@@ -17,6 +17,7 @@ import { resolveConfig } from '../../lib/config.js'
 import { normalizeParseOptions } from '../../lib/mineru.js'
 import { createParseManager } from '../../lib/parse-manager.js'
 import { createStore } from '../../lib/store.js'
+import { WireError } from '../../lib/wire.js'
 import { makeStoredZip } from './zip-builder.test.mjs'
 
 const TOKEN = 'unit-test-token-abcdef'
@@ -185,13 +186,14 @@ async function setup({ token = TOKEN } = {}) {
 }
 
 /** Build a manager for a setup environment. */
-function makeManager(env, fake, token = TOKEN) {
+function makeManager(env, fake, token = TOKEN, localEngine) {
   return createParseManager({
     store: env.store,
     config: env.config,
     logger: env.logger,
     getToken: async () => (token === null ? undefined : token),
     fetchImpl: fake.fetchImpl,
+    localEngine,
   })
 }
 
@@ -750,6 +752,216 @@ test('cancelling a page repair restores the parsed document', async () => {
     assert.equal(cancelled.parse.repairPages, null)
     const parsed = await env.store.readMarkdown(env.id)
     assert.equal(parsed.markdown, REPAIR_OLD_MARKDOWN)
+  } finally {
+    await teardown(env, manager)
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// Local engine (T0 / T0.5) flows
+// ---------------------------------------------------------------------------
+
+const LOCAL_MARKDOWN = '# Local Parsed Paper\n\nLocal body text extracted on device.\n'
+const LOCAL_CONTENT_LIST = [
+  { type: 'text', text: 'Local Parsed Paper', page_idx: 0, text_level: 1 },
+  { type: 'text', text: 'Local body text extracted on device.', page_idx: 1, text_level: 0 },
+]
+const LOCAL_STATS = {
+  pageCount: 2,
+  textChars: 42,
+  extractMs: 3,
+  toolVersion: 'pdfjs-dist/5.4.449',
+  provider: 'builtin',
+}
+
+/**
+ * In-memory local engine facade matching `createLocalEngine()`'s surface.
+ * `fail` throws during extraction; `hang` blocks until the task is cancelled.
+ */
+function createFakeLocalEngine({ fail = null, hang = false } = {}) {
+  let markStarted = () => {}
+  const started = new Promise((resolve) => {
+    markStarted = resolve
+  })
+  const state = { extracts: [], aborted: false, started }
+  const engine = {
+    state,
+    config: { maxPdfBytes: 200 * 1024 * 1024 },
+    supports(meta) {
+      return /\.pdf$/i.test(String(meta?.originalName ?? ''))
+        ? { supported: true, provider: 'builtin' }
+        : { supported: false, reason: `unsupported extension` }
+    },
+    async extract(input) {
+      state.extracts.push(input)
+      if (hang) {
+        markStarted()
+        await new Promise((resolve, reject) => {
+          const abort = () => {
+            state.aborted = true
+            reject(Object.assign(new Error('cancelled'), { name: 'AbortError' }))
+          }
+          if (input.signal?.aborted === true) abort()
+          else input.signal?.addEventListener('abort', abort, { once: true })
+        })
+        return undefined
+      }
+      if (fail !== null) throw fail
+      input.onProgress?.({ extracted: 1, total: 2 })
+      input.onProgress?.({ extracted: 2, total: 2 })
+      return {
+        markdown: LOCAL_MARKDOWN,
+        contentList: LOCAL_CONTENT_LIST,
+        pages: 2,
+        provider: 'builtin',
+        title: 'Local Parsed Paper',
+        warnings: ['no-structure', 'no-outline'],
+        stats: { ...LOCAL_STATS },
+      }
+    },
+  }
+  return engine
+}
+
+/** A fetch implementation that fails loudly if the local path ever uses it. */
+const NO_NETWORK = async (url) => {
+  throw new Error(`local parse must not use the network (${url})`)
+}
+
+test('local flow: extracts on device, writes artifacts and records provider metadata', async () => {
+  const env = await setup()
+  const local = createFakeLocalEngine()
+  const manager = makeManager(env, { fetchImpl: NO_NETWORK }, TOKEN, local)
+  try {
+    const started = await manager.start(env.id, {
+      engine: 'local',
+      params: { fileName: 'paper.pdf', language: 'local', localProvider: 'builtin' },
+    })
+    assert.equal(started.status, 'parsing')
+    assert.equal(started.parse.engine, 'local')
+    assert.equal(started.parse.phase, 'extracting')
+    assert.equal(started.parse.modelVersion, null, 'local parses have no model version')
+    assert.equal(started.parse.hasContentList, false)
+    assert.deepEqual(started.parse.options, { isOcr: false, enableFormula: false, enableTable: false, pageRanges: '' })
+
+    const final = await waitFor(
+      () => {
+        const current = env.store.get(env.id)
+        return current?.status === 'parsed' ? current : null
+      },
+      { label: 'local parse completion' },
+    )
+    assert.equal(final.error, null)
+    assert.equal(final.parse.engine, 'local')
+    assert.equal(final.parse.phase, null)
+    assert.equal(final.parse.provider, 'builtin')
+    assert.equal(final.parse.pages, 2)
+    assert.equal(final.parse.hasContentList, true)
+    assert.equal(final.title, 'Local Parsed Paper')
+    assert.deepEqual(final.parse.local, { ...LOCAL_STATS, warnings: ['no-structure', 'no-outline'] })
+
+    // The local extractor got the source path, params and a live abort signal.
+    assert.equal(local.state.extracts.length, 1)
+    const input = local.state.extracts[0]
+    assert.equal(input.id, env.id)
+    assert.equal(input.sourcePath, await env.store.sourcePath(env.id))
+    assert.deepEqual(input.params, { fileName: 'paper.pdf', language: 'local', localProvider: 'builtin' })
+    assert.ok(input.signal instanceof AbortSignal)
+    assert.equal(typeof input.onProgress, 'function')
+
+    // Artifacts on disk.
+    const parsedDir = env.store.parsedDir(env.id)
+    assert.equal(await readFile(join(parsedDir, 'full.md'), 'utf8'), LOCAL_MARKDOWN)
+    assert.deepEqual(JSON.parse(await readFile(join(parsedDir, 'content_list.json'), 'utf8')), LOCAL_CONTENT_LIST)
+
+    // The library read path sees the local result.
+    const read = await env.store.readMarkdown(env.id)
+    assert.equal(read.markdown, LOCAL_MARKDOWN)
+    assert.deepEqual(read.contentList, LOCAL_CONTENT_LIST)
+    assert.equal(read.pages, 2)
+  } finally {
+    await teardown(env, manager)
+  }
+})
+
+test('local flow: local-empty-text fails the document and writes no artifacts', async () => {
+  const env = await setup()
+  const failure = new WireError('local-empty-text', '没有从文件中提取到文字（可能是扫描件）', 422)
+  const local = createFakeLocalEngine({ fail: failure })
+  const manager = makeManager(env, { fetchImpl: NO_NETWORK }, TOKEN, local)
+  try {
+    await manager.start(env.id, {
+      engine: 'local',
+      params: { fileName: 'paper.pdf', language: 'local', localProvider: 'builtin' },
+    })
+    const failed = await waitFor(
+      () => {
+        const current = env.store.get(env.id)
+        return current?.status === 'failed' ? current : null
+      },
+      { label: 'local parse failure' },
+    )
+    assert.match(failed.error, /没有从文件中提取到文字/)
+    assert.equal(failed.parse.phase, null)
+    assert.equal(existsSync(join(env.store.docDir(env.id), 'parsed')), false)
+    assert.equal(await env.store.sourcePath(env.id).then((path) => existsSync(path)), true, 'the source is kept')
+  } finally {
+    await teardown(env, manager)
+  }
+})
+
+test('local flow: cancelling during extraction returns the document to uploaded', async () => {
+  const env = await setup()
+  const local = createFakeLocalEngine({ hang: true })
+  const manager = makeManager(env, { fetchImpl: NO_NETWORK }, TOKEN, local)
+  try {
+    await manager.start(env.id, {
+      engine: 'local',
+      params: { fileName: 'paper.pdf', language: 'local', localProvider: 'builtin' },
+    })
+    await local.state.started
+    const cancelled = await manager.cancel(env.id)
+    assert.equal(cancelled.status, 'uploaded')
+    assert.equal(cancelled.error, null)
+    assert.equal(cancelled.parse.phase, null)
+    await waitFor(() => local.state.aborted, { label: 'local extractor abort' })
+    assert.equal(existsSync(join(env.store.docDir(env.id), 'parsed')), false)
+  } finally {
+    await teardown(env, manager)
+  }
+})
+
+test('local parses cannot be page-repaired', async () => {
+  const env = await setup()
+  const local = createFakeLocalEngine()
+  const manager = makeManager(env, { fetchImpl: NO_NETWORK }, TOKEN, local)
+  try {
+    // Seed a parsed document produced by the local engine.
+    const parsedDir = env.store.parsedDir(env.id)
+    await mkdir(parsedDir, { recursive: true })
+    await writeFile(join(parsedDir, 'full.md'), LOCAL_MARKDOWN)
+    await writeFile(join(parsedDir, 'content_list.json'), JSON.stringify(LOCAL_CONTENT_LIST))
+    await env.store.update(env.id, {
+      status: 'parsed',
+      error: null,
+      parse: {
+        engine: 'local',
+        provider: 'builtin',
+        language: 'local',
+        phase: null,
+        pages: 2,
+        hasContentList: true,
+      },
+    })
+    await assert.rejects(manager.start(env.id, { merge: true }), (error) => {
+      assert.ok(error instanceof WireError)
+      assert.equal(error.code, 'repair-unavailable')
+      assert.equal(error.status, 409)
+      assert.match(error.message, /本地解析不支持按页修复/)
+      return true
+    })
+    assert.equal(local.state.extracts.length, 0, 'no repair work reached the local engine')
   } finally {
     await teardown(env, manager)
   }

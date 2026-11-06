@@ -39,6 +39,7 @@ const MRU_DEFAULT_PREFS = {
   readingMode: 'original',
   readingScale: 1,
   defaultEngine: 'auto',
+  autoAllowAgentFallback: true,
   defaultModelVersion: 'vlm',
   defaultLanguage: 'ch',
   defaultIsOcr: false,
@@ -104,9 +105,15 @@ const ZH = {
   'setup.title': '准备解析',
   'setup.text': 'MinerU 会识别版式、公式和表格，把文件转成可翻译、可批注的结构化阅读稿。',
   'setup.engine': '解析引擎',
-  'setup.engineAuto': '自动（有 Token 用精准解析）',
+  'setup.engineAuto': '自动（有 Token 用精准解析，否则优先本地）',
   'setup.engineStandard': '精准解析',
-  'setup.engineAgent': '轻量解析（免 Token）',
+  'setup.engineLocal': '本地解析（离线 · 不上传）',
+  'setup.engineLocalUnavailable': '本地解析不可用',
+  'setup.engineLocalWhy': '本地解析不可用：{reason}',
+  'setup.localReasonDisabled': '已在配置中关闭',
+  'setup.localReasonUnavailable': '本机没有可用的本地解析器',
+  'setup.localReasonType': '这种文件类型不支持本地解析',
+  'setup.engineAgent': '轻量云端解析（免 Token · 会上传文件）',
   'setup.model': '模型',
   'setup.language': '文档语言',
   'setup.pageRanges': '页码范围',
@@ -119,7 +126,14 @@ const ZH = {
   'setup.ocrHint': '扫描件建议开启',
   'setup.start': '开始解析',
   'setup.note': '精准解析消耗每日解析额度；轻量解析限 10 MB / 20 页。',
+  'setup.noteLocal': '本地解析只提取文字层，保留段落与页码；公式、表格、图片与扫描件需云端精准解析。文件不会上传。',
   'setup.tokenWarn': '精准解析需要 MinerU Token。',
+  'setup.tokenWarnLocal': '配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。',
+  'setup.tokenWarnPrivacy': '本地解析无需 Token，文件不会上传。',
+  'setup.effectiveStandard': '将使用：MinerU 精准解析',
+  'setup.effectiveLocal': '将使用：本地解析',
+  'setup.effectiveAgent': '将使用：轻量云端解析（文件会上传）',
+  'setup.effectiveBlocked': '将使用：没有可用引擎，请先配置 Token 或启用轻量云端解析',
   'setup.tokenAction': '去设置',
   'setup.langCh': '中文',
   'setup.langEn': 'English',
@@ -136,6 +150,7 @@ const ZH = {
   'fail.title': '解析没有完成',
   'fail.retry': '重试',
   'fail.otherEngine': '换个引擎',
+  'fail.localSuggestion': '换用云端解析或配置 Token',
   'reader.modeOriginal': '原文',
   'reader.modeBilingual': '对照',
   'reader.modeTranslated': '译文',
@@ -153,6 +168,11 @@ const ZH = {
   'reader.more': '更多操作',
   'reader.fontDec': '缩小字号',
   'reader.fontInc': '放大字号',
+  'banner.localTitle': '本地解析结果',
+  'banner.localText': '本文由本地解析生成：保留文字、段落与页码；公式、表格、图片未还原。',
+  'banner.missingFonts': '个别字体缺失，文字可能有缺字。',
+  'banner.scanned': '几乎没有提取到文字，可能是扫描件。',
+  'banner.upgrade': '配置 Token 解锁精准解析',
   'block.annotate': '高亮并批注',
   'margin.label': '页边',
   'margin.outline': '大纲',
@@ -187,11 +207,20 @@ const ZH = {
   'settings.title': '设置',
   'settings.sectionToken': 'MinerU 接入',
   'settings.token': 'API Token',
-  'settings.tokenHint': '精准解析需要 Token，在 mineru.net 的 API 管理页创建。',
+  'settings.tokenHint': '本地解析无需 Token；配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。',
   'settings.tokenPlaceholder': '粘贴 Token',
   'settings.tokenSaved': '已配置 · 保存在本机凭据中',
   'settings.tokenMemory': '已配置 · 仅保存在本次会话（凭据服务不可用）',
   'settings.tokenMissing': '未配置',
+  'settings.tokenMissingLocal': '当前默认将使用本地解析（文件不会上传）',
+  'settings.sectionLocal': '本地解析',
+  'settings.localBuiltin': '内置文字层提取',
+  'settings.localPdfTool': '系统 pdftotext',
+  'settings.localOffice': 'Office 转换（office-to-pdf）',
+  'settings.localRedetect': '重新检测',
+  'settings.localAvailable': '可用',
+  'settings.localUnavailable': '不可用',
+  'settings.localHint': '本地解析不上传文件；扫描件需云端解析或 OCR 侧车。',
   'settings.save': '保存',
   'settings.clear': '清除',
   'settings.close': '关闭',
@@ -226,6 +255,7 @@ const ZH = {
   'reparse.onlyProblems': '只重新解析有问题的页面（{count} 页）',
   'reparse.onlyProblemsHint': '其余页面的解析结果、高亮与批注都会保留。',
   'reparse.needsToken': '按页修复需要 MinerU Token；没有 Token 时只能整篇用轻量解析重新解析。',
+  'reparse.localRepair': '本地解析不支持按页修复；可整篇重新解析，或配置 Token 后整篇用云端解析。',
   'toast.noteSaved': '批注已保存',
   'toast.deleted': '已删除',
   'toast.exported': '已导出 Markdown',
@@ -242,6 +272,11 @@ const ZH = {
   'err.forbidden': '没有权限访问文献服务。',
   'err.generic': '操作没有完成。',
   'err.crashed': '阅读台出了点问题，重新打开文献库试试。',
+  'err.localUnsupported': '本地解析不支持这种文件；可用轻量云端解析或配置 Token。',
+  'err.localMissingTool': '本地解析工具不可用；请检查系统工具或改用云端解析。',
+  'err.localEmptyText': '没有从文件中提取到文字（可能是扫描件）；请用云端解析或配置 OCR。',
+  'err.localEncrypted': 'PDF 已加密，无法本地解析；请去除密码后重试，或改用云端解析。',
+  'err.localFailed': '本地解析失败：{message}',
   'importUrl.title': '从链接导入',
   'importUrl.url': '链接地址',
   'importUrl.placeholder': 'https://example.com/paper.pdf',
@@ -250,6 +285,9 @@ const ZH = {
   'importUrl.importing': '正在导入…',
   'statusbar.engineStandard': 'MinerU 精准解析',
   'statusbar.engineAgent': 'MinerU 轻量解析',
+  'statusbar.engineLocal': '本地解析',
+  'statusbar.providerBuiltin': '内置',
+  'statusbar.providerOffice': 'Office 转换',
   'statusbar.pages': '{count} 页',
   'statusbar.words': '{count} 词',
   'statusbar.translated': '已翻译 {percent}%',
@@ -289,9 +327,15 @@ const EN = {
   'setup.title': 'Ready to parse',
   'setup.text': 'MinerU detects layout, formulas, and tables, then turns the file into a structured reading draft.',
   'setup.engine': 'Engine',
-  'setup.engineAuto': 'Auto (precise when a token is set)',
+  'setup.engineAuto': 'Auto (precise with a token, local first otherwise)',
   'setup.engineStandard': 'Precise',
-  'setup.engineAgent': 'Lightweight (no token)',
+  'setup.engineLocal': 'Local (offline, no upload)',
+  'setup.engineLocalUnavailable': 'Local parsing unavailable',
+  'setup.engineLocalWhy': 'Local parsing unavailable: {reason}',
+  'setup.localReasonDisabled': 'disabled in the configuration',
+  'setup.localReasonUnavailable': 'no local parser on this machine',
+  'setup.localReasonType': 'this file type cannot be parsed locally',
+  'setup.engineAgent': 'Lightweight cloud (no token, uploads the file)',
   'setup.model': 'Model',
   'setup.language': 'Document language',
   'setup.pageRanges': 'Page range',
@@ -304,7 +348,14 @@ const EN = {
   'setup.ocrHint': 'Turn on for scanned pages',
   'setup.start': 'Start parsing',
   'setup.note': 'Precise parsing uses the daily quota; lightweight parsing is limited to 10 MB / 20 pages.',
+  'setup.noteLocal': 'Local parsing extracts the text layer and keeps paragraphs and page marks; formulas, tables, figures and scanned pages need precise cloud parsing. The file is not uploaded.',
   'setup.tokenWarn': 'Precise parsing needs a MinerU token.',
+  'setup.tokenWarnLocal': 'A token unlocks MinerU precise parsing (formulas/tables/OCR).',
+  'setup.tokenWarnPrivacy': 'Local parsing needs no token and never uploads the file.',
+  'setup.effectiveStandard': 'Will use: MinerU precise parsing',
+  'setup.effectiveLocal': 'Will use: local parsing',
+  'setup.effectiveAgent': 'Will use: lightweight cloud parsing (the file is uploaded)',
+  'setup.effectiveBlocked': 'Will use: no engine available — configure a token or allow lightweight cloud parsing',
   'setup.tokenAction': 'Open settings',
   'setup.langCh': 'Chinese',
   'setup.langEn': 'English',
@@ -321,6 +372,7 @@ const EN = {
   'fail.title': "Parsing didn't finish",
   'fail.retry': 'Retry',
   'fail.otherEngine': 'Try another engine',
+  'fail.localSuggestion': 'Try cloud parsing or configure a token',
   'reader.modeOriginal': 'Original',
   'reader.modeBilingual': 'Bilingual',
   'reader.modeTranslated': 'Translation',
@@ -338,6 +390,11 @@ const EN = {
   'reader.more': 'More',
   'reader.fontDec': 'Smaller text',
   'reader.fontInc': 'Larger text',
+  'banner.localTitle': 'Local parse result',
+  'banner.localText': 'Parsed locally: text, paragraphs and page marks are kept; formulas, tables and figures are not reconstructed.',
+  'banner.missingFonts': 'Some fonts were missing; a few characters may be absent.',
+  'banner.scanned': 'Little or no text was extracted; the file may be scanned.',
+  'banner.upgrade': 'Configure a token for precise parsing',
   'block.annotate': 'Highlight and note',
   'margin.label': 'Margin',
   'margin.outline': 'Outline',
@@ -372,11 +429,20 @@ const EN = {
   'settings.title': 'Settings',
   'settings.sectionToken': 'MinerU access',
   'settings.token': 'API token',
-  'settings.tokenHint': 'Create a token on mineru.net under API management.',
+  'settings.tokenHint': 'Local parsing needs no token; configure a token to unlock MinerU precise parsing (formulas/tables/OCR).',
   'settings.tokenPlaceholder': 'Paste token',
   'settings.tokenSaved': 'Configured · stored in local credentials',
   'settings.tokenMemory': 'Configured · stored for this session only (credentials unavailable)',
   'settings.tokenMissing': 'Not configured',
+  'settings.tokenMissingLocal': 'Current default: local parsing (the file is not uploaded)',
+  'settings.sectionLocal': 'Local parsing',
+  'settings.localBuiltin': 'Built-in text-layer extraction',
+  'settings.localPdfTool': 'System pdftotext',
+  'settings.localOffice': 'Office conversion (office-to-pdf)',
+  'settings.localRedetect': 'Re-detect',
+  'settings.localAvailable': 'Available',
+  'settings.localUnavailable': 'Unavailable',
+  'settings.localHint': 'Local parsing does not upload files; scanned pages need cloud parsing or an OCR sidecar.',
   'settings.save': 'Save',
   'settings.clear': 'Clear',
   'settings.close': 'Close',
@@ -411,6 +477,7 @@ const EN = {
   'reparse.onlyProblems': 'Re-parse only the problematic pages ({count})',
   'reparse.onlyProblemsHint': 'Other pages, highlights, and notes stay untouched.',
   'reparse.needsToken': 'Page repair needs a MinerU token; without one only a full lightweight reparse is possible.',
+  'reparse.localRepair': 'Page repair is unavailable for local parses; reparse the whole document, or configure a token and reparse in the cloud.',
   'toast.noteSaved': 'Note saved',
   'toast.deleted': 'Deleted',
   'toast.exported': 'Markdown exported',
@@ -427,6 +494,11 @@ const EN = {
   'err.forbidden': 'No permission to reach the library service.',
   'err.generic': "The action didn't finish.",
   'err.crashed': 'The reading desk hit an error. Reopen the library to retry.',
+  'err.localUnsupported': 'Local parsing does not support this file; use lightweight cloud parsing or configure a token.',
+  'err.localMissingTool': 'The local parsing tool is unavailable; check system tools or use cloud parsing.',
+  'err.localEmptyText': 'No text was extracted (the file may be scanned); use cloud parsing or configure OCR.',
+  'err.localEncrypted': 'The PDF is encrypted and cannot be parsed locally; remove the password or use cloud parsing.',
+  'err.localFailed': 'Local parsing failed: {message}',
   'importUrl.title': 'Import from URL',
   'importUrl.url': 'URL',
   'importUrl.placeholder': 'https://example.com/paper.pdf',
@@ -435,6 +507,9 @@ const EN = {
   'importUrl.importing': 'Importing…',
   'statusbar.engineStandard': 'MinerU precise',
   'statusbar.engineAgent': 'MinerU lightweight',
+  'statusbar.engineLocal': 'Local',
+  'statusbar.providerBuiltin': 'built-in',
+  'statusbar.providerOffice': 'Office conversion',
   'statusbar.pages': '{count} pages',
   'statusbar.words': '{count} words',
   'statusbar.translated': '{percent}% translated',
@@ -692,8 +767,100 @@ function mruErrorText(t, error) {
   if (code === 'network' || code === 'aborted') return t('err.network');
   if (code === 'translate-unavailable') return t('err.noTranslation');
   if (code === 'forbidden') return t('err.forbidden');
+  if (code === 'local-unsupported') return t('err.localUnsupported');
+  if (code === 'local-missing-tool') return t('err.localMissingTool');
+  if (code === 'local-empty-text') return t('err.localEmptyText');
+  if (code === 'local-encrypted') return t('err.localEncrypted');
+  if (code === 'local-failed') {
+    const detail = error && typeof error.message === 'string' && error.message.trim() !== '' ? error.message : t('err.generic');
+    return t('err.localFailed', { message: detail });
+  }
+  if (typeof code === 'string' && code.indexOf('local-') === 0) {
+    const detail = error && typeof error.message === 'string' && error.message.trim() !== '' ? error.message : t('err.generic');
+    return t('err.localFailed', { message: detail });
+  }
   if (error && typeof error.message === 'string' && error.message.trim() !== '') return error.message;
   return t('err.generic');
+}
+
+// ===========================================================================
+// 2b. Local parsing helpers (T0/T0.5 client half)
+// ===========================================================================
+
+/** File extensions the local engine can handle, grouped by capability. */
+const MRU_OFFICE_EXTS = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
+const MRU_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.jp2', '.webp', '.gif', '.bmp'];
+const MRU_HTML_EXTS = ['.html', '.htm'];
+
+/** Normalize the host's `local` capability snapshot; tolerant of older hosts. */
+function mruLocalInfo(raw) {
+  const local = raw && typeof raw === 'object' ? raw : null;
+  if (!local) return null;
+  const providers = Array.isArray(local.providers)
+    ? local.providers.filter((entry) => entry && typeof entry.id === 'string' && entry.id !== '')
+    : [];
+  return {
+    enabled: local.enabled !== false,
+    available: typeof local.available === 'boolean' ? local.available : providers.some((entry) => entry.available === true),
+    recommended: typeof local.recommended === 'string' ? local.recommended : '',
+    providers,
+    capabilities: local.capabilities && typeof local.capabilities === 'object' ? local.capabilities : {},
+  };
+}
+
+/** True when `capabilities` allow `ext` to be parsed locally; `reason` is an i18n key. */
+function mruLocalSupport(local, ext) {
+  const info = mruLocalInfo(local);
+  if (!info || !info.enabled) return { ok: false, reason: 'setup.localReasonDisabled' };
+  if (!info.available) return { ok: false, reason: 'setup.localReasonUnavailable' };
+  const capabilities = info.capabilities || {};
+  const name = String(ext || '').toLowerCase().replace(/^\./, '');
+  const dotted = name === '' ? '' : `.${name}`;
+  let supported = false;
+  if (dotted === '.pdf') supported = capabilities.textLayerPdf === true;
+  else if (MRU_OFFICE_EXTS.includes(dotted)) supported = capabilities.office === true;
+  else if (MRU_IMAGE_EXTS.includes(dotted)) supported = capabilities.images === true;
+  else if (MRU_HTML_EXTS.includes(dotted)) supported = capabilities.html === true;
+  return supported
+    ? { ok: true, reason: '' }
+    : { ok: false, reason: 'setup.localReasonType' };
+}
+
+/**
+ * Client-side prediction of the engine `auto` will pick. Mirrors the host
+ * policy: token → standard; otherwise a supported file → local; otherwise the
+ * lightweight cloud engine when the user allows the upload; else blocked.
+ */
+function mruEffectiveEngine(engine, tokenConfigured, localSupported, autoAllowAgentFallback) {
+  if (engine !== 'auto') return engine;
+  if (tokenConfigured) return 'standard';
+  if (localSupported) return 'local';
+  if (autoAllowAgentFallback !== false) return 'agent';
+  return 'blocked';
+}
+
+/** i18n key for the effective-engine hint shown next to the start button. */
+function mruEffectiveEngineKey(engine) {
+  if (engine === 'local') return 'setup.effectiveLocal';
+  if (engine === 'agent') return 'setup.effectiveAgent';
+  if (engine === 'standard') return 'setup.effectiveStandard';
+  return 'setup.effectiveBlocked';
+}
+
+/** Short provider label for the status bar (builtin / Office conversion / tool name). */
+function mruLocalProviderLabel(t, id) {
+  if (id === 'builtin') return t('statusbar.providerBuiltin');
+  if (id === 'system:officeToPdf') return t('statusbar.providerOffice');
+  if (typeof id === 'string' && id.indexOf('system:') === 0) return id.slice('system:'.length);
+  return typeof id === 'string' ? id : '';
+}
+
+/** Full provider label for the settings capability list. */
+function mruLocalProviderName(t, id) {
+  if (id === 'builtin') return t('settings.localBuiltin');
+  if (id === 'system:officeToPdf') return t('settings.localOffice');
+  if (typeof id === 'string' && id.indexOf('pdftotext') !== -1) return t('settings.localPdfTool');
+  return typeof id === 'string' ? id : '';
 }
 
 // ===========================================================================
@@ -1477,9 +1644,10 @@ function MruPaper(props) {
     t, doc, reader, mode, katexReady, annotationsByBlock, translations, jobs, providers,
     translationFlash, activeAnnotationId, translateAll, bodyRef, onReaderMouseUp, onReaderKeyUp,
     onModeChange, onScaleDown, onScaleUp, onMoreMenu, onTranslateBlock, onAnnotateBlock,
-    onRetryTranslation, onMarkClick, onCancelTranslateAll, onReparse,
+    onRetryTranslation, onMarkClick, onCancelTranslateAll, onReparse, onOpenSettings,
   } = props;
   const [unknownNoticeDismissed, setUnknownNoticeDismissed] = React.useState(false);
+  const [localBannerDismissed, setLocalBannerDismissed] = React.useState(false);
   const model = reader.model || { blocks: [], outline: [], stats: { blocks: 0, headings: 0, chars: 0, words: 0 } };
   const blocks = Array.isArray(model.blocks) ? model.blocks : [];
   const title = String(doc.title || doc.originalName || '');
@@ -1505,6 +1673,14 @@ function MruPaper(props) {
     const text = block && typeof block.plainText === 'string' ? block.plainText : '';
     if (text.indexOf('\ufffd') !== -1) unknownCount += (text.match(/\ufffd/g) || []).length;
   }
+  const parseMeta = doc.parse && typeof doc.parse === 'object' ? doc.parse : {};
+  const isLocalParse = parseMeta.engine === 'local';
+  const localParse = isLocalParse && parseMeta.local && typeof parseMeta.local === 'object' ? parseMeta.local : null;
+  const localWarnings = localParse && Array.isArray(localParse.warnings) ? localParse.warnings : [];
+  const localNoticeParts = isLocalParse ? [t('banner.localText')] : [];
+  if (localWarnings.indexOf('missing-fonts') !== -1) localNoticeParts.push(t('banner.missingFonts'));
+  if (localWarnings.indexOf('scanned') !== -1) localNoticeParts.push(t('banner.scanned'));
+  const showLocalBanner = isLocalParse && !localBannerDismissed;
   const body = blocks.length === 0
     ? h('div', { className: 'mru-empty mru-empty--quiet' }, h('p', { className: 'mru-empty__text' }, t('reader.emptyDoc')))
     : blocks.map((block) => {
@@ -1579,6 +1755,30 @@ function MruPaper(props) {
               onClick: () => setUnknownNoticeDismissed(true),
             }, '×')))
         : null,
+      showLocalBanner
+        ? h('div', { className: 'mru-banner mru-banner--info mru-banner--inline mru-banner--local', role: 'status' },
+          h('div', { className: 'mru-banner__body' },
+            h('strong', { className: 'mru-banner__title' }, t('banner.localTitle')),
+            h('span', { className: 'mru-banner__text' }, localNoticeParts.join(' '))),
+          h('div', { className: 'mru-banner__actions' },
+            h('button', {
+              type: 'button',
+              className: 'mru-btn mru-btn--ghost mru-btn--sm',
+              onClick: () => { if (onOpenSettings) onOpenSettings(); },
+            }, t('banner.upgrade')),
+            h('button', {
+              type: 'button',
+              className: 'mru-btn mru-btn--ghost mru-btn--sm',
+              onClick: () => { if (onReparse) onReparse(false); },
+            }, t('menu.reparse')),
+            h('button', {
+              type: 'button',
+              className: 'mru-icon-btn',
+              'aria-label': t('settings.close'),
+              title: t('settings.close'),
+              onClick: () => setLocalBannerDismissed(true),
+            }, '×')))
+        : null,
       translateAll && translateAll.running ? h('div', { className: 'mru-parsing mru-parsing--translate' },
         h('div', { className: 'mru-parsing__row' },
           h(MruSpinner),
@@ -1628,18 +1828,21 @@ function MruEmptyQuiet({ t }) {
 // ===========================================================================
 
 /** Switch row used by the setup panel. */
-function mruToggleRow(t, titleKey, hintKey, checked, onToggle) {
-  return h('div', { className: 'mru-toggle-row' },
+function mruToggleRow(t, titleKey, hintKey, checked, onToggle, disabled) {
+  const off = disabled === true;
+  return h('div', { className: 'mru-toggle-row' + (off ? ' mru-toggle-row--disabled' : '') },
     h('span', { className: 'mru-toggle-row__text' },
       h('span', { className: 'mru-toggle-row__title' }, t(titleKey)),
       h('span', { className: 'mru-toggle-row__hint' }, t(hintKey))),
     h('span', {
-      className: 'mru-switch' + (checked ? ' mru-switch--on' : ''),
+      className: 'mru-switch' + (checked ? ' mru-switch--on' : '') + (off ? ' mru-switch--disabled' : ''),
       role: 'switch',
       'aria-checked': checked ? 'true' : 'false',
-      tabIndex: 0,
-      onClick: () => onToggle(!checked),
+      'aria-disabled': off ? 'true' : 'false',
+      tabIndex: off ? -1 : 0,
+      onClick: () => { if (!off) onToggle(!checked); },
       onKeyDown: (event) => {
+        if (off) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onToggle(!checked);
@@ -1648,17 +1851,24 @@ function mruToggleRow(t, titleKey, hintKey, checked, onToggle) {
     }));
 }
 
-/** Parse options form (uploaded / failed documents). */
+/** Parse options form (uploaded / failed documents, also reused by reparse). */
 function MruSetupPanel(props) {
-  const { t, prefs, tokenConfigured, busy, errorMessage, onSubmit, onOpenSettings } = props;
-  const [engine, setEngine] = React.useState(prefs.defaultEngine || 'auto');
+  const {
+    t, prefs, doc, local, tokenConfigured, busy, errorMessage, onSubmit, onOpenSettings,
+  } = props;
+  const support = mruLocalSupport(local, doc && doc.ext);
+  const localDisabled = !support.ok;
+  const preferredEngine = props.initialEngine || prefs.defaultEngine || 'auto';
+  const [engine, setEngine] = React.useState(preferredEngine === 'local' && localDisabled ? 'auto' : preferredEngine);
   const [modelVersion, setModelVersion] = React.useState(prefs.defaultModelVersion || 'vlm');
   const [language, setLanguage] = React.useState(prefs.defaultLanguage || 'ch');
   const [pageRanges, setPageRanges] = React.useState('');
   const [isOcr, setIsOcr] = React.useState(Boolean(prefs.defaultIsOcr));
   const [enableFormula, setEnableFormula] = React.useState(prefs.defaultEnableFormula !== false);
   const [enableTable, setEnableTable] = React.useState(prefs.defaultEnableTable !== false);
-  const needsToken = engine === 'standard' || (engine === 'auto' && !tokenConfigured);
+  const isLocal = engine === 'local';
+  const effective = mruEffectiveEngine(engine, Boolean(tokenConfigured), support.ok, prefs.autoAllowAgentFallback);
+  const needsToken = engine === 'standard' || (engine === 'auto' && (effective === 'agent' || effective === 'blocked'));
   const options = {
     engine,
     modelVersion,
@@ -1673,6 +1883,9 @@ function MruSetupPanel(props) {
     onSubmit(options);
   };
   React.useEffect(() => {
+    if (engine === 'local' && localDisabled) setEngine('auto');
+  }, [engine, localDisabled]);
+  React.useEffect(() => {
     const onKey = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault();
@@ -1686,8 +1899,10 @@ function MruSetupPanel(props) {
     h('div', { className: 'mru-setup__intro' },
       h('h2', { className: 'mru-setup__title' }, t('setup.title')),
       h('p', { className: 'mru-setup__text' }, t('setup.text'))),
-    needsToken ? h('div', { className: 'mru-callout mru-callout--warn' },
-      t('setup.tokenWarn'),
+    needsToken ? h('div', { className: 'mru-callout mru-callout--warn mru-callout--stack' },
+      h('span', { className: 'mru-callout__body' },
+        h('span', { className: 'mru-callout__text' }, t('setup.tokenWarnLocal')),
+        h('span', { className: 'mru-callout__sub' }, t('setup.tokenWarnPrivacy'))),
       h('button', { type: 'button', className: 'mru-link-btn', onClick: onOpenSettings }, t('setup.tokenAction'))) : null,
     errorMessage ? h('div', { className: 'mru-callout mru-callout--warn mru-callout--error' }, errorMessage) : null,
     h('div', { className: 'mru-setup__grid' },
@@ -1700,20 +1915,31 @@ function MruSetupPanel(props) {
         },
           h('option', { value: 'auto' }, t('setup.engineAuto')),
           h('option', { value: 'standard' }, t('setup.engineStandard')),
-          h('option', { value: 'agent' }, t('setup.engineAgent')))),
+          h('option', { value: 'local', disabled: localDisabled },
+            localDisabled ? `${t('setup.engineLocal')} — ${t('setup.engineLocalUnavailable')}` : t('setup.engineLocal')),
+          h('option', { value: 'agent' }, t('setup.engineAgent'))),
+        localDisabled
+          ? h('span', { className: 'mru-field__hint mru-field__hint--warn' },
+            t('setup.engineLocalWhy', { reason: t(support.reason) }))
+          : null),
       h('div', { className: 'mru-field' },
         h('label', { className: 'mru-field__label' }, t('setup.model')),
         h('select', {
           className: 'mru-select',
           value: modelVersion,
-          disabled: engine === 'agent',
+          disabled: engine === 'agent' || isLocal,
           onChange: (event) => setModelVersion(event.target.value),
         },
           h('option', { value: 'vlm' }, 'vlm'),
           h('option', { value: 'pipeline' }, 'pipeline'))),
       h('div', { className: 'mru-field' },
         h('label', { className: 'mru-field__label' }, t('setup.language')),
-        h('select', { className: 'mru-select', value: language, onChange: (event) => setLanguage(event.target.value) },
+        h('select', {
+          className: 'mru-select',
+          value: language,
+          disabled: isLocal,
+          onChange: (event) => setLanguage(event.target.value),
+        },
           MRU_LANGUAGE_OPTIONS.map(([value, key]) => h('option', { key: value, value }, t(key))))),
       h('div', { className: 'mru-field' },
         h('label', { className: 'mru-field__label' }, t('setup.pageRanges')),
@@ -1726,9 +1952,9 @@ function MruSetupPanel(props) {
         }),
         h('span', { className: 'mru-field__hint' }, t('setup.pageRangesHint')))),
     h('div', { className: 'mru-setup__toggles' },
-      mruToggleRow(t, 'setup.formula', 'setup.formulaHint', enableFormula, setEnableFormula),
-      mruToggleRow(t, 'setup.table', 'setup.tableHint', enableTable, setEnableTable),
-      mruToggleRow(t, 'setup.ocr', 'setup.ocrHint', isOcr, setIsOcr)),
+      mruToggleRow(t, 'setup.formula', 'setup.formulaHint', enableFormula, setEnableFormula, isLocal),
+      mruToggleRow(t, 'setup.table', 'setup.tableHint', enableTable, setEnableTable, isLocal),
+      mruToggleRow(t, 'setup.ocr', 'setup.ocrHint', isOcr, setIsOcr, isLocal)),
     h('div', { className: 'mru-setup__foot' },
       h('button', {
         type: 'button',
@@ -1736,7 +1962,8 @@ function MruSetupPanel(props) {
         disabled: busy,
         onClick: start,
       }, busy ? t('parse.starting') : t('setup.start')),
-      h('span', { className: 'mru-note-text' }, t('setup.note'))));
+      h('span', { className: 'mru-setup__effective' }, t(mruEffectiveEngineKey(effective))),
+      h('span', { className: 'mru-note-text' }, t(isLocal ? 'setup.noteLocal' : 'setup.note'))));
 }
 
 /** Parsing progress panel. */
@@ -1756,10 +1983,11 @@ function MruParsingPanel({ t, doc, onCancel }) {
 }
 
 /** Parse failure panel. */
-function MruFailPanel({ t, message, onRetry, onOtherEngine }) {
+function MruFailPanel({ t, message, suggestion, onRetry, onOtherEngine }) {
   return h('div', { className: 'mru-fail' },
     h('h2', { className: 'mru-fail__title' }, t('fail.title')),
     h('p', { className: 'mru-fail__text' }, message || t('err.generic')),
+    suggestion ? h('p', { className: 'mru-fail__hint' }, suggestion) : null,
     h('div', { className: 'mru-fail__actions' },
       h('button', { type: 'button', className: 'mru-btn mru-btn--primary', onClick: onRetry }, t('fail.retry')),
       h('button', { type: 'button', className: 'mru-btn mru-btn--ghost', onClick: onOtherEngine }, t('fail.otherEngine'))));
@@ -1794,6 +2022,7 @@ function MruMain(props) {
       reader,
       key: selectedDoc.id,
       onReparse,
+      onOpenSettings,
     }));
   }
 
@@ -1818,9 +2047,11 @@ function MruMain(props) {
     return scroll(h(MruParsingPanel, { t, doc: selectedDoc, onCancel: onCancelParse }));
   }
   if (selectedDoc.status === 'failed') {
+    const failureEngine = selectedDoc.parse && typeof selectedDoc.parse === 'object' ? selectedDoc.parse.engine : '';
     return scroll(h(MruFailPanel, {
       t,
       message: mruDocErrorMessage(selectedDoc),
+      suggestion: failureEngine === 'local' ? t('fail.localSuggestion') : '',
       onRetry: onRetryParse,
       onOtherEngine,
     }));
@@ -1829,6 +2060,7 @@ function MruMain(props) {
     t,
     doc: selectedDoc,
     prefs,
+    local: props.local,
     tokenConfigured: Boolean(props.tokenConfigured),
     busy: Boolean(parseBusy),
     errorMessage: parseError || '',
@@ -2103,8 +2335,14 @@ function MruStatusbar(props) {
   const left = [];
   const right = [];
   if (doc) {
-    const engineKey = doc.parse && doc.parse.engine === 'agent' ? 'statusbar.engineAgent' : 'statusbar.engineStandard';
+    const engine = doc.parse && doc.parse.engine;
+    const engineKey = engine === 'agent' ? 'statusbar.engineAgent' : engine === 'local' ? 'statusbar.engineLocal' : 'statusbar.engineStandard';
     left.push(h('span', { key: 'engine' }, t(engineKey)));
+    const provider = doc.parse && typeof doc.parse.provider === 'string' ? doc.parse.provider : '';
+    if (engine === 'local' && provider !== '') {
+      left.push(h('span', { key: 'provider-dot', className: 'mru-dot' }, '·'));
+      left.push(h('span', { key: 'provider' }, mruLocalProviderLabel(t, provider)));
+    }
     const modelVersion = doc.parse && doc.parse.modelVersion;
     if (modelVersion) {
       left.push(h('span', { key: 'dot-1', className: 'mru-dot' }, '·'));
@@ -2471,12 +2709,15 @@ function mruProviderOptions(settings) {
   return options;
 }
 
-/** Settings modal: MinerU token, reading preferences, storage info. */
+/** Settings modal: MinerU token, local parsing capabilities, reading preferences, storage info. */
 function MruSettingsModal(props) {
   const { t, status, settings, onClose, onSaveToken, onClearToken, onUpdatePrefs, tokenBusy } = props;
   const [tokenInput, setTokenInput] = React.useState('');
+  const [localBusy, setLocalBusy] = React.useState(false);
   const tokenConfigured = Boolean(status && status.tokenConfigured);
   const tokenPersistent = status ? status.tokenPersistent !== false : true;
+  const local = mruLocalInfo((settings && settings.local) || (status && status.local));
+  const localAvailable = Boolean(local && local.enabled && local.available);
   const prefs = props.prefs || MRU_DEFAULT_PREFS;
   const providerOptions = mruProviderOptions(settings);
   const configuredHint = tokenConfigured
@@ -2484,6 +2725,25 @@ function MruSettingsModal(props) {
     : t('settings.tokenMissing');
   const dataDir = status && status.dataDirDisplay ? status.dataDirDisplay : '';
   const version = status && status.version ? String(status.version) : '';
+  const redetectLocal = () => {
+    if (localBusy || typeof props.onRedetect !== 'function') return;
+    setLocalBusy(true);
+    Promise.resolve()
+      .then(() => props.onRedetect())
+      .catch(() => {})
+      .then(() => setLocalBusy(false));
+  };
+  const localRows = local && local.enabled && local.providers.length > 0
+    ? local.providers.map((provider) => h('div', {
+      key: provider.id,
+      className: 'mru-local-row',
+      title: typeof provider.reason === 'string' ? provider.reason : undefined,
+    },
+      h('span', { className: 'mru-local-row__name' }, mruLocalProviderName(t, provider.id)),
+      h('span', { className: 'mru-local-row__state' + (provider.available ? ' mru-local-row__state--ok' : '') },
+        t(provider.available ? 'settings.localAvailable' : 'settings.localUnavailable')),
+      provider.version ? h('span', { className: 'mru-local-row__version' }, String(provider.version)) : null))
+    : h('p', { className: 'mru-field__hint' }, t('settings.localUnavailable'));
   return h(MruModal, { onClose, labelledBy: 'mru-settings-title', panelClass: 'mru-modal__panel--settings' },
     h('header', { className: 'mru-modal__head' },
       h('h2', { className: 'mru-modal__title', id: 'mru-settings-title' }, t('settings.title')),
@@ -2520,7 +2780,23 @@ function MruSettingsModal(props) {
               disabled: tokenBusy || !tokenConfigured,
               onClick: () => onClearToken(),
             }, t('settings.clear'))),
-          h('span', { className: 'mru-field__hint' + (tokenConfigured ? ' mru-field__hint--ok' : '') }, configuredHint))),
+          h('span', { className: 'mru-field__hint' + (tokenConfigured ? ' mru-field__hint--ok' : '') }, configuredHint),
+          !tokenConfigured && localAvailable
+            ? h('span', { className: 'mru-field__hint' }, t('settings.tokenMissingLocal'))
+            : null)),
+      h('section', { className: 'mru-section' },
+        h('div', { className: 'mru-section__head' },
+          h('h3', { className: 'mru-section__title' }, t('settings.sectionLocal')),
+          typeof props.onRedetect === 'function'
+            ? h('button', {
+              type: 'button',
+              className: 'mru-btn mru-btn--ghost mru-btn--sm',
+              disabled: localBusy,
+              onClick: redetectLocal,
+            }, t('settings.localRedetect'))
+            : null),
+        h('p', { className: 'mru-section__desc' }, t('settings.localHint')),
+        h('div', { className: 'mru-local-list' }, localRows)),
       h('section', { className: 'mru-section' },
         h('h3', { className: 'mru-section__title' }, t('settings.sectionRead')),
         h('div', { className: 'mru-field' },
@@ -2637,11 +2913,13 @@ function MruConfirmDeleteModal(props) {
 /** Reparse dialog — the same setup form inside a modal shell. */
 function MruReparseModal(props) {
   const {
-    t, prefs, tokenConfigured, busy, errorMessage, onStart, onOpenSettings, onClose,
+    t, prefs, doc, local, tokenConfigured, busy, errorMessage, onStart, onOpenSettings, onClose,
     problemPages, defaultOnlyProblems,
   } = props;
   const pages = Array.isArray(problemPages) ? problemPages : [];
-  const canRepair = pages.length > 0;
+  const sourceEngine = doc && doc.parse ? doc.parse.engine : '';
+  const isLocalSource = sourceEngine === 'local';
+  const canRepair = pages.length > 0 && !isLocalSource;
   const [onlyProblems, setOnlyProblems] = React.useState(Boolean(defaultOnlyProblems) && canRepair);
   const submit = (options) => {
     if (onlyProblems && canRepair) {
@@ -2669,10 +2947,16 @@ function MruReparseModal(props) {
               tokenConfigured ? t('reparse.onlyProblemsHint') : t('reparse.needsToken'))),
           h('span', { className: 'mru-switch' + (onlyProblems ? ' mru-switch--on' : ''), 'aria-hidden': 'true' }))
         : null,
+      isLocalSource
+        ? h('p', { className: 'mru-reparse-hint' }, t('reparse.localRepair'))
+        : null,
       h(MruSetupPanel, {
         t,
         prefs,
+        doc,
+        local,
         tokenConfigured,
+        initialEngine: isLocalSource ? 'local' : '',
         busy,
         errorMessage,
         onSubmit: submit,
@@ -2695,6 +2979,11 @@ function mruNormalizePrefs(raw) {
   prefs.defaultIsOcr = Boolean(prefs.defaultIsOcr);
   prefs.defaultEnableFormula = prefs.defaultEnableFormula !== false;
   prefs.defaultEnableTable = prefs.defaultEnableTable !== false;
+  prefs.autoAllowAgentFallback = prefs.autoAllowAgentFallback !== false;
+  if (prefs.defaultEngine !== 'auto' && prefs.defaultEngine !== 'standard'
+    && prefs.defaultEngine !== 'local' && prefs.defaultEngine !== 'agent') {
+    prefs.defaultEngine = 'auto';
+  }
   if (typeof prefs.targetLanguage !== 'string' || prefs.targetLanguage === '') prefs.targetLanguage = 'zh';
   if (typeof prefs.translationProvider !== 'string' || prefs.translationProvider === '') prefs.translationProvider = 'auto';
   return prefs;
@@ -3720,6 +4009,19 @@ function MineruApp(props) {
     setSettingsOpen(true);
   };
 
+  /** Refresh the local capability snapshot (settings panel 「重新检测」). */
+  const redetectLocal = async () => {
+    try {
+      const value = await mruPost('settings.get', {});
+      setSettingsData(value || null);
+      if (value && value.local) {
+        setStatus((previous) => (previous ? { ...previous, local: value.local } : previous));
+      }
+    } catch {
+      /* capability refresh is best-effort */
+    }
+  };
+
   const saveToken = async (token, done) => {
     setTokenBusy(true);
     try {
@@ -4181,6 +4483,9 @@ function MineruApp(props) {
         if (cancelled) return;
         setSettingsData(value || null);
         if (value && value.preferences) setPrefs(mruNormalizePrefs(value.preferences));
+        if (value && value.local) {
+          setStatus((previous) => (previous ? { ...previous, local: value.local } : previous));
+        }
       })
       .catch(() => {
         if (!cancelled) setSettingsData(null);
@@ -4362,6 +4667,7 @@ function MineruApp(props) {
         prefs,
         parseBusy,
         parseError,
+        local: status ? status.local : null,
         tokenConfigured: Boolean(status && status.tokenConfigured),
         scrollRef,
         paperProps,
@@ -4375,8 +4681,14 @@ function MineruApp(props) {
         onCancelParse: () => { void cancelParse(selectedId); },
         onRetryParse: () => { void startParse(selectedId, mruDefaultParseOptions(prefs)); },
         onOtherEngine: () => {
+          // Rotate the available engines: local → agent → standard → local.
           const currentEngine = selectedDoc && selectedDoc.parse ? selectedDoc.parse.engine : undefined;
-          const engine = currentEngine === 'agent' ? 'standard' : 'agent';
+          const localOk = mruLocalSupport(status ? status.local : null, selectedDoc && selectedDoc.ext).ok;
+          const engine = currentEngine === 'local'
+            ? 'agent'
+            : currentEngine === 'agent'
+              ? 'standard'
+              : localOk ? 'local' : 'agent';
           void startParse(selectedId, { ...mruDefaultParseOptions(prefs), engine });
         },
         onReloadReader: reloadReader,
@@ -4501,6 +4813,7 @@ function MineruApp(props) {
       onSaveToken: saveToken,
       onClearToken: clearToken,
       onUpdatePrefs: (patch) => { void updatePrefs(patch); },
+      onRedetect: redetectLocal,
       tokenBusy,
     }) : null,
     importUrlOpen ? h(MruImportUrlModal, {
@@ -4520,6 +4833,8 @@ function MineruApp(props) {
     reparseDoc ? h(MruReparseModal, {
       t,
       prefs,
+      doc: reparseDoc,
+      local: status ? status.local : null,
       tokenConfigured: Boolean(status && status.tokenConfigured),
       problemPages: mruProblemPages(reader.contentList),
       defaultOnlyProblems: reparseOnlyProblemsDefault,

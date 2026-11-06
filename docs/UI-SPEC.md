@@ -100,6 +100,9 @@ Alignment: the paper is centered in the center column; its text is left-aligned 
 right, no justification). Rail and margin content are left-aligned, dense 13px UI text. Titles
 are never centered except the empty state.
 
+Status bar engine label: `MinerU 精准解析` (standard), `MinerU 轻量解析` (agent) or `本地解析`
+(local); a local parse appends the provider (`· 内置` / `· Office 转换`).
+
 Responsive:
 - `> 1280px`: all three zones visible.
 - `900–1280px`: margin hidden by default; the topbar `margin` toggle adds
@@ -251,6 +254,23 @@ No document selected (library non-empty): `.mru-empty mru-empty--quiet` with
 
 Reader block classes (client-reader supplies block model; client-ui renders):
 
+Local parse result banner (inside the scrolling reader, above the paper body; dismissible):
+```
+<div class="mru-banner mru-banner--info mru-banner--inline mru-banner--local" role="status">
+  <div class="mru-banner__body">
+    <strong class="mru-banner__title">本地解析结果</strong>
+    <span class="mru-banner__text">本文由本地解析生成：保留文字、段落与页码；公式、表格、图片未还原。[个别字体缺失…] [几乎没有提取到文字…]</span>
+  </div>
+  <div class="mru-banner__actions">
+    <button class="mru-btn mru-btn--ghost mru-btn--sm">配置 Token 解锁精准解析</button>
+    <button class="mru-btn mru-btn--ghost mru-btn--sm">重新解析</button>
+    <button class="mru-icon-btn" aria-label="关闭">×</button>
+  </div>
+</div>
+```
+It renders only when `doc.parse.engine==='local'`; `banner.missingFonts` / `banner.scanned` are
+appended when `parse.local.warnings` contains `missing-fonts` / `scanned`. Other block classes:
+
 | block | markup |
 |---|---|
 | heading | `<div class="mru-block mru-block--h1" data-block-key="b3:ab12cd"><h2 class="mru-h mru-h--1">…</h2></div>` (h1→`mru-h--1`…`mru-h--4`; article title itself is not a block) |
@@ -282,21 +302,39 @@ Parse setup (document not yet parsed, or reparsing):
     <h2 class="mru-setup__title">准备解析</h2>
     <p class="mru-setup__text">MinerU 会识别版式、公式和表格，把文件转成可翻译、可批注的结构化阅读稿。</p>
   </div>
-  [<div class="mru-callout mru-callout--warn">精准解析需要 MinerU Token。<button class="mru-link-btn">去设置</button></div>]
+  [<div class="mru-callout mru-callout--warn">配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。本地解析无需 Token，文件不会上传。<button class="mru-link-btn">去设置</button></div>]
   <div class="mru-setup__grid">
-    <div class="mru-field"><label class="mru-field__label">解析引擎</label><select class="mru-select">…</select></div>
+    <div class="mru-field"><label class="mru-field__label">解析引擎</label>
+      <select class="mru-select">
+        <option value="auto">自动（有 Token 用精准解析，否则优先本地）</option>
+        <option value="standard">精准解析</option>
+        <option value="local">本地解析（离线 · 不上传）</option>
+        <option value="agent">轻量云端解析（免 Token · 会上传文件）</option>
+      </select>
+      [<span class="mru-field__hint mru-field__hint--warn">本地解析不可用：{reason}</span>]
+    </div>
     … model / language / page ranges …
   </div>
   <div class="mru-setup__toggles">
     <label class="mru-toggle-row"><span class="mru-toggle-row__text"><span class="mru-toggle-row__title">公式识别</span><span class="mru-toggle-row__hint">保留 LaTeX 公式</span></span><span class="mru-switch mru-switch--on" role="switch" aria-checked="true"></span></label>
-    … OCR / 表格 …
+    … OCR / 表格 (disabled while the local engine is selected) …
   </div>
   <div class="mru-setup__foot">
     <button class="mru-btn mru-btn--primary">开始解析</button>
-    <span class="mru-note-text">精准解析消耗每日解析额度；轻量解析限 10 MB / 20 页。</span>
+    <span class="mru-setup__effective">将使用：本地解析</span>
+    <span class="mru-note-text">本地解析只提取文字层，保留段落与页码；公式、表格、图片与扫描件需云端精准解析。文件不会上传。</span>
   </div>
 </section>
 ```
+
+Engine select order is `auto, standard, local, agent`. When the current file cannot be parsed
+locally (`capabilities` / extension; `enabled:false` or no parser), the `local` option is
+`disabled` and renders 「本地解析（离线 · 不上传） — 本地解析不可用」 plus
+`本地解析不可用：{reason}` (`setup.localReasonDisabled` / `localReasonUnavailable` /
+`localReasonType`). The `mru-setup__effective` hint mirrors the host `auto` policy
+(将使用：MinerU 精准解析 / 本地解析 / 轻量云端解析（文件会上传） / 没有可用引擎…), and the
+foot note switches to `setup.noteLocal` while `local` is selected. `modelVersion`, `language`,
+OCR/formula/table controls are disabled for `local` (and `modelVersion` for `agent`).
 
 Parsing state (replaces setup when `status==='parsing'`):
 ```
@@ -398,14 +436,27 @@ and close on Escape / outside pointerdown / scroll of the reader.
     <div class="mru-modal__body">
       <section class="mru-section">
         <h3 class="mru-section__title">MinerU 接入</h3>
-        <p class="mru-section__desc">精准解析需要 API Token，在 mineru.net 的 API 管理页创建。</p>
+        <p class="mru-section__desc">本地解析无需 Token；配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。</p>
         <div class="mru-field"><label class="mru-field__label">API Token</label>
           <div class="mru-field__row">
             <input class="mru-input" type="password" placeholder="粘贴 Token" />
             <button class="mru-btn mru-btn--ghost mru-btn--sm">保存</button>
             <button class="mru-btn mru-btn--ghost mru-btn--sm mru-btn--danger">清除</button>
           </div>
-          <span class="mru-field__hint mru-field__hint--ok">已配置 · 保存于本机凭据</span>
+          <span class="mru-field__hint mru-field__hint--ok">已配置 · 保存在本机凭据中</span>
+          [<span class="mru-field__hint">当前默认将使用本地解析（文件不会上传）</span>]
+        </div>
+      </section>
+      <section class="mru-section">
+        <div class="mru-section__head"><h3 class="mru-section__title">本地解析</h3>
+          <button class="mru-btn mru-btn--ghost mru-btn--sm">重新检测</button></div>
+        <p class="mru-section__desc">本地解析不上传文件；扫描件需云端解析或 OCR 侧车。</p>
+        <div class="mru-local-list">
+          <div class="mru-local-row"><span class="mru-local-row__name">内置文字层提取</span>
+            <span class="mru-local-row__state mru-local-row__state--ok">可用</span>
+            <span class="mru-local-row__version">pdfjs-dist/5.4.449</span></div>
+          <div class="mru-local-row"><span class="mru-local-row__name">Office 转换（office-to-pdf）</span>
+            <span class="mru-local-row__state">不可用</span></div>
         </div>
       </section>
       <section class="mru-section"> … 阅读偏好: 目标语言 / 翻译服务 / 显示页面标记 … </section>
@@ -438,7 +489,11 @@ Import-by-URL modal: `.mru-modal__panel--import` with `.mru-input mru-input--url
 ```
 Utilities: `.mru-dot` (middle dot separator, but content is a real `<span>·</span>`),
 `.mru-spinner` (1em border spinner), `.mru-sr-only`, `.mru-kbd`, `.mru-link-btn`,
-`.mru-note-text`, `.mru-hr`. Skeleton surfaces: `.mru-doc-skeleton`, `.mru-line-skeleton`.
+`.mru-note-text`, `.mru-hr`, `.mru-setup__effective` (effective-engine hint).
+Skeleton surfaces: `.mru-doc-skeleton`, `.mru-line-skeleton`.
+Local parsing: `.mru-banner--local` (info banner variant, see §3.5), `.mru-local-list`,
+`.mru-local-row`, `.mru-local-row__name`, `.mru-local-row__state`
+(`--ok` = available), `.mru-local-row__version` (settings capability rows).
 
 ---
 
@@ -451,7 +506,13 @@ Utilities: `.mru-dot` (middle dot separator, but content is a real `<span>·</sp
 2. **Open**: selecting a doc loads `library.get` (+ `document.markdown` when parsed); the paper
    re-mounts with the entry animation and scrolls to top. Unparsed docs show the setup panel.
 3. **Parse**: start → optimistic status `parsing`, poll list every 2.5s while any parsing; when
-   done the doc auto-opens with the parsed body. Failure keeps the setup panel with the error.
+   done the doc auto-opens with the parsed body. Failure keeps the setup panel with the error and
+   a 「换用云端解析或配置 Token」 hint for local failures. Engine selection is
+   `auto|standard|local|agent`; `local` is disabled when the host `local` snapshot / extension
+   says it is unsupported, and the effective-engine hint mirrors the host `auto` policy
+   (token → precise; else local when supported; else lightweight cloud with upload; else no
+   engine). Local parses never upload; a parsed local document is shown with the local-result
+   banner (§3.5) and only offers whole-document reparse.
 4. **Reading modes**: 原文 hides translations; 对照 shows `.mru-para__translation` under blocks;
    译文 shows only translation blocks (`.mru-paper--translated` styles originals as `.mru-para__text--muted`
    small above translation? Keep simple: 译文 mode renders translation as the primary body and
@@ -475,9 +536,10 @@ Utilities: `.mru-dot` (middle dot separator, but content is a real `<span>·</sp
    `blockKey` is missing after a reparse are dropped with a quiet note in the margin
    (`.mru-margin__notice`).
 8. **Search**: filter rail by title/originalName; empty result `.mru-rail__empty`.
-9. **Settings**: token save/clear (never displays the token), defaults for parse form, target
-   language, translation provider, show page marks, reading scale. Save persists via
-   `settings.update` + token endpoints; failures toast and keep the form open.
+9. **Settings**: token save/clear (never displays the token), reading preferences, show page marks,
+   reading scale, and a 「本地解析」 capability section (built-in text-layer extraction + Office
+   conversion rows with 可用/不可用/version; 「重新检测」 re-reads `settings.get`). Save persists
+   via `settings.update` + token endpoints; failures toast and keep the form open.
 10. **Keyboard**: `Escape` closes overlays; `Cmd/Ctrl+F` focuses search (prevent default only
     inside the plugin); `Cmd/Ctrl+Enter` starts parse when the setup panel is visible; arrow
     navigation in the rail list works because rows are buttons.
@@ -511,9 +573,15 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | setup.title | 准备解析 | Ready to parse |
 | setup.text | MinerU 会识别版式、公式和表格，把文件转成可翻译、可批注的结构化阅读稿。 | MinerU detects layout, formulas, and tables, then turns the file into a structured reading draft. |
 | setup.engine | 解析引擎 | Engine |
-| setup.engineAuto | 自动（有 Token 用精准解析） | Auto (precise when a token is set) |
+| setup.engineAuto | 自动（有 Token 用精准解析，否则优先本地） | Auto (precise with a token, local first otherwise) |
 | setup.engineStandard | 精准解析 | Precise |
-| setup.engineAgent | 轻量解析（免 Token） | Lightweight (no token) |
+| setup.engineLocal | 本地解析（离线 · 不上传） | Local (offline, no upload) |
+| setup.engineLocalUnavailable | 本地解析不可用 | Local parsing unavailable |
+| setup.engineLocalWhy | 本地解析不可用：{reason} | Local parsing unavailable: {reason} |
+| setup.localReasonDisabled | 已在配置中关闭 | disabled in the configuration |
+| setup.localReasonUnavailable | 本机没有可用的本地解析器 | no local parser on this machine |
+| setup.localReasonType | 这种文件类型不支持本地解析 | this file type cannot be parsed locally |
+| setup.engineAgent | 轻量云端解析（免 Token · 会上传文件） | Lightweight cloud (no token, uploads the file) |
 | setup.model | 模型 | Model |
 | setup.language | 文档语言 | Document language |
 | setup.pageRanges | 页码范围 | Page range |
@@ -526,7 +594,14 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | setup.ocrHint | 扫描件建议开启 | Turn on for scanned pages |
 | setup.start | 开始解析 | Start parsing |
 | setup.note | 精准解析消耗每日解析额度；轻量解析限 10 MB / 20 页。 | Precise parsing uses the daily quota; lightweight parsing is limited to 10 MB / 20 pages. |
+| setup.noteLocal | 本地解析只提取文字层，保留段落与页码；公式、表格、图片与扫描件需云端精准解析。文件不会上传。 | Local parsing extracts the text layer and keeps paragraphs and page marks; formulas, tables, figures and scanned pages need precise cloud parsing. The file is not uploaded. |
 | setup.tokenWarn | 精准解析需要 MinerU Token。 | Precise parsing needs a MinerU token. |
+| setup.tokenWarnLocal | 配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。 | A token unlocks MinerU precise parsing (formulas/tables/OCR). |
+| setup.tokenWarnPrivacy | 本地解析无需 Token，文件不会上传。 | Local parsing needs no token and never uploads the file. |
+| setup.effectiveStandard | 将使用：MinerU 精准解析 | Will use: MinerU precise parsing |
+| setup.effectiveLocal | 将使用：本地解析 | Will use: local parsing |
+| setup.effectiveAgent | 将使用：轻量云端解析（文件会上传） | Will use: lightweight cloud parsing (the file is uploaded) |
+| setup.effectiveBlocked | 将使用：没有可用引擎，请先配置 Token 或启用轻量云端解析 | Will use: no engine available — configure a token or allow lightweight cloud parsing |
 | setup.tokenAction | 去设置 | Open settings |
 | parsing.text | MinerU 正在解析 · {done} / {total} 页 | MinerU is parsing · {done} / {total} pages |
 | parsing.textNoProgress | MinerU 正在解析… | MinerU is parsing… |
@@ -534,6 +609,7 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | fail.title | 解析没有完成 | Parsing didn't finish |
 | fail.retry | 重试 | Retry |
 | fail.otherEngine | 换个引擎 | Try another engine |
+| fail.localSuggestion | 换用云端解析或配置 Token | Try cloud parsing or configure a token |
 | reader.modeOriginal | 原文 | Original |
 | reader.modeBilingual | 对照 | Bilingual |
 | reader.modeTranslated | 译文 | Translation |
@@ -543,6 +619,11 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | reader.loading | 正在载入解析稿… | Loading the parsed draft… |
 | reader.copy | 复制 | Copy |
 | reader.more | 更多操作 | More |
+| banner.localTitle | 本地解析结果 | Local parse result |
+| banner.localText | 本文由本地解析生成：保留文字、段落与页码；公式、表格、图片未还原。 | Parsed locally: text, paragraphs and page marks are kept; formulas, tables and figures are not reconstructed. |
+| banner.missingFonts | 个别字体缺失，文字可能有缺字。 | Some fonts were missing; a few characters may be absent. |
+| banner.scanned | 几乎没有提取到文字，可能是扫描件。 | Little or no text was extracted; the file may be scanned. |
+| banner.upgrade | 配置 Token 解锁精准解析 | Configure a token for precise parsing |
 | margin.outline | 大纲 | Outline |
 | margin.notes | 批注 | Notes |
 | margin.empty | 选中正文后，可以高亮或写下批注。 | Select text to highlight it or leave a note. |
@@ -559,13 +640,24 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | noteeditor.save | 保存 | Save |
 | noteeditor.cancel | 取消 | Cancel |
 | settings.title | 设置 | Settings |
+| settings.sectionToken | MinerU 接入 | MinerU access |
 | settings.token | API Token | API token |
-| settings.tokenHint | 精准解析需要 Token，在 mineru.net 的 API 管理页创建。 | Create a token on mineru.net under API management. |
+| settings.tokenHint | 本地解析无需 Token；配置 Token 可解锁 MinerU 精准解析（公式/表格/OCR）。 | Local parsing needs no token; configure a token to unlock MinerU precise parsing (formulas/tables/OCR). |
 | settings.tokenPlaceholder | 粘贴 Token | Paste token |
 | settings.tokenSaved | 已配置 · 保存在本机凭据中 | Configured · stored in local credentials |
+| settings.tokenMissing | 未配置 | Not configured |
+| settings.tokenMissingLocal | 当前默认将使用本地解析（文件不会上传） | Current default: local parsing (the file is not uploaded) |
 | settings.save | 保存 | Save |
 | settings.clear | 清除 | Clear |
 | settings.close | 关闭 | Close |
+| settings.sectionLocal | 本地解析 | Local parsing |
+| settings.localBuiltin | 内置文字层提取 | Built-in text-layer extraction |
+| settings.localPdfTool | 系统 pdftotext | System pdftotext |
+| settings.localOffice | Office 转换（office-to-pdf） | Office conversion (office-to-pdf) |
+| settings.localRedetect | 重新检测 | Re-detect |
+| settings.localAvailable | 可用 | Available |
+| settings.localUnavailable | 不可用 | Unavailable |
+| settings.localHint | 本地解析不上传文件；扫描件需云端解析或 OCR 侧车。 | Local parsing does not upload files; scanned pages need cloud parsing or an OCR sidecar. |
 | settings.sectionRead | 阅读偏好 | Reading |
 | settings.targetLang | 目标语言 | Target language |
 | settings.provider | 翻译服务 | Translation service |
@@ -577,6 +669,7 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | menu.export | 导出 Markdown | Export Markdown |
 | menu.delete | 删除文献 | Delete paper |
 | menu.translateAll | 翻译全文 | Translate whole paper |
+| reparse.localRepair | 本地解析不支持按页修复；可整篇重新解析，或配置 Token 后整篇用云端解析。 | Page repair is unavailable for local parses; reparse the whole document, or configure a token and reparse in the cloud. |
 | confirm.deleteTitle | 删除这篇文献？ | Delete this paper? |
 | confirm.deleteText | 原文、解析稿、高亮和批注都会一起删除，无法恢复。 | The source, parsed draft, highlights, and notes are removed permanently. |
 | confirm.delete | 删除 | Delete |
@@ -598,6 +691,16 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | err.fileTooLarge | 文件超过 {limit} MB，无法上传。 | The file exceeds {limit} MB. |
 | err.unsupported | 暂不支持这种文件类型。 | This file type is not supported. |
 | err.noTranslation | 翻译服务不可用，无法生成译文。 | No translation service is available. |
+| err.localUnsupported | 本地解析不支持这种文件；可用轻量云端解析或配置 Token。 | Local parsing does not support this file; use lightweight cloud parsing or configure a token. |
+| err.localMissingTool | 本地解析工具不可用；请检查系统工具或改用云端解析。 | The local parsing tool is unavailable; check system tools or use cloud parsing. |
+| err.localEmptyText | 没有从文件中提取到文字（可能是扫描件）；请用云端解析或配置 OCR。 | No text was extracted (the file may be scanned); use cloud parsing or configure OCR. |
+| err.localEncrypted | PDF 已加密，无法本地解析；请去除密码后重试，或改用云端解析。 | The PDF is encrypted and cannot be parsed locally; remove the password or use cloud parsing. |
+| err.localFailed | 本地解析失败：{message} | Local parsing failed: {message} |
+| statusbar.engineStandard | MinerU 精准解析 | MinerU precise |
+| statusbar.engineAgent | MinerU 轻量解析 | MinerU lightweight |
+| statusbar.engineLocal | 本地解析 | Local |
+| statusbar.providerBuiltin | 内置 | built-in |
+| statusbar.providerOffice | Office 转换 | Office conversion |
 
 Locale fallback: if the harness locale is not `zh` use `en`. Add `locale` namespace id
 `dsh-litnotes`.

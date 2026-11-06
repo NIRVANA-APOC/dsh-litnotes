@@ -24,7 +24,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=20.16"
   },
   "dsh": {
     "bundle": {

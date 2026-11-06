@@ -30,10 +30,17 @@ import {
  *   translator?: 'fake' | null,
  *   mock?: object,
  *   config?: object,
+ *   localEngine?: object,
  * }} [options]
  */
 export async function createHarness(t, options = {}) {
-  const { token = 'e2e-token-1234', translator = 'fake', mock: mockOptions = {}, config: configOverrides = {} } = options
+  const {
+    token = 'e2e-token-1234',
+    translator = 'fake',
+    mock: mockOptions = {},
+    config: configOverrides = {},
+    localEngine,
+  } = options
   const root = await mkdtemp(join(tmpdir(), 'dsh-litnotes-e2e-'))
   const mock = await startMockMineru({
     token: token ?? 'no-token-configured',
@@ -66,6 +73,7 @@ export async function createHarness(t, options = {}) {
     config,
     getToken: () => getToken(credentials),
     logger,
+    localEngine,
   })
   const service = createService({
     store,
@@ -77,6 +85,7 @@ export async function createHarness(t, options = {}) {
     getTranslator: () => translatorImpl,
     getLlm: () => undefined,
     getDefaultModel: () => undefined,
+    localEngine,
   })
 
   const harness = {

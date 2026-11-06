@@ -9,6 +9,65 @@
 
 ---
 
+## 实现状态（2026-11-06）
+
+> 本节由 docs-writer 在 T0/T0.5 落地后追加；下文 §1–§8 仍是**调研时的快照**（含当时的行号与
+> "现状：没有本地路径" 的判断），以本节和代码为准。另：§1 写的 `~/.dsh/litnotes/` 为当时笔误，
+> 实际默认数据目录是 `~/.dsh/litnotes`（详见 `docs/ARCH.md` §3）。
+
+**结论：P0（T0 内置 pdf.js 本地 PDF + T0.5 `officeToPdf` → PDF → pdf.js）已实现；P1（系统
+pdftotext 探测）与 P2（侧车）未实现。**
+
+### 已实现范围
+
+| 计划项 | 状态 | 实现位置 |
+|---|---|---|
+| T0 内置 pdf.js 文字层解析 | ✅ | `lib/local-pdf.js`（pdfjs-dist 5.4.449 legacy min，懒加载）、`lib/local-synth.js`（`full.md` + 合成 `content_list.json`）、`lib/local-engine.js`（provider/capability/错误映射编排）、`vendor/pdfjs/{pdf.mjs,pdf.worker.mjs,LICENSE}`（≈1.54 MiB，Apache-2.0） |
+| T0.5 Office → PDF → 文字层 | ✅（服务可选） | `lib/local-office.js` + `ctx.get('officeToPdf')`；doc/docx/ppt/pptx/xls/xlsx；服务缺失时该能力不可用 |
+| 引擎模型 `auto\|standard\|agent\|local` | ✅ | `lib/mineru.js` `normalizeParseOptions`；`lib/config.js` `ENGINES` / `defaultEngine` |
+| `auto` 无 Token local-first + 可选云端回退 | ✅ | `lib/mineru.js:722-857`；偏好 `autoAllowAgentFallback`（默认 true） |
+| 本地解析能力/状态暴露 | ✅ | `lib/service.js` `getStatus().local`、`getSettings().local`/`defaults.localProvider`；`index.js` 注入 `createLocalEngine` |
+| parse-manager 引擎分叉与 local 产物落盘 | ✅ | `lib/parse-manager.js` `executeLocalTask()`（staging 复用、`parse.provider`/`parse.local` 持久化、local 不参与 repair/断点恢复） |
+| Client：四引擎选择 / 质量 banner / 本地解析设置区 / 状态栏 / `local-*` 文案 | ✅ | `ui/app.js` + `ui/styles.css`（`lib/client.js` 由构建脚本重建） |
+| 配置 `local:{enabled,maxPages,maxPdfBytes,maxTextBytes,minCharsPerPage,maxParagraphChars,keepContentList,timeoutMs,maxOfficePdfBytes}` | ✅ | `lib/config.js` 校验/钳制；默认值与 `lib/local-engine.js` `DEFAULT_LOCAL_CONFIG` 一致 |
+| 错误码 `local-unsupported/missing-tool/empty-text/encrypted/failed` + `too-large` | ✅ | `lib/local-engine.js`、`lib/local-office.js`、`lib/local-pdf.js`、`lib/wire.js` `STATUS_BY_CODE` |
+| 文档 | ✅ | `docs/ARCH.md`（§1/§2/§3/§4.1/§5.5/§8/§9.3/§10/§11）、`docs/HOST-INTERFACES.md`、`docs/UI-SPEC.md`、`README.md`、本节 |
+
+产物契约与 §5.3 一致：本地解析写 `parsed/full.md` + 合成纯数组 `parsed/content_list.json`
+（`{page_idx,type:'text',text,text_level?}`，与 markdown block 1:1，供页码标记对齐），不写
+`images/`，不迁移目录、不改 `schemaVersion`；`meta.parse` 增量字段为 `engine:'local'`、
+`provider`、`local:{pageCount,textChars,extractMs,toolVersion,provider,warnings}`。
+
+### 测试与门禁
+
+测试与门禁已在工作区落地并通过（2026-11-06，文档更新时本机运行）：
+
+- `node scripts/check.mjs` — **11/11 PASS**，含 `vendor pdf.js assets` 门禁（3 files，pdfjs
+  5.4.449；校验 `vendor/pdfjs/{pdf.mjs,pdf.worker.mjs,LICENSE}` 存在且与
+  `lib/local-pdf.js` 的 `PDFJS_VERSION` 一致）、client build 校验，以及内嵌的
+  `node --test test/`：**301 passed / 0 failed**。
+- 覆盖范围：`test/unit/local-{engine,pdf,synth,office}.test.mjs`（synth golden/确定性/页号、
+  pdf.js 适配层、engine plan/extract、Office 错误映射）、`test/unit/local-pdf.test.mjs` 的真实
+  `loadPdfjs()` vendor smoke + 最小合成 PDF、`test/e2e/local-flow.test.mjs`（真实 Host 栈、
+  无 Token `auto` → local 且 mock-MinerU **零请求**、扫描件 `local-empty-text`）、
+  `test/reader/local-artifact.test.mjs`（阅读台产物契约）。
+
+测试仍在并行补充，数字以最终 `test/` 与 `scripts/check.mjs` 为准。
+
+### 与 P1/P2 的边界（未实现）
+
+- **P1 `pdftotext` 探测与兜底未实现**：没有 `lib/local-tools.js` / `system:pdftotext`
+  provider；设置面板已预留「系统 pdftotext」文案（`settings.localPdfTool`），但 Host 不会探测，
+  因此不会出现在 capability 列表里。
+- **P2 侧车未实现**：没有 `lib/local-sidecar.js`，没有 MinerU 本地版 / Docling / MarkItDown /
+  OCR 探测；扫描件仍只能走云端解析或用户自建 OCR。
+- **Office 只走 `officeToPdf`**：没有自写 OOXML 回退（§6 P2 项），也没有 LibreOffice CLI 直调。
+- **与 §5.1 的偏差（以代码为准）**：原计划 `config.local.provider = auto|builtin|system|sidecar`
+  未实现；provider 只在单次 `parse.start` 里用 `options.localProvider`
+  （`auto|builtin|system:officeToPdf`）覆盖。`autoAllowAgentFallback` 在 Host 与偏好校验中已实现，
+  但**设置面板尚无开关**（默认 true，客户端只读取）。
+- 回滚开关仍在：`config.local.enabled:false` 恢复纯云端行为，已解析的本地文档保持可读。
+
 ## 0. 结论速览
 
 - **现状**：插件**没有**任何本地解析路径。解析只有 MinerU 两个云端引擎——`standard`（需 Token，

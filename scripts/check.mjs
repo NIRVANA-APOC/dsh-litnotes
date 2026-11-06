@@ -12,7 +12,9 @@
  *      no YAML dependency).
  *   3. locale/{en,zh}.json: meta.title + meta.description.
  *   4. icon.svg + ui/*.svg exist and look like SVG documents.
- *   5. `node --check` on every shipped .js/.mjs (index.js, lib/**, ui/*.js,
+ *   5. vendored pdf.js runtime files (pdf.mjs / pdf.worker.mjs / LICENSE)
+ *      exist, are non-empty and stay in sync with `PDFJS_VERSION`.
+ *   6. `node --check` on every shipped .js/.mjs (index.js, lib/**, ui/*.js,
  *      scripts/**, test/**).
  *   6. generated client bundle sanity (lib/client.js: loader shell, no
  *      unreplaced __MINERU_ placeholders).
@@ -22,7 +24,7 @@
  * Prints a compact PASS/FAIL table and exits non-zero on any failure.
  * Dependency-free; no npm install, no network.
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -218,6 +220,37 @@ check('icon.svg + ui/*.svg', () => {
   }
   if (problems.length > 0) throw new Error(problems.join('; '))
   return `${svgs.length} SVG files look valid`
+})
+
+// ---------------------------------------------------------------------------
+// 5b. vendored pdf.js runtime (T0 local engine)
+// ---------------------------------------------------------------------------
+
+check('vendor pdf.js assets', () => {
+  const required = ['vendor/pdfjs/pdf.mjs', 'vendor/pdfjs/pdf.worker.mjs', 'vendor/pdfjs/LICENSE']
+  const problems = []
+  const sizes = new Map()
+  for (const rel of required) {
+    const absolute = join(ROOT, rel)
+    if (!existsSync(absolute)) {
+      problems.push(`${rel} is missing`)
+      continue
+    }
+    const info = statSync(absolute)
+    if (info.size <= 0) problems.push(`${rel} is empty`)
+    else sizes.set(rel, info.size)
+  }
+  if (problems.length > 0) throw new Error(problems.join('; '))
+  // The loader reports PDFJS_VERSION; it must describe the vendored bundle.
+  const version = /export const PDFJS_VERSION = '([^']+)'/.exec(read('lib/local-pdf.js'))?.[1]
+  if (typeof version !== 'string' || version === '') throw new Error('lib/local-pdf.js has no PDFJS_VERSION')
+  for (const rel of ['vendor/pdfjs/pdf.mjs', 'vendor/pdfjs/pdf.worker.mjs']) {
+    if (!read(rel).includes(version)) throw new Error(`${rel} does not contain PDFJS_VERSION ${version}`)
+  }
+  const kib = (bytes) => `${(bytes / 1024).toFixed(0)} KiB`
+  return `${required.length} files (pdf.mjs ${kib(sizes.get('vendor/pdfjs/pdf.mjs'))}, worker ${kib(
+    sizes.get('vendor/pdfjs/pdf.worker.mjs'),
+  )}), pdfjs ${version}`
 })
 
 // ---------------------------------------------------------------------------

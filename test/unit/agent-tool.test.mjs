@@ -238,3 +238,16 @@ test('defers registration until an optional tool registry appears', () => {
   assert.equal(tools.calls[0].name, 'mineru')
   assert.equal(typeof dispose, 'function')
 })
+
+
+test('parse options expose the local engine and its provider override', () => {
+  const { tools } = register()
+  const parse = tools.calls[0].parameters.properties.parse
+  assert.ok(parse, 'parse options are part of the schema')
+  assert.deepEqual(parse.properties.engine.enum, ['auto', 'standard', 'agent', 'local'])
+  assert.match(parse.properties.engine.description, /local/i)
+  const localProvider = parse.properties.localProvider
+  assert.ok(localProvider, 'localProvider is exposed')
+  assert.deepEqual(localProvider.enum, ['auto', 'builtin', 'system:officeToPdf'])
+  assert.match(localProvider.description, /officeToPdf/i)
+})

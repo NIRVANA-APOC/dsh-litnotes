@@ -3918,3 +3918,165 @@ html[data-ds-dark-theme] .mru-root {
 .mru-repair-option .mru-toggle-row__text {
   flex: 1;
 }
+
+/* --------------------------------------------------------------------------
+   14. Local parsing (T0/T0.5) — engine choice, quality banner, capability list
+   -------------------------------------------------------------------------- */
+
+/* Setup: the token callout becomes a two-line note (local needs no token). */
+.mru-callout--stack {
+  align-items: flex-start;
+}
+
+.mru-callout__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mru-callout__text {
+  display: block;
+}
+
+.mru-callout__sub {
+  display: block;
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+}
+
+.mru-field__hint--warn {
+  color: var(--mru-warn);
+}
+
+/* Setup: options the local engine ignores are visible but inert. */
+.mru-toggle-row--disabled {
+  opacity: 0.52;
+  cursor: default;
+  pointer-events: none;
+}
+
+.mru-switch--disabled {
+  cursor: default;
+}
+
+/* Setup: "will use: …" hint next to the start button. */
+.mru-setup__foot {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.mru-setup__effective {
+  flex: none;
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* Reader: local parse quality banner (dismissible, per document session). */
+.mru-banner--local {
+  border-color: color-mix(in srgb, var(--mru-accent) 34%, var(--mru-rule));
+  background: color-mix(in srgb, var(--mru-accent) 6%, var(--mru-surface));
+}
+
+.mru-banner--local::before {
+  background: var(--mru-accent);
+}
+
+.mru-banner__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mru-banner__title {
+  color: var(--mru-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.mru-banner--local .mru-banner__text {
+  color: var(--mru-ink-soft);
+  white-space: normal;
+}
+
+.mru-banner--local .mru-banner__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Settings: local capability section. */
+.mru-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mru-local-list {
+  margin-top: 2px;
+}
+
+.mru-local-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--mru-rule);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mru-local-row:last-child {
+  border-bottom: 0;
+}
+
+.mru-local-row__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mru-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mru-local-row__state {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.mru-local-row__state--ok {
+  color: color-mix(in srgb, var(--mru-success) 68%, var(--mru-ink));
+}
+
+.mru-local-row__version {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-mono);
+  font-size: 10.5px;
+}
+
+/* Reparse dialog: local parses cannot repair pages, so explain the fallback. */
+.mru-reparse-hint {
+  margin: 0 0 14px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--mru-accent) 30%, var(--mru-rule));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mru-accent) 6%, var(--mru-surface));
+  color: var(--mru-ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* Failure panel: engine-specific guidance under the error text. */
+.mru-fail__hint {
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.5;
+}

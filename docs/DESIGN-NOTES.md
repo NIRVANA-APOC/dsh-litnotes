@@ -279,3 +279,25 @@ One edge case is now covered end-to-end: in 译文 mode an untranslated block re
 English inside `.mru-para__translation--source`, and the stylesheet keeps that fallback in the
 serif reading voice at body size — so a not-yet-translated block reads as the original page
 rather than switching to the translation voice.
+
+---
+
+## 12. Engine extension: local parsing (T0/T0.5)
+
+The parse form now carries a fourth engine, `local`, because "offline / nothing uploaded" is a
+different promise from "cloud, no token" — not a hidden mode of `auto`. In the interface this is
+expressed as one extra option in the existing select (`自动 / 精准解析 / 本地解析（离线 · 不上传）/
+轻量云端解析`), a disabled state with a concrete reason when the file cannot be parsed locally, and
+a small 「将使用：…」 line that states *before* the click which engine will run (and whether the
+file will be uploaded). The reader then labels the result with the quieter
+`.mru-banner--local` strip — informational, not an error — carrying the quality caveat and the
+"configure a token for precise parsing" path; the status bar adds the provider
+(`本地解析 · 内置` / `Office 转换`) so a locally produced draft is never mistaken for a MinerU
+one. The settings modal gained a compact 「本地解析」 capability list (built-in text layer, Office
+conversion) instead of a generic toggle, mirroring the host's `local` snapshot.
+
+No new visual language was introduced: the local banner reuses the existing info banner with
+`--local`, the capability rows reuse hairlines and the `.mru-field__hint` voice, and the engine
+labels reuse the statusbar text style. The deliberate asymmetry — local parsing appears *less*
+prominent than precise parsing — is intentional: it is the zero-setup fallback, while formulas,
+tables, figures and scanned pages still point at MinerU.

@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getToken, resolveConfig } from './lib/config.js'
 import { createStore } from './lib/store.js'
+import { createLocalEngine } from './lib/local-engine.js'
 import { createParseManager } from './lib/parse-manager.js'
 import { createService } from './lib/service.js'
 import { registerRoutes } from './lib/routes.js'
@@ -40,12 +41,20 @@ export function apply(ctx, config) {
   const credentials = ctx.get('credentials')
 
   const store = createStore({ dataDir: resolved.dataDir, logger })
+  // Local engine (T0 pdf.js / T0.5 officeToPdf). The Office service is optional
+  // and may be mounted after this plugin, so resolve it lazily per parse.
+  const localEngine = createLocalEngine({
+    config: resolved,
+    logger,
+    getOfficeToPdf: () => ctx.get('officeToPdf'),
+  })
   const manager = createParseManager({
     store,
     config: resolved,
     logger,
     getToken: () => getToken(credentials),
     fetchImpl: globalThis.fetch,
+    localEngine,
   })
   const service = createService({
     store,
@@ -56,6 +65,7 @@ export function apply(ctx, config) {
     getCredentials: () => credentials,
     getTranslator: () => ctx.get('translator'),
     getLlm: () => ctx.get('llm'),
+    localEngine,
     getDefaultModel: () => {
       try {
         return ctx.get('agentDefaultModel')?.currentSelection?.()

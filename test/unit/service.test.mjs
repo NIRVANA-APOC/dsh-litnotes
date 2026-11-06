@@ -45,6 +45,7 @@ async function setup({
   llm,
   defaultModel,
   fetchImpl,
+  localEngine,
   config: configOverrides = {},
 } = {}) {
   // Reset the module-level in-memory token fallback so tests stay isolated.
@@ -80,6 +81,7 @@ async function setup({
     getLlm: () => llm,
     getDefaultModel: () => defaultModel,
     fetchImpl,
+    localEngine,
   })
   return { dataDir, config, store, service, managerCalls }
 }
@@ -544,6 +546,131 @@ test('library removal keeps no files behind and health counts follow', async () 
       assert.equal(error.code, 'not-found')
       return true
     })
+  } finally {
+    await teardown(env)
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// Local engine wiring (T0 / T0.5)
+// ---------------------------------------------------------------------------
+
+/** Fake local engine facade exposing the snapshot/supports contract the service probes. */
+function createFakeLocalEngine({
+  supports = (meta) =>
+    /\.pdf$/i.test(String(meta?.originalName ?? ''))
+      ? { supported: true, provider: 'builtin' }
+      : { supported: false, provider: null, reason: 'unsupported extension' },
+} = {}) {
+  const snapshot = {
+    enabled: true,
+    available: true,
+    recommended: 'builtin',
+    providers: [
+      { id: 'builtin', available: true, version: 'pdfjs-dist/5.4.449' },
+      { id: 'system:officeToPdf', available: false, version: '', reason: 'office-to-pdf service is not mounted in this profile' },
+    ],
+    capabilities: { textLayerPdf: true, office: false, images: false, html: false },
+  }
+  return {
+    config: { maxPdfBytes: 200 * 1024 * 1024 },
+    snapshot: () => snapshot,
+    supports: (meta) => supports(meta),
+  }
+}
+
+test('local capability snapshot is exposed through status and settings', async () => {
+  const localEngine = createFakeLocalEngine()
+  const env = await setup({ localEngine })
+  try {
+    const status = await env.service.getStatus()
+    assert.ok(status.local !== null && typeof status.local === 'object')
+    assert.equal(status.local.enabled, true)
+    assert.equal(status.local.available, true)
+    assert.equal(status.local.recommended, 'builtin')
+    assert.equal(status.local.capabilities.textLayerPdf, true)
+    assert.deepEqual(status.local.providers, localEngine.snapshot().providers)
+
+    const settings = await env.service.getSettings()
+    assert.deepEqual(settings.local, status.local)
+    assert.equal(settings.defaults.localProvider, 'auto')
+    assert.equal(settings.preferences.autoAllowAgentFallback, true)
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('auto parse without a token selects the local engine for supported files', async () => {
+  const localEngine = createFakeLocalEngine()
+  const env = await setup({ localEngine })
+  try {
+    const document = await addDocument(env, { name: 'paper.pdf' })
+    const result = await env.service.startParse(document.id, { engine: 'auto' })
+    assert.equal(result.document.parse.engine, 'local')
+    assert.equal(env.managerCalls.length, 1)
+    assert.equal(env.managerCalls[0].normalized.engine, 'local')
+    assert.deepEqual(env.managerCalls[0].normalized.params, {
+      fileName: 'paper.pdf',
+      language: 'ch',
+      localProvider: 'auto',
+    })
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('explicit local parse reports local-missing-tool when the engine is absent', async () => {
+  const env = await setup()
+  try {
+    const document = await addDocument(env, { name: 'paper.pdf' })
+    await assert.rejects(env.service.startParse(document.id, { engine: 'local' }), (error) => {
+      assert.ok(error instanceof WireError)
+      assert.equal(error.code, 'local-missing-tool')
+      assert.equal(error.status, 503)
+      return true
+    })
+    assert.equal(env.managerCalls.length, 0, 'the manager never starts a doomed parse')
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('auto parse with cloud fallback disabled and no local support is token-missing', async () => {
+  const localEngine = createFakeLocalEngine({
+    supports: () => ({ supported: false, provider: null, reason: 'unsupported extension .png' }),
+  })
+  const env = await setup({ localEngine })
+  try {
+    await env.service.updatePreferences({ autoAllowAgentFallback: false })
+    const document = await addDocument(env, { name: 'scan.png' })
+    await assert.rejects(env.service.startParse(document.id, { engine: 'auto' }), (error) => {
+      assert.ok(error instanceof WireError)
+      assert.equal(error.code, 'token-missing')
+      assert.equal(error.status, 401)
+      assert.match(error.message, /云端回退已关闭/)
+      return true
+    })
+    assert.equal(env.managerCalls.length, 0)
+
+    // With the default preference the token-free agent fallback is used.
+    await env.service.updatePreferences({ autoAllowAgentFallback: true })
+    const started = await env.service.startParse(document.id, { engine: 'auto' })
+    assert.equal(started.document.parse.engine, 'agent')
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('local capability overrides surface in status when the engine is unavailable', async () => {
+  const env = await setup()
+  try {
+    const status = await env.service.getStatus()
+    assert.equal(status.local, null)
+    const document = await addDocument(env, { name: 'paper.pdf' })
+    // Without a token and without local support the agent fallback wins.
+    const started = await env.service.startParse(document.id, { engine: 'auto' })
+    assert.equal(started.document.parse.engine, 'agent')
   } finally {
     await teardown(env)
   }

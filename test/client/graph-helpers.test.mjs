@@ -13,6 +13,7 @@ import {
   mruGraphActivePath,
   mruGraphAnchoredCardPosition,
   mruGraphNodeSeparation,
+  mruGraphLimitRenderEdges,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -530,5 +531,62 @@ test('incremental layout keeps previous nodes and spreads newly added ones', () 
   for (const node of extra) assert.ok(second.positions[node.id], `position for ${node.id}`)
   for (const node of graph.nodes) {
     assert.deepEqual(second.positions[node.id], first.positions[node.id], 'previous node stays put')
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// Dense library graphs: relation focus + canvas usage
+// ---------------------------------------------------------------------------
+
+/** A dense library-like fixture: 2 papers + 28 topics, near-complete topics. */
+function denseLibraryFixture() {
+  const nodes = [
+    { id: 'paper-a', type: 'paper', label: 'Paper A', weight: 2 },
+    { id: 'paper-b', type: 'paper', label: 'Paper B', weight: 2 },
+  ]
+  const edges = []
+  for (let i = 0; i < 28; i += 1) {
+    nodes.push({ id: `topic-${i}`, type: 'topic', label: `Topic ${i}`, weight: 1 })
+    edges.push({ id: `m-a-${i}`, from: 'paper-a', to: `topic-${i}`, type: 'mentions', weight: 1 })
+    edges.push({ id: `m-b-${i}`, from: 'paper-b', to: `topic-${i}`, type: 'mentions', weight: 1 })
+    for (let j = i + 1; j < 28; j += 1) {
+      edges.push({ id: `r-${i}-${j}`, from: `topic-${i}`, to: `topic-${j}`, type: 'relates', weight: 1 })
+    }
+  }
+  return { nodes, edges }
+}
+
+test('mruGraphLimitRenderEdges focuses dense relation layers deterministically', () => {
+  const graph = denseLibraryFixture()
+  const limited = mruGraphLimitRenderEdges(graph.edges, graph.nodes, 'topic-3', 120)
+  assert.equal(limited.total, graph.edges.length)
+  assert.equal(limited.trimmed, true)
+  assert.ok(limited.edges.length <= 120)
+  assert.ok(limited.edges.some((edge) => edge.from === 'topic-3' || edge.to === 'topic-3'), 'selected edges stay')
+  const again = mruGraphLimitRenderEdges(graph.edges, graph.nodes, 'topic-3', 120)
+  assert.deepEqual(again.edges.map((edge) => edge.id), limited.edges.map((edge) => edge.id), 'deterministic')
+
+  const small = graph.edges.slice(0, 20)
+  const untouched = mruGraphLimitRenderEdges(small, graph.nodes, null, 120)
+  assert.equal(untouched.trimmed, false)
+  assert.equal(untouched.edges, small, 'small graphs pass through untouched')
+})
+
+test('dense layout uses the wide canvas instead of a central blob', () => {
+  const graph = denseLibraryFixture()
+  const layout = layoutGraph(graph, { width: 1000, height: 680, seed: 11 })
+  const points = graph.nodes.map((node) => layout.positions[node.id])
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const spanX = Math.max(...xs) - Math.min(...xs)
+  const spanY = Math.max(...ys) - Math.min(...ys)
+  assert.ok(spanX >= 700, `layout fills the canvas width (${spanX.toFixed(0)}px)`)
+  assert.ok(spanY >= 420, `layout fills the canvas height (${spanY.toFixed(0)}px)`)
+  const { minPair, cv } = spreadMetrics(points)
+  assert.ok(minPair >= 30, `dense nodes keep apart (${minPair.toFixed(1)}px)`)
+  assert.ok(cv <= 0.45, `dense spacing is even (CV ${cv.toFixed(3)})`)
+  for (const point of points) {
+    assert.ok(point.x >= 0 && point.x <= 1000 && point.y >= 0 && point.y <= 680)
   }
 })

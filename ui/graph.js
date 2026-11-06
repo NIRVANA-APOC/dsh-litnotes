@@ -42,6 +42,11 @@ const MRU_GRAPH_DEFAULT_SEED = 0x1f2e3d4c;
 /** Library scale thresholds for progressive disclosure. */
 const MRU_GRAPH_COLLAPSE_THRESHOLD = 160;
 const MRU_GRAPH_COLLAPSE_KEEP = 120;
+/** Library graphs are much denser: fold minor topics earlier (progressive disclosure). */
+const MRU_GRAPH_LIBRARY_COLLAPSE_THRESHOLD = 46;
+const MRU_GRAPH_LIBRARY_COLLAPSE_KEEP = 28;
+/** Upper bound on relation lines drawn at once (dense library graphs are hairballs). */
+const MRU_GRAPH_MAX_RENDER_EDGES = 180;
 
 const MRU_GRAPH_MIN_ZOOM = 0.35;
 const MRU_GRAPH_MAX_ZOOM = 3.2;
@@ -72,6 +77,7 @@ const MRU_GRAPH_TEXT = {
     'graph.ask': '问 AI 关于此概念',
     'graph.search': '搜索节点',
     'graph.legend': '节点类型',
+    'graph.edgesTrimmed': '已聚焦 {shown}/{total} 条关系',
     'graph.aspectLegend': '批注颜色',
     'graph.aspect.definition': '定义/背景',
     'graph.aspect.method': '方法',
@@ -154,6 +160,7 @@ const MRU_GRAPH_TEXT = {
     'graph.ask': 'Ask AI about this concept',
     'graph.search': 'Search nodes',
     'graph.legend': 'Node types',
+    'graph.edgesTrimmed': 'showing {shown}/{total} relations',
     'graph.aspectLegend': 'Annotation colours',
     'graph.aspect.definition': 'definition/context',
     'graph.aspect.method': 'method',
@@ -822,9 +829,16 @@ function mruGraphVisibleGraph(graph, options) {
   let collapsed = false;
   let collapsedNodes = 0;
   const explicitThreshold = mruGraphNumber(opts.collapseThreshold, NaN);
-  const forcedAuto = collapse === 'auto' && Number.isFinite(explicitThreshold);
+  const explicitKeep = mruGraphNumber(opts.collapseKeep, NaN);
+  // A caller-provided keep count selects progressive disclosure (top-K kept,
+  // the rest folded into type clusters); a bare threshold keeps the legacy
+  // "force type collapse" behaviour used by the tests and the toggle.
+  const forcedAuto = collapse === 'auto' && Number.isFinite(explicitThreshold)
+    && !Number.isFinite(explicitKeep);
   const keepCount = collapse === 'auto'
-    ? (Number.isFinite(explicitThreshold) ? threshold : MRU_GRAPH_COLLAPSE_KEEP)
+    ? (Number.isFinite(explicitKeep)
+      ? explicitKeep
+      : (Number.isFinite(explicitThreshold) ? threshold : MRU_GRAPH_COLLAPSE_KEEP))
     : Infinity;
   if (rawNodes.length > 0 && (collapse === 'type' || (collapse === 'auto' && rawNodes.length > threshold))) {
     const result = mruGraphCollapseByType(rawNodes, rawEdges, forcedAuto ? 'type' : collapse, keepCount);
@@ -854,6 +868,53 @@ function mruGraphVisibleGraph(graph, options) {
 
 export function visibleGraph(graph, options) {
   return mruGraphVisibleGraph(graph, options);
+}
+
+/**
+ * Keep a readable number of relation lines for very dense graphs.
+ *
+ * All edges incident to the selected node are kept; the rest are ranked by
+ * weight, cluster size and endpoint degree so the strongest structure stays
+ * visible. Pure and deterministic.
+ *
+ * @param {object[]} edges visible edges.
+ * @param {object[]} nodes visible nodes.
+ * @param {string|null} selectedId currently selected node.
+ * @param {number} max maximum number of returned edges.
+ * @returns {{ edges: object[], total: number, trimmed: boolean }}
+ */
+export function mruGraphLimitRenderEdges(edges, nodes, selectedId = null, max = MRU_GRAPH_MAX_RENDER_EDGES) {
+  const list = Array.isArray(edges) ? edges : []
+  const nodeList = Array.isArray(nodes) ? nodes : []
+  const limit = Math.max(1, Math.floor(mruGraphNumber(max, MRU_GRAPH_MAX_RENDER_EDGES)))
+  if (list.length <= limit) return { edges: list, total: list.length, trimmed: false }
+  const nodeById = new Map(nodeList.map((node) => [node.id, node]))
+  const degree = new Map()
+  for (const edge of list) {
+    degree.set(edge.from, (degree.get(edge.from) || 0) + 1)
+    degree.set(edge.to, (degree.get(edge.to) || 0) + 1)
+  }
+  const selected = typeof selectedId === 'string' && selectedId !== '' ? selectedId : null
+  const pinned = []
+  const rest = []
+  for (const edge of list) {
+    if (selected !== null && (edge.from === selected || edge.to === selected)) pinned.push(edge)
+    else rest.push(edge)
+  }
+  const rankOf = (edge) => {
+    const from = nodeById.get(edge.from)
+    const to = nodeById.get(edge.to)
+    const clusterBonus = (from && from.cluster ? 2 : 0) + (to && to.cluster ? 2 : 0)
+    const degreeBonus = (degree.get(edge.from) || 0) + (degree.get(edge.to) || 0)
+    return (mruGraphNumber(edge.weight, 1) * 6)
+      + (mruGraphNumber(edge.count, 0) * 4)
+      + clusterBonus * 2
+      + Math.min(60, degreeBonus) * 0.05
+  }
+  rest.sort((left, right) => rankOf(right) - rankOf(left))
+  const keep = Math.max(0, limit - pinned.length)
+  const edgesOut = pinned.concat(rest.slice(0, keep))
+  return { edges: edgesOut, total: list.length, trimmed: edgesOut.length < list.length }
 }
 
 export const mruGraphVisible = visibleGraph;
@@ -977,6 +1038,39 @@ function mruGraphFitPositions(xs, ys, width, height, padding) {
   for (let i = 0; i < xs.length; i += 1) {
     xs[i] = mruGraphClamp(xs[i] * finalScale + offsetX, padding, width - padding);
     ys[i] = mruGraphClamp(ys[i] * finalScale + offsetY, padding, height - padding);
+  }
+}
+
+/**
+ * Stretch an already-fitted cloud horizontally so a roughly circular force
+ * layout still uses the wide canvas instead of leaving empty side margins.
+ * Distances along x grow, overlaps are fixed afterwards by the relaxation.
+ */
+function mruGraphStretchToAspect(xs, ys, width, height, padding) {
+  const usableWidth = Math.max(1, width - padding * 2);
+  const usableHeight = Math.max(1, height - padding * 2);
+  if (xs.length < 2) return;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < xs.length; i += 1) {
+    if (!Number.isFinite(xs[i]) || !Number.isFinite(ys[i])) continue;
+    if (xs[i] < minX) minX = xs[i];
+    if (xs[i] > maxX) maxX = xs[i];
+    if (ys[i] < minY) minY = ys[i];
+    if (ys[i] > maxY) maxY = ys[i];
+  }
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  if (!(spanX > 1) || !(spanY > 1)) return;
+  const canvasAspect = usableWidth / usableHeight;
+  const cloudAspect = spanX / spanY;
+  if (cloudAspect >= canvasAspect * 0.92) return;
+  const factor = mruGraphClamp(canvasAspect / cloudAspect, 1, 1.85);
+  const centerX = width / 2;
+  for (let i = 0; i < xs.length; i += 1) {
+    xs[i] = mruGraphClamp(centerX + (xs[i] - centerX) * factor, padding, width - padding);
   }
 }
 
@@ -1123,7 +1217,7 @@ function mruGraphLayoutGraph(graph, options) {
     }
   }
 
-  const links = [];
+  let links = [];
   const degrees = new Float64Array(count);
   for (let i = 0; i < edges.length; i += 1) {
     const edge = edges[i];
@@ -1134,6 +1228,14 @@ function mruGraphLayoutGraph(graph, options) {
     links.push({ a, b, weight });
     degrees[a] += weight;
     degrees[b] += weight;
+  }
+  // Dense library graphs (topic webs can be near-complete) would overpower
+  // repulsion with thousands of springs. Keep the full edge list for output,
+  // but attract along a deterministic sample capped at ~5n springs.
+  let attractionLinks = links;
+  if (links.length > count * 5) {
+    const stride = Math.ceil(links.length / (count * 5));
+    attractionLinks = links.filter((_, index) => index % stride === 0);
   }
 
   const defaultIterations = count > 240 ? 90 : count > 120 ? 120 : 160;
@@ -1186,8 +1288,8 @@ function mruGraphLayoutGraph(graph, options) {
     }
 
     // Attraction along links (FR d²/k), weighted by edge importance.
-    for (let i = 0; i < links.length; i += 1) {
-      const link = links[i];
+    for (let i = 0; i < attractionLinks.length; i += 1) {
+      const link = attractionLinks[i];
       let deltaX = xs[link.b] - xs[link.a];
       let deltaY = ys[link.b] - ys[link.a];
       let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -1256,6 +1358,7 @@ function mruGraphLayoutGraph(graph, options) {
       }
     }
     mruGraphFitPositions(xs, ys, width, height, padding);
+    mruGraphStretchToAspect(xs, ys, width, height, padding);
     // Spread overlapping dots after fitting: this is what turns a tight
     // centre blob into an even sheet on sparse/hub-heavy graphs.
     mruGraphRelaxOverlaps(xs, ys, fixed, width, height, padding, collision, 90);
@@ -1572,25 +1675,38 @@ export function MruGraphView(props) {
   const normalized = React.useMemo(() => mruGraphNormalizeGraph(rawGraph), [rawGraph]);
   const signature = React.useMemo(() => mruGraphSignature(normalized), [normalized]);
 
+  const visible = React.useMemo(() => mruGraphVisibleGraph(normalized, {
+    types: typeFilter,
+    query,
+    collapse: collapseMode,
+    ...(mode === 'library'
+      ? {
+        collapseThreshold: MRU_GRAPH_LIBRARY_COLLAPSE_THRESHOLD,
+        collapseKeep: MRU_GRAPH_LIBRARY_COLLAPSE_KEEP,
+      }
+      : null),
+  }), [normalized, typeFilter, query, collapseMode, mode]);
+
+  // Lay out exactly the visible subgraph: folded-in clusters get real positions
+  // (instead of falling back to the canvas centre) and hidden nodes stop
+  // occupying space, so a collapsed library graph reads as a clean map.
+  const layoutSignature = React.useMemo(() => (
+    `${signature}|${visible.nodes.map((node) => node.id).join(',')}|${visible.edges.length}`
+  ), [signature, visible]);
+
   const layout = React.useMemo(() => {
     const cache = layoutCacheRef.current;
-    if (cache && cache.signature === signature) return cache.layout;
-    const next = mruGraphLayoutGraph(normalized, {
+    if (cache && cache.signature === layoutSignature) return cache.layout;
+    const next = mruGraphLayoutGraph({ nodes: visible.nodes, edges: visible.edges }, {
       width: MRU_GRAPH_CANVAS_WIDTH,
       height: MRU_GRAPH_CANVAS_HEIGHT,
       seed: MRU_GRAPH_DEFAULT_SEED,
       previous: cache && cache.layout ? cache.layout.positions : null,
       pinned: pinsRef.current,
     });
-    layoutCacheRef.current = { signature, layout: next };
+    layoutCacheRef.current = { signature: layoutSignature, layout: next };
     return next;
-  }, [normalized, signature]);
-
-  const visible = React.useMemo(() => mruGraphVisibleGraph(normalized, {
-    types: typeFilter,
-    query,
-    collapse: collapseMode,
-  }), [normalized, typeFilter, query, collapseMode]);
+  }, [layoutSignature, visible]);
 
   const types = React.useMemo(() => mruGraphOrderedTypes(normalized.nodes), [normalized]);
   const degree = React.useMemo(() => mruGraphDegrees(visible.nodes, visible.edges), [visible]);
@@ -1600,33 +1716,19 @@ export function MruGraphView(props) {
     const base = layout.positions || {};
     for (let i = 0; i < visible.nodes.length; i += 1) {
       const node = visible.nodes[i];
-      if (node.cluster) continue;
-      const pinned = pins[node.id];
-      const point = pinned || base[node.id];
+      const point = pins[node.id] || base[node.id];
       out[node.id] = point && Number.isFinite(point.x) && Number.isFinite(point.y)
         ? { x: point.x, y: point.y }
         : mruGraphFallbackPoint(node.id, i);
     }
-    for (let i = 0; i < visible.nodes.length; i += 1) {
-      const node = visible.nodes[i];
-      if (!node.cluster) continue;
-      const members = Array.isArray(node.members) ? node.members : [];
-      let sumX = 0;
-      let sumY = 0;
-      let seen = 0;
-      for (let j = 0; j < members.length; j += 1) {
-        const point = pins[members[j]] || base[members[j]];
-        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
-        sumX += point.x;
-        sumY += point.y;
-        seen += 1;
-      }
-      out[node.id] = seen > 0
-        ? { x: mruGraphRound(sumX / seen), y: mruGraphRound(sumY / seen) }
-        : mruGraphFallbackPoint(node.id, i);
-    }
     return out;
   }, [visible, layout, pins]);
+
+  // Very dense graphs get a focused relation layer; the full edge set still
+  // powers neighbour lists and highlights.
+  const renderEdges = React.useMemo(() => (
+    mruGraphLimitRenderEdges(visible.edges, visible.nodes, selectedId)
+  ), [visible, selectedId]);
 
   const selected = selectedId ? visible.nodes.find((node) => node.id === selectedId) || null : null;
 
@@ -1702,8 +1804,8 @@ export function MruGraphView(props) {
 
   const edgeGeometry = React.useMemo(() => {
     const out = [];
-    for (let i = 0; i < visible.edges.length; i += 1) {
-      const edge = visible.edges[i];
+    for (let i = 0; i < renderEdges.edges.length; i += 1) {
+      const edge = renderEdges.edges[i];
       const from = positions[edge.from];
       const to = positions[edge.to];
       if (!from || !to) continue;
@@ -1732,7 +1834,7 @@ export function MruGraphView(props) {
       out.push({ edge, x1, y1, x2, y2, labelX, labelY });
     }
     return out;
-  }, [visible, positions, degree, selectedId]);
+  }, [visible.nodes, renderEdges, positions, degree, selectedId]);
 
   const progress = mruGraphProgress(rawProgress);
   const progressPercent = progress.percent;
@@ -2128,7 +2230,10 @@ export function MruGraphView(props) {
     mruGraphH('span', { key: 'label' }, mruGraphTypeLabel(t, type, lang)),
     mruGraphH('span', { key: 'count', className: 'mru-graph__legend-count' }, mruGraphFormatCount(count)));
   });
-  const showCollapseToggle = visible.filteredNodes > MRU_GRAPH_COLLAPSE_THRESHOLD || visible.collapsed;
+  const collapseThreshold = mode === 'library'
+    ? MRU_GRAPH_LIBRARY_COLLAPSE_THRESHOLD
+    : MRU_GRAPH_COLLAPSE_THRESHOLD;
+  const showCollapseToggle = visible.filteredNodes > collapseThreshold || visible.collapsed;
   const legend = mruGraphH('div', { className: 'mru-graph__legend', role: 'group', 'aria-label': tr('graph.legend') },
     legendItems,
     showCollapseToggle
@@ -2398,7 +2503,14 @@ export function MruGraphView(props) {
   const statusBits = [];
   if (hasNodes) {
     statusBits.push(tr('graph.nodes', { count: mruGraphFormatCount(totalNodes) }));
-    statusBits.push(tr('graph.edges', { count: mruGraphFormatCount(normalized.edges.length) }));
+    if (renderEdges.trimmed) {
+      statusBits.push(tr('graph.edgesTrimmed', {
+        shown: mruGraphFormatCount(renderEdges.edges.length),
+        total: mruGraphFormatCount(visible.edges.length),
+      }));
+    } else {
+      statusBits.push(tr('graph.edges', { count: mruGraphFormatCount(normalized.edges.length) }));
+    }
   }
   if (hasNodes && visible.filteredNodes !== totalNodes) {
     statusBits.push(tr('graph.filtered', {

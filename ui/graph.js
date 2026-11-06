@@ -596,7 +596,7 @@ function mruGraphDegrees(nodes, edges) {
  *
  * @returns {{nodes: object[], edges: object[], collapsed: boolean, collapsedNodes: number}}
  */
-function mruGraphCollapseByType(nodes, edges, mode) {
+function mruGraphCollapseByType(nodes, edges, mode, keepCount = MRU_GRAPH_COLLAPSE_KEEP) {
   const degree = mruGraphDegrees(nodes, edges);
   let keep = null;
   if (mode === 'auto') {
@@ -609,7 +609,8 @@ function mruGraphCollapseByType(nodes, edges, mode) {
       right.score - left.score
       || left.index - right.index
     ));
-    keep = new Set(ranked.slice(0, MRU_GRAPH_COLLAPSE_KEEP).map((entry) => entry.node.id));
+    const limit = Math.max(1, Math.floor(mruGraphNumber(keepCount, MRU_GRAPH_COLLAPSE_KEEP)));
+    keep = new Set(ranked.slice(0, limit).map((entry) => entry.node.id));
   }
 
   const groups = new Map();
@@ -757,8 +758,13 @@ function mruGraphVisibleGraph(graph, options) {
   let edges = rawEdges;
   let collapsed = false;
   let collapsedNodes = 0;
+  const explicitThreshold = mruGraphNumber(opts.collapseThreshold, NaN);
+  const forcedAuto = collapse === 'auto' && Number.isFinite(explicitThreshold);
+  const keepCount = collapse === 'auto'
+    ? (Number.isFinite(explicitThreshold) ? threshold : MRU_GRAPH_COLLAPSE_KEEP)
+    : Infinity;
   if (rawNodes.length > 0 && (collapse === 'type' || (collapse === 'auto' && rawNodes.length > threshold))) {
-    const result = mruGraphCollapseByType(rawNodes, rawEdges, collapse);
+    const result = mruGraphCollapseByType(rawNodes, rawEdges, forcedAuto ? 'type' : collapse, keepCount);
     nodes = result.nodes;
     edges = result.edges;
     collapsed = result.collapsed;
@@ -1064,8 +1070,25 @@ function mruGraphLayoutGraph(graph, options) {
   }
 
   // The first layout uses the whole canvas; incremental updates keep prior
-  // coordinates stable and only clamp new nodes inside the view.
-  if (!hasPrevious && !hasPinned) mruGraphFitPositions(xs, ys, width, height, padding);
+  // coordinates stable and only clamp new nodes inside the view. A seeded
+  // rotation makes the layout depend on the seed (same seed → same layout)
+  // without disturbing incremental stability.
+  if (!hasPrevious && !hasPinned) {
+    mruGraphFitPositions(xs, ys, width, height, padding);
+    const angle = ((seed % 360) / 180) * Math.PI;
+    if (angle > 1e-6) {
+      const cx = width / 2;
+      const cy = height / 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      for (let i = 0; i < count; i += 1) {
+        const dx = xs[i] - cx;
+        const dy = ys[i] - cy;
+        xs[i] = mruGraphClamp(cx + dx * cos - dy * sin, padding, width - padding);
+        ys[i] = mruGraphClamp(cy + dx * sin + dy * cos, padding, height - padding);
+      }
+    }
+  }
 
   const positions = {};
   for (let i = 0; i < count; i += 1) {

@@ -1911,6 +1911,7 @@ export function MruAiPanel(props) {
   }
 
   const handleInputKeyDown = (event) => {
+    if (event.isComposing === true || event.keyCode === 229) return
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault()
       submitComposer()
@@ -1967,6 +1968,7 @@ export function MruAiPanel(props) {
 
   const handlePanelKeyDown = (event) => {
     if (event === null || typeof event !== 'object' || event.key !== 'Escape') return
+    if (event.isComposing === true) return
     if (card !== null) {
       event.stopPropagation()
       setCard(null)

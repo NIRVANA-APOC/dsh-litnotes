@@ -102,8 +102,12 @@ export function apply(ctx, config) {
 
   ctx.effect(() => registerRoutes({ ctx, service, store, config: resolved, logger }),
     'dsh-litnotes: web routes')
-  ctx.effect(() => registerLibraryTools({ ctx, service, config: resolved, logger }),
-    'dsh-litnotes: library agent tools')
+  ctx.effect(() => registerLibraryTools({
+    tools: ctx.get('tools'),
+    service,
+    config: resolved,
+    logger,
+  }), 'dsh-litnotes: library agent tools')
 
   logger.info?.('[dsh-litnotes] mounted (data=%s, api=%s)', resolved.dataDir, resolved.apiBase)
 }

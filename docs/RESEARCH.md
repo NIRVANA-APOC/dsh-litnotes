@@ -2,6 +2,7 @@
 
 > **Snapshot:** 2026-11-06. Sources are product help pages, papers and 2026 reviews; numbers are vendor/paper claims.
 > **Current product:** workspace still ships as `dsh-mineru` (rename in flight); reading desk + MinerU parse + bilingual/annotations are done.
+> **Read with [AI-SPEC](AI-SPEC.md):** it is the authoritative implementation contract (uses `dsh-litnotes` naming, `/dsh-litnotes/api` routes, `[n]` citation markers, `library_*` tools, its own file layout/graph shape). On any conflict AI-SPEC wins; this doc is landscape evidence and build input. `[E#]` below == AI-SPEC's `[n]`.
 > **Next goal:** right-AI-panel grounded Q&A, per-paper KG auto-built + Q&A enrichment, library-wide KG, multiple DSH agent tools.
 > **Hard constraints** (see [ARCH](ARCH.md), [UI-SPEC](UI-SPEC.md)): host is plain Node ESM, no npm deps; client is React `createElement` only; JSON HTTP routes + same-origin fence; block anchors are `blockKey` + plain-text offsets; annotations live in `annotations.json` and the client owns the merge.
 > **Extra lever we actually have:** host `ctx.get('llm')` (optional) exposes `stream({provider, model, system, messages, temperature, maxTokens, signal})`; default route via `ctx.get('agentDefaultModel').currentSelection()` → `{provider, model, reasoningEffort}`. There is no citations feature, no JSON-schema mode: citation grounding and JSON validation are ours to implement. `ctx.get('translator')` is available for cross-lingual retrieval.
@@ -169,6 +170,13 @@
 - Custom user-defined graph schemas/tags; shared/exported graphs; multi-device sync.
 - Audio/video overviews (not a reading-desk need); OCR'd figure understanding (PaperQA2 media enrichment suggests synthetic captions for figure/table retrieval — useful but expensive).
 - Embedding-based semantic search if the harness ever exposes an embeddings service; until then BM25 + LLM rerank is enough.
+
+### Reconciling with AI-SPEC.md (the authoritative contract)
+
+- **Auto-annotation needs a brake.** AI-SPEC §3 auto-creates annotations for every verified citation. Dedupe + aspect colors + the "AI 批注" filter are good, but three controls are still worth the ~50 lines: a per-answer cap (e.g. ≤5 marks), an "AI 自动划线" setting (on/off, or auto only for `method|result|limitation`), and one **清除本条 AI 标注** action per answer (undo the `annotationIds` from that message). NotebookLM's save-to-note is explicit for a reason; a chatty 6-answer session can otherwise flood a page before the user notices.
+- **Quote containment proves provenance, not entailment.** `verified` (quote is a substring of the block) stops fabricated quotes, but a real quote can still be made to support an overstated claim. Add one cheap post-answer call over `(citation.note, quote)` → `supported | partial | unsupported`; dim `unsupported`, skip its annotation, and don't create graph edges from it. This is the same reason AGREE adds an NLI pass and why OpenScholar's citation-verification ablation hurts ([AGREE](https://research.google/blog/effective-large-language-model-adaptation-for-improved-grounding/), [OpenScholar](https://www.nature.com/articles/s41586-025-10072-4)); it costs one small request per answer and composes with the `unverified` field already specified.
+- **Stored caps ≠ rendered caps.** AI-SPEC allows 120/400 nodes (doc) and 600/2000 (library). Keep those as storage limits, but render by `weight` with a default 1-hop ego, type filters and cluster collapse — otherwise the SVG becomes the hairball the research warns about ([Semantic Bundling](https://arxiv.org/abs/2608.04002)). If render time exceeds ~100ms, cut rendered nodes before cutting stored knowledge.
+- **Tool naming:** AI-SPEC's `library_*` names (7 focused tools) supersede the `scholar_*` sketch in §2.6/§5; the handle conventions (`documentId` + `blockKey` + `quote` + page) are identical.
 
 ## 5. Implementation contracts (paste-ready shapes)
 

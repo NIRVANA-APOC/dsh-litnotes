@@ -45,6 +45,11 @@ const MRU_DEFAULT_PREFS = {
   defaultEnableFormula: true,
   defaultEnableTable: true,
   showPageMarks: true,
+  // AI upgrade (docs/AI-SPEC.md §6/§9): host-persisted view state.
+  aiPanelOpen: false,
+  libraryView: 'library',
+  docView: 'read',
+  graphAutoBuild: false,
 };
 
 /** MinerU document language options (value -> dictionary key). */
@@ -77,6 +82,15 @@ const MRU_MAX_QUOTE = 2000;
 
 /** Translation concurrency cap for "translate all". */
 const MRU_TRANSLATE_CONCURRENCY = 4;
+
+/** Margin tabs: outline / notes / AI conversation (docs/AI-SPEC.md §6). */
+const MRU_MARGIN_TABS = ['outline', 'notes', 'ai'];
+
+/** Library-topbar views: the library rail or the library-wide knowledge graph. */
+const MRU_LIBRARY_VIEWS = ['library', 'graph'];
+
+/** Paper runhead views: the reading paper or the per-document knowledge graph. */
+const MRU_DOC_VIEWS = ['read', 'graph'];
 
 /** zh dictionary — primary copy deck (docs/UI-SPEC.md §5). */
 const ZH = {
@@ -261,6 +275,104 @@ const ZH = {
   'paper.metaModel': 'MinerU {model}',
   'parse.reparseTitle': '重新解析',
   'parse.starting': '正在开始解析…',
+  // AI upgrade: margin tab, view switches, quick actions, panel + graph copy.
+  'margin.ai': 'AI',
+  'margin.aiTitle': 'AI 阅读助手',
+  'topbar.viewLibrary': '文献库',
+  'topbar.viewGraph': '全景图谱',
+  'topbar.viewGroup': '文献库视图',
+  'reader.viewRead': '阅读',
+  'reader.viewGraph': '图谱',
+  'reader.viewGroup': '文档视图',
+  'sel.askAi': '问 AI',
+  'ai.askBlock': '问 AI（这段）',
+  'ai.title': 'AI 阅读助手',
+  'ai.model': '模型 {model}',
+  'ai.placeholderTitle': 'AI 阅读助手',
+  'ai.placeholderText': 'AI 对话面板正在载入…',
+  'ai.unavailable': 'AI 暂不可用',
+  'ai.unavailableText': '当前 Harness 配置没有可用的语言模型。配置默认模型后即可在这里提问。',
+  'ai.emptyTitle': '从这一页开始提问',
+  'ai.emptyText': '答案只根据本文内容生成，并标注来源段落。',
+  'ai.promptSummary': '总结全文',
+  'ai.promptProblem': '这篇论文解决了什么',
+  'ai.promptMethod': '方法是什么',
+  'ai.promptLimit': '有什么局限',
+  'ai.promptExplain': '解释这个概念',
+  'ai.placeholder': '问点关于这篇论文的问题…',
+  'ai.send': '发送',
+  'ai.stop': '停止',
+  'ai.regenerate': '重新生成',
+  'ai.thinking': '正在阅读…',
+  'ai.loading': '正在载入对话…',
+  'ai.historyFailed': '对话记录载入失败。',
+  'ai.retry': '重试',
+  'ai.copy': '复制答案',
+  'ai.copied': '已复制',
+  'ai.copyFailed': '复制失败',
+  'ai.contextSelection': '选中文本',
+  'ai.contextParagraph': '当前段落',
+  'ai.clearContext': '清除上下文',
+  'ai.clearSelection': '清除选中',
+  'ai.clearParagraph': '清除段落',
+  'ai.citations': '引用',
+  'ai.citationJump': '跳转到原文',
+  'ai.page': '第 {page} 页',
+  'ai.unverified': '{count} 条引用未通过校验',
+  'ai.annotationsCreated': 'AI 新增 {count} 条高亮',
+  'ai.error': 'AI 生成失败：{message}',
+  'ai.stopped': '已停止生成',
+  'ai.insufficient': '现有内容不足以回答这个问题。可以换个问法，或先精读全文生成图谱。',
+  'ai.openGraph': '查看知识图谱',
+  'ai.askAbout': '问 AI 关于「{label}」',
+  'ai.followup': '继续追问',
+  'ai.sendHint': 'Enter 发送 · Shift+Enter 换行',
+  'graph.titleDoc': '本文知识图谱',
+  'graph.titleLibrary': '全景图谱',
+  'graph.placeholderTitle': '知识图谱',
+  'graph.placeholderText': '知识图谱视图正在载入…',
+  'graph.unavailable': '知识图谱引擎不可用。',
+  'graph.error': '知识图谱载入失败。',
+  'graph.retry': '重试',
+  'graph.build': 'AI 精读全文',
+  'graph.rebuild': '重建图谱',
+  'graph.refresh': '刷新',
+  'graph.building': '正在生成图谱…',
+  'graph.progress': '正在生成 · {done} / {total}',
+  'graph.reading': '正在阅读…',
+  'graph.extracting': '正在抽取概念…',
+  'graph.merging': '正在合并…',
+  'graph.emptyDoc': '这篇论文还没有知识图谱。',
+  'graph.emptyLibrary': '文献库还没有全景图谱。',
+  'graph.emptyHint': 'AI 精读全文后，会自动抽取概念、方法与结论。',
+  'graph.jump': '跳转到原文',
+  'graph.ask': '问 AI 关于此概念',
+  'graph.search': '搜索节点',
+  'graph.legend': '节点类型',
+  'graph.filters': '筛选',
+  'graph.nodes': '{count} 个节点',
+  'graph.edges': '{count} 条关系',
+  'graph.loading': '正在载入图谱…',
+  'graph.modeDoc': '本文图谱',
+  'graph.modeLibrary': '全景图谱',
+  'graph.close': '关闭',
+  'graph.collapseClusters': '折叠次要节点',
+  'graph.expandAll': '展开全部',
+  'graph.concept': '概念',
+  'graph.method': '方法',
+  'graph.finding': '发现',
+  'graph.definition': '定义',
+  'graph.limitation': '局限',
+  'graph.section': '章节',
+  'graph.question': '问题',
+  'graph.insight': '洞见',
+  'graph.paper': '论文',
+  'graph.topic': '主题',
+  'toast.graphBuilt': '知识图谱已生成',
+  'toast.graphUpdated': '知识图谱已更新',
+  'err.aiUnavailable': 'AI 服务不可用（{message}）',
+  'err.aiFailed': 'AI 生成失败（{message}）',
+  'err.contextTooLarge': '上下文超出模型限制，请缩小选中范围。',
 };
 
 /** en dictionary — fallback locale (docs/UI-SPEC.md §5). */
@@ -446,6 +558,104 @@ const EN = {
   'paper.metaModel': 'MinerU {model}',
   'parse.reparseTitle': 'Reparse',
   'parse.starting': 'Starting parse…',
+  // AI upgrade: margin tab, view switches, quick actions, panel + graph copy.
+  'margin.ai': 'AI',
+  'margin.aiTitle': 'AI reading assistant',
+  'topbar.viewLibrary': 'Library',
+  'topbar.viewGraph': 'Library graph',
+  'topbar.viewGroup': 'Library view',
+  'reader.viewRead': 'Read',
+  'reader.viewGraph': 'Graph',
+  'reader.viewGroup': 'Document view',
+  'sel.askAi': 'Ask AI',
+  'ai.askBlock': 'Ask AI (this paragraph)',
+  'ai.title': 'AI reading assistant',
+  'ai.model': 'Model {model}',
+  'ai.placeholderTitle': 'AI reading assistant',
+  'ai.placeholderText': 'The AI panel is loading…',
+  'ai.unavailable': 'AI is unavailable',
+  'ai.unavailableText': 'No language-model route is configured in Harness. Set a default model to ask questions here.',
+  'ai.emptyTitle': 'Start from this page',
+  'ai.emptyText': 'Answers are generated from this paper only, with source paragraphs cited.',
+  'ai.promptSummary': 'Summarize the paper',
+  'ai.promptProblem': 'What problem does it solve',
+  'ai.promptMethod': 'What is the method',
+  'ai.promptLimit': 'What are the limitations',
+  'ai.promptExplain': 'Explain this concept',
+  'ai.placeholder': 'Ask something about this paper…',
+  'ai.send': 'Send',
+  'ai.stop': 'Stop',
+  'ai.regenerate': 'Regenerate',
+  'ai.thinking': 'Reading…',
+  'ai.loading': 'Loading conversation…',
+  'ai.historyFailed': "Couldn't load the conversation.",
+  'ai.retry': 'Retry',
+  'ai.copy': 'Copy answer',
+  'ai.copied': 'Copied',
+  'ai.copyFailed': 'Copy failed',
+  'ai.contextSelection': 'Selection',
+  'ai.contextParagraph': 'Current paragraph',
+  'ai.clearContext': 'Clear context',
+  'ai.clearSelection': 'Clear selection',
+  'ai.clearParagraph': 'Clear paragraph',
+  'ai.citations': 'Citations',
+  'ai.citationJump': 'Jump to source',
+  'ai.page': 'Page {page}',
+  'ai.unverified': '{count} citations failed verification',
+  'ai.annotationsCreated': 'AI added {count} highlights',
+  'ai.error': 'AI failed: {message}',
+  'ai.stopped': 'Generation stopped',
+  'ai.insufficient': 'The available content is not enough to answer. Rephrase the question, or build the paper graph first.',
+  'ai.openGraph': 'Open knowledge graph',
+  'ai.askAbout': 'Ask AI about "{label}"',
+  'ai.followup': 'Follow up',
+  'ai.sendHint': 'Enter to send · Shift+Enter for a new line',
+  'graph.titleDoc': 'Paper knowledge graph',
+  'graph.titleLibrary': 'Library graph',
+  'graph.placeholderTitle': 'Knowledge graph',
+  'graph.placeholderText': 'The knowledge-graph view is loading…',
+  'graph.unavailable': 'The knowledge-graph engine is unavailable.',
+  'graph.error': 'The knowledge graph failed to load.',
+  'graph.retry': 'Retry',
+  'graph.build': 'Build with AI',
+  'graph.rebuild': 'Rebuild graph',
+  'graph.refresh': 'Refresh',
+  'graph.building': 'Building the graph…',
+  'graph.progress': 'Building · {done} / {total}',
+  'graph.reading': 'Reading…',
+  'graph.extracting': 'Extracting concepts…',
+  'graph.merging': 'Merging…',
+  'graph.emptyDoc': 'This paper has no knowledge graph yet.',
+  'graph.emptyLibrary': 'The library graph is empty.',
+  'graph.emptyHint': 'Building the graph extracts concepts, methods, and findings automatically.',
+  'graph.jump': 'Jump to source',
+  'graph.ask': 'Ask AI about this concept',
+  'graph.search': 'Search nodes',
+  'graph.legend': 'Node types',
+  'graph.filters': 'Filters',
+  'graph.nodes': '{count} nodes',
+  'graph.edges': '{count} edges',
+  'graph.loading': 'Loading graph…',
+  'graph.modeDoc': 'Paper graph',
+  'graph.modeLibrary': 'Library graph',
+  'graph.close': 'Close',
+  'graph.collapseClusters': 'Collapse minor nodes',
+  'graph.expandAll': 'Expand all',
+  'graph.concept': 'Concept',
+  'graph.method': 'Method',
+  'graph.finding': 'Finding',
+  'graph.definition': 'Definition',
+  'graph.limitation': 'Limitation',
+  'graph.section': 'Section',
+  'graph.question': 'Question',
+  'graph.insight': 'Insight',
+  'graph.paper': 'Paper',
+  'graph.topic': 'Topic',
+  'toast.graphBuilt': 'Knowledge graph built',
+  'toast.graphUpdated': 'Knowledge graph updated',
+  'err.aiUnavailable': 'AI service unavailable ({message})',
+  'err.aiFailed': 'AI generation failed ({message})',
+  'err.contextTooLarge': 'The context exceeds the model limit. Select less text.',
 };
 
 /** Fallback translation used by components rendered outside the locale seat. */
@@ -588,6 +798,105 @@ async function mruPost(method, payload, options) {
   throw new MruApiError(`http-${response.status}`, `HTTP ${response.status}`, response.status);
 }
 
+/**
+ * POST one NDJSON-streaming method and deliver each decoded frame to
+ * `options.onFrame(frame)` (docs/AI-SPEC.md §4). Resolves when the stream ends;
+ * rethrows transport/host failures as `MruApiError` so callers can branch.
+ */
+async function mruStreamNdjson(method, payload, options) {
+  const opts = options || {};
+  let response;
+  try {
+    response = await fetch(mruApiUrl(method), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/x-ndjson' },
+      body: JSON.stringify(payload || {}),
+      credentials: 'same-origin',
+      signal: opts.signal,
+    });
+  } catch (error) {
+    if (error && (error.name === 'AbortError' || opts.signal?.aborted)) throw new MruApiError('aborted', 'aborted');
+    throw new MruApiError('network', error instanceof Error ? error.message : 'network');
+  }
+  if (!response.ok) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    if (data && data.ok === false) {
+      const info = data.error || {};
+      throw new MruApiError(info.code || `http-${response.status}`, info.message || '', response.status);
+    }
+    if (response.status === 403 || response.status === 404 || response.status === 405) {
+      throw new MruApiError('host-unavailable', `HTTP ${response.status}`, response.status);
+    }
+    throw new MruApiError(`http-${response.status}`, `HTTP ${response.status}`, response.status);
+  }
+  const headers = response.headers;
+  const contentType = headers && typeof headers.get === 'function' ? headers.get('content-type') || '' : '';
+  // A JSON envelope answer means the host declined to stream (e.g. unavailable).
+  if (contentType.indexOf('application/json') !== -1) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    if (data && data.ok === true) return data.value;
+    if (data && data.ok === false) {
+      const info = data.error || {};
+      throw new MruApiError(info.code || 'ai-failed', info.message || '', response.status);
+    }
+    throw new MruApiError('bad-response', 'bad response', response.status);
+  }
+  const onFrame = typeof opts.onFrame === 'function' ? opts.onFrame : null;
+  const decoder = typeof TextDecoder === 'function' ? new TextDecoder() : null;
+  let buffer = '';
+  const emitLine = (line) => {
+    const trimmed = line.trim();
+    if (trimmed === '') return;
+    let frame = null;
+    try {
+      frame = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    if (frame && typeof frame === 'object' && onFrame) onFrame(frame);
+  };
+  const consume = (chunk) => {
+    buffer += chunk;
+    let index = buffer.indexOf('\n');
+    while (index !== -1) {
+      emitLine(buffer.slice(0, index));
+      buffer = buffer.slice(index + 1);
+      index = buffer.indexOf('\n');
+    }
+  };
+  try {
+    const body = response.body;
+    if (body && typeof body.getReader === 'function') {
+      const reader = body.getReader();
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        if (step.value !== undefined && step.value !== null) {
+          consume(decoder ? decoder.decode(step.value, { stream: true }) : String(step.value));
+        }
+      }
+      if (decoder) consume(decoder.decode());
+    } else if (typeof response.text === 'function') {
+      consume(await response.text());
+    }
+    if (buffer.trim() !== '') emitLine(buffer);
+  } catch (error) {
+    if (opts.signal?.aborted || (error && error.name === 'AbortError')) throw new MruApiError('aborted', 'aborted');
+    throw new MruApiError('network', error instanceof Error ? error.message : 'network');
+  }
+  return undefined;
+}
+
 /** Raw XHR upload with progress; resolves `{document}` like the JSON API. */
 function mruUpload(file, options) {
   const opts = options || {};
@@ -692,8 +1001,35 @@ function mruErrorText(t, error) {
   if (code === 'network' || code === 'aborted') return t('err.network');
   if (code === 'translate-unavailable') return t('err.noTranslation');
   if (code === 'forbidden') return t('err.forbidden');
+  if (code === 'ai-unavailable' || code === 'llm-unavailable' || code === 'ai-disabled') {
+    return t('err.aiUnavailable', { message: (error && error.message) || '' });
+  }
+  if (code === 'ai-failed' || code === 'llm-failed') {
+    return t('err.aiFailed', { message: (error && error.message) || '' });
+  }
+  if (code === 'context-too-large') return t('err.contextTooLarge');
   if (error && typeof error.message === 'string' && error.message.trim() !== '') return error.message;
   return t('err.generic');
+}
+
+/** Normalized AI availability facts from the host `status` payload (docs/AI-SPEC.md §9). */
+function mruAiState(status) {
+  const ai = status && status.ai && typeof status.ai === 'object' ? status.ai : null;
+  return {
+    available: Boolean(ai && ai.available),
+    graph: Boolean(ai && ai.graph),
+    route: ai && ai.route && typeof ai.route === 'object' ? ai.route : null,
+  };
+}
+
+/** Human label for the AI model route ("deepseek-flash" / "provider · model"). */
+function mruAiModelLabel(status) {
+  const route = mruAiState(status).route;
+  if (!route) return '';
+  const model = typeof route.model === 'string' ? route.model.trim() : '';
+  const provider = typeof route.provider === 'string' ? route.provider.trim() : '';
+  if (model !== '') return model;
+  return provider;
 }
 
 // ===========================================================================
@@ -823,6 +1159,8 @@ const MRU_GLYPHS = {
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.4 1.4M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.4-1.4',
   check: 'm5 13 4 4L19 7',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-14v5l3 2',
+  spark: 'M12 3l2.1 6.3L21 12l-6.9 2.7L12 21l-2.1-6.3L3 12l6.9-2.7L12 3Z',
+  graph: 'M6 4.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm12 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-6 11a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-4.6-6.9 4.1 5.6m4.1-5.6-4.1 5.6',
 };
 
 /** Render one inline stroke glyph. */
@@ -1291,7 +1629,15 @@ function mruBlockTools(t, block, options) {
       title: t('block.annotate'),
       onMouseDown: (event) => event.preventDefault(),
       onClick: () => opts.onAnnotateBlock && opts.onAnnotateBlock(block),
-    }, h(MruGlyph, { name: 'annotate' })));
+    }, h(MruGlyph, { name: 'annotate' })),
+    h('button', {
+      type: 'button',
+      className: 'mru-icon-btn mru-block__ask',
+      'aria-label': t('ai.askBlock'),
+      title: t('ai.askBlock'),
+      onMouseDown: (event) => event.preventDefault(),
+      onClick: () => opts.onAskBlock && opts.onAskBlock(block),
+    }, h(MruGlyph, { name: 'spark' })));
 }
 
 /** Normalize the table block's head/rows into arrays of row arrays. */
@@ -1449,6 +1795,109 @@ function MruBlockView(props) {
       h('p', { className: 'mru-para__text' }, inline(block.runs, 0)));
   }
   return null;
+}
+
+// --- AI / graph module surfaces -------------------------------------------
+// ui/chat.js (`MruAiPanel`) and ui/graph.js (`MruGraphView`) are concatenated
+// into the same bundle scope before app.js. These resolvers keep the reading
+// desk renderable while either module is absent (placeholders during the AI
+// workstream) and switch to the real component as soon as it defines itself.
+
+/** Resolve the AI panel module (ui/chat.js), or null while it is absent. */
+function mruAiPanelComponent() {
+  return typeof MruAiPanel === 'function' ? MruAiPanel : null;
+}
+
+/** Resolve the graph view module (ui/graph.js), or null while it is absent. */
+function mruGraphViewComponent() {
+  return typeof MruGraphView === 'function' ? MruGraphView : null;
+}
+
+/** Minimal AI panel used only while ui/chat.js is a placeholder. */
+function MruAiPanelFallback(props) {
+  const { t, available, modelLabel } = props;
+  return h('div', { className: 'mru-ai mru-ai--placeholder' },
+    h('div', { className: 'mru-ai__head' },
+      h('h3', { className: 'mru-ai__title' }, t('ai.title')),
+      modelLabel ? h('span', { className: 'mru-ai__model' }, t('ai.model', { model: modelLabel })) : null),
+    h('div', { className: 'mru-ai__empty' },
+      h('p', { className: 'mru-ai__empty-title' }, available ? t('ai.placeholderTitle') : t('ai.unavailable')),
+      h('p', { className: 'mru-ai__empty-text' }, available ? t('ai.placeholderText') : t('ai.unavailableText'))));
+}
+
+/** Minimal graph surface used only while ui/graph.js is a placeholder. */
+function MruGraphPlaceholder(props) {
+  const { t, mode, graph, building, progress, available, error, onBuild, onRefresh } = props;
+  const titleKey = mode === 'library' ? 'graph.titleLibrary' : 'graph.titleDoc';
+  const nodeCount = graph && Array.isArray(graph.nodes) ? graph.nodes.length : 0;
+  let statusText;
+  if (available === false) statusText = t('graph.unavailable');
+  else if (error) statusText = error;
+  else if (building) {
+    statusText = progress && Number(progress.total) > 0
+      ? t('graph.progress', { done: Number(progress.done) || 0, total: Number(progress.total) || 0 })
+      : t('graph.building');
+  } else if (nodeCount > 0) statusText = t('graph.nodes', { count: nodeCount });
+  else statusText = mode === 'library' ? t('graph.emptyLibrary') : t('graph.emptyDoc');
+  return h('div', { className: 'mru-graph mru-graph--placeholder' },
+    h('div', { className: 'mru-graph__head' },
+      h('h2', { className: 'mru-graph__title' }, t(titleKey)),
+      h('div', { className: 'mru-graph__actions' },
+        onRefresh ? h('button', {
+          type: 'button',
+          className: 'mru-btn mru-btn--ghost mru-btn--sm',
+          onClick: () => onRefresh(),
+        }, t('graph.refresh')) : null,
+        onBuild ? h('button', {
+          type: 'button',
+          className: 'mru-btn mru-btn--primary mru-btn--sm',
+          'data-action': 'graph-build',
+          disabled: Boolean(building),
+          onClick: () => onBuild(),
+        }, building ? t('graph.building') : (mode === 'library' ? t('graph.rebuild') : t('graph.build'))) : null)),
+    h('div', { className: 'mru-graph__empty' },
+      h('p', { className: 'mru-graph__status' }, statusText),
+      h('p', { className: 'mru-graph__empty-text' }, t('graph.emptyHint'))));
+}
+
+/** Render the AI panel module, or the placeholder while it is absent. */
+function MruAiSurface(props) {
+  const Component = mruAiPanelComponent();
+  if (Component) return h(Component, props);
+  return h(MruAiPanelFallback, { t: props.t, available: props.available, modelLabel: props.modelLabel });
+}
+
+/** Render the graph view module, or the placeholder while it is absent. */
+function MruGraphSurface(props) {
+  const Component = mruGraphViewComponent();
+  if (Component) {
+    return h(Component, {
+      t: props.t,
+      mode: props.mode,
+      graph: props.graph || null,
+      building: Boolean(props.building),
+      progress: props.progress || null,
+      error: props.error || '',
+      available: props.available !== false,
+      loading: Boolean(props.loading),
+      onJump: props.onJump,
+      onAsk: props.onAsk,
+      onBuild: props.onBuild,
+      onRefresh: props.onRefresh,
+      onUpdateGraph: props.onUpdateGraph,
+    });
+  }
+  return h(MruGraphPlaceholder, {
+    t: props.t,
+    mode: props.mode,
+    graph: props.graph || null,
+    building: Boolean(props.building),
+    progress: props.progress || null,
+    available: props.available !== false,
+    error: props.error || '',
+    onBuild: props.onBuild,
+    onRefresh: props.onRefresh,
+  });
 }
 
 /** Paper meta line: file · format · pages · engine model · date. */
@@ -2276,7 +2725,7 @@ function MruDrop({ t }) {
 // ===========================================================================
 
 /** Selection toolbar; focuses itself after a keyboard selection. */
-function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onRemoveHighlight }) {
+function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onRemoveHighlight, onAskAi }) {
   const firstRef = React.useRef(null);
   React.useEffect(() => {
     if (selection && selection.source === 'keyboard' && firstRef.current && typeof firstRef.current.focus === 'function') {
@@ -2284,7 +2733,7 @@ function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onR
     }
   }, [selection]);
   const removable = Array.isArray(selection.annotationIds) && selection.annotationIds.length > 0;
-  const pos = mruOverlayPos(selection.rect, removable ? 452 : 344, 44);
+  const pos = mruOverlayPos(selection.rect, removable ? 512 : 404, 44);
   return h('div', {
     className: 'mru-selbar',
     role: 'toolbar',
@@ -2297,6 +2746,11 @@ function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onR
       className: 'mru-selbar__btn mru-selbar__btn--primary',
       onClick: () => onTranslate(),
     }, t('sel.translate')),
+    onAskAi ? h('button', {
+      type: 'button',
+      className: 'mru-selbar__btn mru-selbar__btn--ai',
+      onClick: () => onAskAi(),
+    }, h(MruGlyph, { name: 'spark', size: 13 }), h('span', { className: 'mru-selbar__btn-label' }, t('sel.askAi'))) : null,
     h('span', { className: 'mru-selbar__sep', 'aria-hidden': 'true' }),
     h('span', { className: 'mru-swatches', role: 'group', 'aria-label': t('sel.colors') },
       MRU_COLORS.map((color) => {
@@ -2697,6 +3151,13 @@ function mruNormalizePrefs(raw) {
   prefs.defaultEnableTable = prefs.defaultEnableTable !== false;
   if (typeof prefs.targetLanguage !== 'string' || prefs.targetLanguage === '') prefs.targetLanguage = 'zh';
   if (typeof prefs.translationProvider !== 'string' || prefs.translationProvider === '') prefs.translationProvider = 'auto';
+  prefs.aiPanelOpen = prefs.aiPanelOpen === true;
+  prefs.graphAutoBuild = prefs.graphAutoBuild === true;
+  prefs.libraryView = MRU_LIBRARY_VIEWS.includes(prefs.libraryView) ? prefs.libraryView : 'library';
+  prefs.docView = MRU_DOC_VIEWS.includes(prefs.docView) ? prefs.docView : 'read';
+  prefs.marginTab = MRU_MARGIN_TABS.includes(prefs.marginTab)
+    ? prefs.marginTab
+    : (prefs.aiPanelOpen ? 'ai' : 'outline');
   return prefs;
 }
 

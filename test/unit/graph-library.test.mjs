@@ -223,7 +223,7 @@ test('rebuildLibraryGraph aggregates papers and topics deterministically from tw
   const matching = topics.filter((topic) => /^graph matching$/i.test(topic.label))
   assert.equal(matching.length, 1, 'one merged topic node for normalized labels across documents')
   assert.deepEqual(matching[0].documentIds, ['doc-a', 'doc-b'])
-  assert.equal(matching[0].weight, 2)
+  assert.ok(matching[0].weight >= 4, 'shared topic weighs more than a single-paper topic')
   assert.equal(matching[0].label, 'Graph Matching', 'first-seen display label wins')
   assert.ok(/^n-topic-/.test(matching[0].id))
 
@@ -241,25 +241,24 @@ test('rebuildLibraryGraph aggregates papers and topics deterministically from tw
   assert.ok(mentions.some((edge) => edge.from === paperB.id && edge.to === matching[0].id))
   assert.ok(mentions.some((edge) => edge.from === paperB.id && edge.to === inference.id))
 
-  const relates = graph.edges.filter((edge) => edge.type === 'relates')
-  assert.equal(relates.length, 2)
-  for (const edge of relates) {
-    assert.equal(edge.weight, 1)
-    assert.ok(edge.from < edge.to, 'co-occurrence orientation is canonical')
-    assert.ok([matching[0].id, neural.id, inference.id].includes(edge.from))
-    assert.ok([matching[0].id, neural.id, inference.id].includes(edge.to))
-  }
-  assert.equal(
-    relates.filter((edge) => [edge.from, edge.to].includes(matching[0].id)).length,
-    2,
-    'the shared topic co-occurs with one topic in each paper',
-  )
+  // Real document-graph relations propagate; there are no "everything
+  // co-occurs" relates edges (the old hairball behaviour).
+  assert.ok(!graph.edges.some((edge) => edge.type === 'relates' && [matching[0].id, inference.id].includes(edge.from)))
+  const uses = graph.edges.filter((edge) => edge.type === 'uses')
+  assert.equal(uses.length, 1, 'the real Uses relation survives curation')
+  assert.deepEqual(new Set([uses[0].from, uses[0].to]), new Set([matching[0].id, neural.id]))
 
-  assert.equal(graph.clusters.length, 1, 'all three topics are one connected component')
-  assert.equal(graph.clusters[0].size, 3)
-  assert.deepEqual(new Set(graph.clusters[0].nodeIds), new Set(topics.map((topic) => topic.id)))
-  assert.equal(graph.clusters[0].label, 'Graph Matching')
-  assert.ok(/^c-/.test(graph.clusters[0].id))
+  const shares = graph.edges.filter((edge) => edge.type === 'shares')
+  assert.equal(shares.length, 1, 'two papers sharing a concept get one paper-paper edge')
+  assert.deepEqual(new Set([shares[0].from, shares[0].to]), new Set([paperA.id, paperB.id]))
+  assert.equal(shares[0].weight, 1)
+
+  assert.equal(graph.clusters.length, 2, 'only genuinely related topics cluster')
+  const bigCluster = graph.clusters.find((cluster) => cluster.size === 2)
+  assert.ok(bigCluster, 'Graph Matching and Neural Retrieval are connected')
+  assert.deepEqual(new Set(bigCluster.nodeIds), new Set([matching[0].id, neural.id]))
+  assert.equal(graph.clusters.find((cluster) => cluster.size === 1).nodeIds[0], inference.id)
+  assert.ok(graph.clusters.every((cluster) => /^c-/.test(cluster.id)))
 
   assert.match(graph.overview, /Graph Matching/)
   assert.match(graph.overview, /Graph Matching for Retrieval/)
@@ -314,7 +313,7 @@ test('library aggregation falls back to headings + annotations when a document g
   assert.ok(!topics.some((topic) => topic.label === 'Results'), 'section headings are not library topics')
 })
 
-test('library cap keeps 600 nodes and 2000 edges without dangling edges', async () => {
+test('library curation keeps a compact representative graph from huge document graphs', async () => {
   const documents = []
   const graphs = {}
   for (let docIndex = 0; docIndex < 6; docIndex += 1) {
@@ -330,13 +329,27 @@ test('library cap keeps 600 nodes and 2000 edges without dangling edges', async 
   const gateway = createFakeGateway({ available: false })
   const service = makeService(env, gateway)
   const graph = (await collect(service.rebuildLibraryGraph())).at(-1).graph
-  assert.equal(graph.nodes.length, 600)
-  assert.equal(graph.edges.length, 2000)
+
+  const papers = graph.nodes.filter((node) => node.type === 'paper')
+  const topics = graph.nodes.filter((node) => node.type === 'topic')
+  assert.equal(papers.length, 6)
+  assert.ok(topics.length <= 28 + 6 * 2, `curated topic count stays bounded (${topics.length})`)
+  assert.ok(graph.nodes.length <= 6 + 28 + 12)
+  assert.ok(graph.edges.length <= 6 * 12 + 40, `edges stay sparse (${graph.edges.length})`)
+
   const nodeIds = new Set(graph.nodes.map((node) => node.id))
   for (const edge of graph.edges) {
-    assert.ok(nodeIds.has(edge.from) && nodeIds.has(edge.to))
+    assert.ok(nodeIds.has(edge.from) && nodeIds.has(edge.to), 'no dangling edges')
   }
-  assert.equal(graph.nodes.filter((node) => node.type === 'paper').length, 6, 'paper nodes survive the cap')
+  const mentions = graph.edges.filter((edge) => edge.type === 'mentions')
+  for (const paper of papers) {
+    assert.ok(mentions.filter((edge) => edge.from === paper.id).length >= 2, 'every paper keeps two representatives')
+  }
+  assert.equal(
+    new Set(mentions.map((edge) => edge.to)).size,
+    topics.length,
+    'every curated topic is attached to at least one paper',
+  )
 })
 
 /* -------------------------------------------------------------------------- */
@@ -437,7 +450,7 @@ test('rebuildLibraryGraph cancellation surfaces an error frame and writes nothin
   assert.equal(env.libraryAux.has('library-graph.json'), false)
 })
 
-test('library relates edges use document co-occurrence counts as weights', async () => {
+test('library edges are value-bearing: typed relations propagate and shared concepts link papers', async () => {
   const documents = [
     { id: 'doc-1', title: 'Paper One', createdAt: '2026-01-01T00:00:00.000Z' },
     { id: 'doc-2', title: 'Paper Two', createdAt: '2026-01-02T00:00:00.000Z' },
@@ -445,13 +458,13 @@ test('library relates edges use document co-occurrence counts as weights', async
   ]
   const graphs = {
     'doc-1': docGraph('doc-1', [
-      { id: 'n-1a', type: 'concept', label: 'Topic A', summary: '', blockKeys: [] },
+      { id: 'n-1a', type: 'method', label: 'Topic A', summary: '', blockKeys: ['b1:aaaaaaaa'] },
       { id: 'n-1b', type: 'concept', label: 'Topic B', summary: '', blockKeys: [] },
-    ]),
+    ], [{ id: 'e-1', from: 'n-1a', to: 'n-1b', type: 'supports', weight: 1 }]),
     'doc-2': docGraph('doc-2', [
       { id: 'n-2a', type: 'concept', label: 'Topic A', summary: '', blockKeys: [] },
-      { id: 'n-2b', type: 'concept', label: 'Topic B', summary: '', blockKeys: [] },
-    ]),
+      { id: 'n-2b', type: 'finding', label: 'Topic B', summary: '', blockKeys: [] },
+    ], [{ id: 'e-2', from: 'n-2a', to: 'n-2b', type: 'uses', weight: 1 }]),
     'doc-3': docGraph('doc-3', [
       { id: 'n-3a', type: 'method', label: 'Topic A', summary: '', blockKeys: [] },
       { id: 'n-3c', type: 'concept', label: 'Topic C', summary: '', blockKeys: [] },
@@ -463,19 +476,33 @@ test('library relates edges use document co-occurrence counts as weights', async
   const topics = graph.nodes.filter((node) => node.type === 'topic')
   const byLabel = new Map(topics.map((topic) => [topic.label, topic]))
   for (const label of ['Topic A', 'Topic B', 'Topic C']) assert.ok(byLabel.has(label))
-  assert.equal(byLabel.get('Topic A').weight, 3, 'topic weight is the number of papers mentioning it')
-  assert.equal(byLabel.get('Topic A').documentIds.length, 3)
-  assert.equal(byLabel.get('Topic B').weight, 2)
-  assert.equal(byLabel.get('Topic C').weight, 1)
+  const papers = graph.nodes.filter((node) => node.type === 'paper')
+  assert.equal(papers.length, 3)
 
-  const relates = graph.edges.filter((edge) => edge.type === 'relates')
-  const pair = (left, right) => relates.find((edge) => {
+  // Representative concepts keep real coverage information.
+  assert.equal(byLabel.get('Topic A').documentIds.length, 3)
+  assert.ok(byLabel.get('Topic A').weight >= 6, 'shared concept outweighs single-paper topics')
+  assert.equal(byLabel.get('Topic B').documentIds.length, 2)
+  assert.equal(byLabel.get('Topic C').documentIds.length, 1)
+
+  // Typed relations from document graphs survive (both supports and uses),
+  // and no synthetic "all pairs" relates edges are produced.
+  const typed = graph.edges.filter((edge) => ['supports', 'uses'].includes(edge.type))
+  assert.equal(typed.length, 2)
+  assert.ok(typed.every((edge) => {
     const ids = new Set([edge.from, edge.to])
-    return ids.has(byLabel.get(left).id) && ids.has(byLabel.get(right).id)
-  })
-  assert.equal(pair('Topic A', 'Topic B').weight, 2, 'two papers contain both topics')
-  assert.equal(pair('Topic A', 'Topic C').weight, 1)
-  assert.equal(pair('Topic B', 'Topic C'), undefined)
-  assert.equal(graph.clusters.length, 1, 'A connects B and C through co-occurrence')
-  assert.equal(graph.clusters[0].size, 3)
+    return ids.has(byLabel.get('Topic A').id) && ids.has(byLabel.get('Topic B').id)
+  }))
+  assert.equal(graph.edges.filter((edge) => edge.type === 'relates').length, 0)
+
+  // Cross-paper links: three papers share Topic A+B, A+C and A+B respectively.
+  const shares = graph.edges.filter((edge) => edge.type === 'shares')
+  assert.equal(shares.length, 3, 'one shares edge per connected paper pair')
+  assert.equal(Math.max(...shares.map((edge) => edge.weight)), 2, 'paper pair sharing two concepts weighs 2')
+
+  assert.equal(graph.clusters.length, 2, 'A and B cluster, C stays separate')
+  const connected = graph.clusters.find((cluster) => cluster.size === 2)
+  assert.deepEqual(new Set(connected.nodeIds), new Set([byLabel.get('Topic A').id, byLabel.get('Topic B').id]))
+  assert.match(graph.overview, /Shared concepts/)
+  assert.match(graph.tldr, /concepts? appear in two or more papers|concept appear/)
 })

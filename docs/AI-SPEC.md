@@ -134,7 +134,7 @@ Used for both per-doc (`graph.json`) and library (`library-graph.json`) graphs:
   "edges": [{
     "id": "e-uuid",
     "from": "n-…", "to": "n-…",
-    "type": "defines|uses|supports|contradicts|part_of|leads_to|evolves_from|relates|answers|mentions",
+    "type": "defines|uses|supports|contradicts|part_of|leads_to|evolves_from|relates|answers|mentions|shares",
     "label": "optional edge label",
     "source": "ai-summary|qa|user|aggregate",
     "weight": 1
@@ -145,7 +145,8 @@ Used for both per-doc (`graph.json`) and library (`library-graph.json`) graphs:
 
 Node id rules: AI returns stable-ish ids per call; the host merges by normalized label + type
 (case-folded, punctuation-stripped) and keeps the existing id. Host caps: document graph 120
-nodes / 400 edges; library graph 600 nodes / 2000 edges (drop lowest-weight nodes when over).
+nodes / 400 edges; library graph 600 nodes / 2000 edges as a safety cap, with a curation
+budget of 28 representative topics (each paper keeps ≥2). `shares` is library-only.
 
 ---
 
@@ -248,8 +249,13 @@ reading the first N + section headings.
 
 Library aggregation: for each parsed doc ensure a doc graph (read from disk; if missing, create a
 lightweight graph from headings + annotations only, no LLM); create `paper` nodes; create `topic`
-nodes by normalized label across docs; edges paper→topic (`mentions`), topic→topic co-occurrence
-(`relates`, weight = co-occurrence count); clusters = connected components of topic graph; overview
+nodes by normalized label across docs. It is **curated, not a union**: each paper contributes at
+most 10 nodes chosen by an importance score (type, weight, degree, evidence blockKeys, provenance),
+concepts appearing in ≥2 papers are always kept, and the total is capped at 28 topics. Edges are
+value-bearing only: paper→topic `mentions`, topic→topic relations propagated from the real document
+graphs (typed, weight = number of papers), and paper↔paper `shares` edges weighted by shared
+concept count. There are no "any two co-occurring topics" edges. Clusters = connected components of
+the topic-topic relation graph; overview
 computed deterministically (top topics, paper list) with an optional LLM polish call.
 
 ### lib/ai/prompts.js

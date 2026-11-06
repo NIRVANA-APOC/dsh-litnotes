@@ -52,6 +52,8 @@
   --mru-rail-width: 288px;
   --mru-margin-width: 296px;
   --mru-doc-width: 880px;
+  /* reading measure (content px) per width preset: 窄500 / 标准560 / 宽700 / 全宽840 */
+  --mru-measure: 560px;
 }
 
 /* Dark theme: only the paper tint and the annotation inks change.
@@ -1071,7 +1073,8 @@ html[data-ds-dark-theme] .mru-root {
 
 .mru-paper {
   /* The sheet follows the shared document width (default 880) so 阅读/图谱 keep
-     the same column; the type area inside stays centered at the 56ch measure. */
+     the same column; the type area inside follows --mru-measure so changing the
+     width preset also changes the line length. */
   width: 100%;
   max-width: min(100%, var(--mru-doc-width, 880px));
   margin: 0 auto;
@@ -1091,10 +1094,10 @@ html[data-ds-dark-theme] .mru-root {
   align-items: center;
   gap: 10px;
   height: 46px;
-  /* the title aligns with the centered type area; the action row uses the page
-     margin on the right so the runhead controls keep breathing room */
+  /* the title aligns with the centered type area (which follows --mru-measure);
+     the action row uses the page margin on the right */
   padding-right: 60px;
-  padding-left: max(60px, calc((100% - 680px) / 2 + 60px));
+  padding-left: max(60px, calc((100% - var(--mru-measure, 560px)) / 2));
   border-bottom: 1px solid var(--mru-rule);
   border-radius: 14px 14px 0 0;
   background: color-mix(in srgb, var(--mru-paper-bg) 88%, transparent);
@@ -1180,7 +1183,8 @@ html[data-ds-dark-theme] .mru-root {
 
 .mru-paper__col {
   width: 100%;
-  max-width: 680px;
+  /* measure + the paper's horizontal padding (60px each side) */
+  max-width: calc(var(--mru-measure, 560px) + 120px);
   margin-right: auto;
   margin-left: auto;
   padding: 56px 60px 72px;
@@ -1265,7 +1269,7 @@ html[data-ds-dark-theme] .mru-root {
 
 /* headings */
 .mru-h {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   color: var(--mru-ink);
   font-family: var(--mru-font-read);
   font-weight: 600;
@@ -1295,7 +1299,7 @@ html[data-ds-dark-theme] .mru-root {
 
 /* paragraph */
 .mru-para__text {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   margin: 0;
   text-wrap: pretty;
   overflow-wrap: break-word;
@@ -1309,7 +1313,7 @@ html[data-ds-dark-theme] .mru-root {
 
 /* translator's voice: quieter sans, hung from a hairline */
 .mru-para__translation {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   margin: 0.5em 0 0;
   padding-left: 13px;
   border-left: 2px solid var(--mru-rule-strong);
@@ -1331,7 +1335,7 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-paper--translated .mru-para__translation {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   margin: 0 0 1.05em;
   padding-left: 0;
   border-left: 0;
@@ -1344,7 +1348,7 @@ html[data-ds-dark-theme] .mru-root {
 /* 译文 mode fallback: an untranslated block shows its original English, so it
    keeps the serif reading voice instead of the translation voice. */
 .mru-paper--translated .mru-para__translation--source {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   margin: 0 0 1.05em;
   padding-left: 0;
   border-left: 0;
@@ -1404,7 +1408,7 @@ html[data-ds-dark-theme] .mru-root {
 
 /* lists */
 .mru-list {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   padding-left: 1.35em;
   list-style: disc outside;
 }
@@ -1431,7 +1435,7 @@ html[data-ds-dark-theme] .mru-root {
 
 /* quote */
 .mru-block--quote {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   padding: 0 0 0 18px;
   border-left: 2px solid var(--mru-rule-strong);
   color: var(--mru-ink-soft);
@@ -1696,8 +1700,9 @@ html[data-ds-dark-theme] .mru-root {
 .mru-block__tools {
   position: absolute;
   top: 1px;
-  /* hug the text measure (56ch) rather than the full column width */
-  right: max(0px, calc(100% - 56ch - 34px));
+  /* hug the text measure rather than the column edge; when the column is
+     narrower than the preset, clamp inside the paper's 60px padding */
+  right: max(-42px, calc(100% - var(--mru-measure, 56ch) - 34px));
   z-index: 3;
   display: flex;
   flex-direction: column;
@@ -2877,7 +2882,7 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-section__desc {
-  max-width: 56ch;
+  max-width: var(--mru-measure, 56ch);
   margin: 4px 0 12px;
   color: var(--mru-ink-soft);
   font-size: 12px;
@@ -6226,19 +6231,15 @@ circle.mru-graph__node[data-related="true"] {
   gap: 8px;
 }
 
+.mru-aspect-popover .mru-aspect-legend {
+  margin-top: 9px;
+}
+
 .mru-aspect-popover__title {
   color: var(--mru-ink);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.3;
-}
-
-.mru-aspect-popover__hint {
-  max-width: 48ch;
-  margin: 6px 0 10px;
-  color: var(--mru-ink-soft);
-  font-size: 11.5px;
-  line-height: 1.55;
 }
 
 /* --------------------------------------------------------------------------
@@ -6268,32 +6269,39 @@ circle.mru-graph__node[data-related="true"] {
 
 .mru-aspect-legend__dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--mru-ink-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mru-ink) 12%, transparent);
 }
 
-/* dot colours derive from the four annotation inks, exactly like the notes */
+/* The dots are small samples of the real highlighter inks: same tokens as
+   .mru-hl--*, plus a stronger same-hue inset ring so the pastel survives on
+   both white and dark surfaces. */
 .mru-aspect-legend__dot--definition {
-  background: color-mix(in srgb, var(--mru-hl-yellow) 62%, var(--mru-ink));
+  background: var(--mru-hl-yellow);
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 72, 0.7);
 }
 
 .mru-aspect-legend__dot--context {
-  background: color-mix(in srgb, var(--mru-hl-yellow) 62%, var(--mru-ink));
+  background: var(--mru-hl-yellow);
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 72, 0.7);
 }
 
 .mru-aspect-legend__dot--method {
-  background: color-mix(in srgb, var(--mru-hl-sage) 58%, var(--mru-ink));
+  background: var(--mru-hl-sage);
+  box-shadow: inset 0 0 0 1px rgba(126, 168, 124, 0.75);
 }
 
 .mru-aspect-legend__dot--result {
-  background: color-mix(in srgb, var(--mru-hl-sky) 58%, var(--mru-ink));
+  background: var(--mru-hl-sky);
+  box-shadow: inset 0 0 0 1px rgba(110, 155, 197, 0.78);
 }
 
 .mru-aspect-legend__dot--limitation {
-  background: color-mix(in srgb, var(--mru-hl-rose) 62%, var(--mru-ink));
+  background: var(--mru-hl-rose);
+  box-shadow: inset 0 0 0 1px rgba(201, 123, 139, 0.78);
 }
 
 .mru-aspect-legend__label {
@@ -6343,13 +6351,6 @@ circle.mru-graph__node[data-related="true"] {
   line-height: 1.35;
 }
 
-.mru-ai__legend-hint {
-  color: var(--mru-ink-soft);
-  font-family: var(--mru-font-ui);
-  font-size: 10px;
-  line-height: 1.4;
-  text-align: right;
-}
 
 /* placement 3: graph footer band under the canvas */
 .mru-graph__aspect-legend {
@@ -6749,4 +6750,95 @@ circle.mru-graph__node[data-related="true"] {
   .mru-ai__toLatest {
     display: none !important;
   }
+}
+
+/* --------------------------------------------------------------------------
+   19.9 Stale annotations after a reparse (addendum to the polish round)
+
+   When a reparse moves a block, the annotation keeps its quote and aspect
+   colour but loses its jump affordance. The note card drops to a dashed left
+   edge and quieter text; the margin gets a neutral info notice (never an error
+   colour). Text stays ≥4.5:1 on the surface in both themes.
+   -------------------------------------------------------------------------- */
+
+.mru-note--stale {
+  cursor: default;
+  border-left: 2px dashed color-mix(in srgb, var(--mru-ink-soft) 45%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 1.5%, var(--mru-surface));
+}
+
+/* neutralise the jump-hover affordance of normal notes */
+.mru-note--stale:hover,
+.mru-note--stale:focus-within {
+  cursor: default;
+  border-color: var(--mru-rule-strong);
+  border-left-color: color-mix(in srgb, var(--mru-ink-soft) 45%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 1.5%, var(--mru-surface));
+}
+
+.mru-note--stale .mru-note__quote,
+.mru-note--stale .mru-note__body {
+  color: var(--mru-ink-soft);
+}
+
+/* aspect dot colours are intentionally kept: the note still belongs to its ink */
+.mru-note--stale .mru-note__swatch {
+  opacity: 1;
+}
+
+.mru-note__stale-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+/* the tag sits right after the aspect dot; time + delete move to the far edge */
+.mru-note__head .mru-note__stale-tag {
+  margin-top: 0;
+  margin-left: 0;
+}
+
+.mru-note--stale .mru-note__time {
+  margin-left: auto;
+}
+
+/* grouped stale section at the end of the 批注 list */
+.mru-margin__stale {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-margin__stale-title {
+  margin: 0 0 2px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* the margin notice variant: neutral info, not a warning */
+.mru-margin__notice--stale {
+  border-color: var(--mru-rule);
+  border-left: 2px solid color-mix(in srgb, var(--mru-ink-soft) 38%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 3%, transparent);
+  color: var(--mru-ink-soft);
 }

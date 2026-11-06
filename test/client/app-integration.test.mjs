@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import vm from 'node:vm'
+import { parseMarkdown } from '../../ui/markdown.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const BUNDLE = join(ROOT, 'lib', 'client.js')
@@ -427,6 +428,32 @@ function click(node) {
 const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const PARSE_ID = '22222222-2222-4222-8222-222222222222'
 const MARKDOWN = ['# Attention Is All You Need', '', '## 1 Introduction', '', 'Recurrent networks are the state of the art.', '', '## 2 Background', '', 'Reducing sequential computation matters.'].join('\n')
+const FIXTURE_MODEL = parseMarkdown(MARKDOWN)
+const FIXTURE_PARAGRAPHS = FIXTURE_MODEL.blocks.filter((block) => block.kind === 'paragraph')
+const FIRST_PARAGRAPH = FIXTURE_PARAGRAPHS[0]
+const SECOND_PARAGRAPH = FIXTURE_PARAGRAPHS[1]
+const ANNOTATION_TIME = '2026-11-06T10:00:00.000Z'
+// One normal annotation + two anchors that a reparse invalidated (host flags
+// stale ones; a missing blockKey also becomes an orphan client-side).
+let libraryAnnotations = [
+  {
+    id: 'ann-normal', blockKey: FIRST_PARAGRAPH.key,
+    start: 0, end: 12, quote: FIRST_PARAGRAPH.plainText.slice(0, 12),
+    color: 'sage', aspect: 'method', note: 'my note',
+    createdAt: ANNOTATION_TIME, updatedAt: ANNOTATION_TIME,
+  },
+  {
+    id: 'ann-stale', blockKey: 'b900:deadbeef',
+    start: 3, end: 18, quote: 'a quote that moved elsewhere',
+    color: 'rose', aspect: 'limitation', note: 'stale note', stale: true, staleReason: 'quote-not-found',
+    createdAt: ANNOTATION_TIME, updatedAt: ANNOTATION_TIME,
+  },
+  {
+    id: 'ann-orphan', blockKey: 'b901:beefdead',
+    start: 0, end: 11, quote: 'an orphaned quote', color: 'yellow', note: 'orphan note',
+    createdAt: ANNOTATION_TIME, updatedAt: ANNOTATION_TIME,
+  },
+]
 const PREFERENCES = {
   targetLanguage: 'zh', translationProvider: 'auto', readingMode: 'original', readingScale: 1,
   defaultEngine: 'auto', defaultModelVersion: 'vlm', defaultLanguage: 'ch', defaultIsOcr: false,
@@ -505,7 +532,7 @@ async function mockFetch(url, options) {
     case 'library.list': return envelope({ documents: [PARSED, UPLOADED] })
     case 'library.get': return envelope({
       document: payload && payload.id === DOC_ID ? PARSED : UPLOADED,
-      annotations: [],
+      annotations: payload && payload.id === DOC_ID ? libraryAnnotations : [],
       translations: { version: 1, targetLanguage: 'zh', entries: {} },
     })
     case 'document.markdown': return envelope({ markdown: MARKDOWN, contentList: null, pages: 15 })
@@ -727,6 +754,8 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
   })
 
   await t.test('reading width presets share one --mru-doc-width', async () => {
+    assert.equal(tree[0].props.style['--mru-doc-width'], '880px', 'default preset is standard width')
+    assert.equal(tree[0].props.style['--mru-measure'], '560px', 'default preset is standard measure')
     const buttons = findAll('mru-runhead__width')
     assert.equal(buttons.length, 4, 'runhead must expose four width presets')
     assert.ok(buttons.some((button) => String(button.attrs['aria-pressed']) === 'true'), 'one preset is active')
@@ -734,7 +763,9 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     assert.ok(wide, 'wide preset button must exist')
     click(wide)
     await settle(4)
-    assert.equal(rootElement ? rootElement.props.style['--mru-doc-width'] : tree[0].props.style['--mru-doc-width'], '1040px', 'preset must set --mru-doc-width on the root')
+    const root = rootElement || tree[0]
+    assert.equal(root.props.style['--mru-doc-width'], '1040px', 'preset must set --mru-doc-width on the root')
+    assert.equal(root.props.style['--mru-measure'], '700px', 'preset must widen the readable text measure too')
     assert.equal(JSON.parse(windowStub.localStorage.getItem('dsh-litnotes:layout')).docWidth, 1040)
     const active = findAll('mru-runhead__width').filter((button) => String(button.attrs['aria-pressed']) === 'true')
     assert.equal(active.length, 1, 'exactly one preset is pressed')
@@ -742,6 +773,7 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     click(findButtonByText('reader.viewGraph'))
     await settle(10)
     assert.equal(tree[0].props.style['--mru-doc-width'], '1040px', 'graph view must keep the reading width')
+    assert.equal(tree[0].props.style['--mru-measure'], '700px', 'graph view must keep the text measure')
     click(findButtonByText('reader.viewRead'))
     await settle(6)
   })
@@ -764,7 +796,8 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     const popover = first('mru-aspect-popover')
     assert.ok(popover, 'legend popover must open')
     assert.equal(findAllInTree(popover, 'mru-aspect-legend__item').length, 5)
-    assert.ok(textOf(popover).includes('aspect.legendHint'), 'popover must carry the one-line hint')
+    assert.equal(textOf(popover).includes('aspect.legendHint'), false, 'the explanatory hint sentence is removed')
+    assert.equal(popover.querySelector('.mru-aspect-popover__hint'), null, 'no hint node in the legend popover')
     for (const listener of windowStub.listeners.get('keydown') || []) {
       listener({ key: 'Escape', preventDefault() {}, stopPropagation() {}, target: rootElement || tree[0] })
     }
@@ -802,6 +835,75 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     const legend = first('mru-ai__legend')
     assert.ok(legend, 'AI panel must show the aspect legend')
     assert.equal(findAllInTree(legend, 'mru-aspect-legend__item').length, 5)
+    assert.equal(findAllInTree(legend, 'mru-ai__legend-hint').length, 0, 'the AI legend hint sentence is removed')
+    assert.equal(findAllInTree(legend, 'mru-aspect-legend__label').length, 5, 'text labels stay next to the dots')
+  })
+
+  await t.test('stale annotations: rendered, kept across saves, and re-anchored ones render', async () => {
+    const notesTab = findButtonByText('margin.notes')
+    assert.ok(notesTab, 'notes tab must exist')
+    click(notesTab)
+    await settle(4)
+    const staleNotice = first('mru-margin__notice--stale')
+    assert.ok(staleNotice, 'margin must show the stale notice')
+    assert.ok(textOf(staleNotice).includes('notes.staleNotice'), 'notice uses the stale copy key')
+    let staleCards = findAll('mru-note--stale')
+    assert.equal(staleCards.length, 2, 'both invalid anchors become stale cards')
+    for (const card of staleCards) {
+      assert.ok(findAllInTree(card, 'mru-note__stale-tag').length === 1, 'stale card carries the tag')
+      assert.equal(typeof card.props.onClick, 'undefined', 'stale cards must not jump to text')
+    }
+    assert.ok(findAll('mru-note').length >= 3, 'normal note cards still render')
+    const notesCount = textOf(findAll('mru-tab')[1])
+    assert.ok(notesCount.includes('3'), 'notes tab count includes stale cards')
+    // Marked-as-reanchored annotation with a NEW blockKey renders at its new place.
+    libraryAnnotations = libraryAnnotations.map((annotation) => (annotation.id === 'ann-normal'
+      ? { ...annotation, blockKey: SECOND_PARAGRAPH.key, reanchored: true }
+      : annotation))
+    click(findAll('mru-doc')[0])
+    await settle(14)
+    let mark = null
+    walk(tree, (element) => {
+      if (!mark && element.attrs && element.attrs['data-annotation-id'] === 'ann-normal') mark = element
+    })
+    assert.ok(mark, 're-anchored annotation must render as a highlight')
+    let blockElement = mark.parentNode
+    while (blockElement && !(blockElement.attrs && blockElement.attrs['data-block-key'])) blockElement = blockElement.parentNode
+    assert.equal(blockElement && blockElement.attrs['data-block-key'], SECOND_PARAGRAPH.key, 'highlight renders on the new block')
+
+    // Save merge: adding a normal annotation keeps both stale ones in the payload.
+    click(findButtonByText('margin.notes'))
+    await settle(3)
+    const annotateButton = first('mru-block__annotate')
+    assert.ok(annotateButton, 'block annotate tool must exist')
+    click(annotateButton)
+    await settle(3)
+    const editor = first('mru-noteeditor')
+    assert.ok(editor, 'note editor must open')
+    click(findAllInTree(editor, 'mru-btn--primary')[0])
+    await sleep(950)
+    await settle(3)
+    const saves = calls.filter((call) => call.method === 'annotations.save')
+    assert.ok(saves.length >= 1, 'adding an annotation must save')
+    let savedIds = (saves[saves.length - 1].payload.annotations || []).map((annotation) => annotation.id)
+    assert.ok(savedIds.includes('ann-stale'), 'stale annotation must survive the save')
+    assert.ok(savedIds.includes('ann-orphan'), 'orphan annotation must survive the save')
+    assert.ok(savedIds.includes('ann-normal'), 'normal annotation is saved')
+    assert.ok(savedIds.length >= 4, `expected merged payload, saw ${savedIds.length}`)
+
+    // Deleting one stale card removes only that card from the merged payload.
+    click(findButtonByText('margin.notes'))
+    await settle(3)
+    staleCards = findAll('mru-note--stale')
+    const deleteButton = findAllInTree(staleCards[0], 'mru-note__delete')[0]
+    assert.ok(deleteButton, 'stale card keeps its delete action')
+    click(deleteButton)
+    await sleep(950)
+    await settle(3)
+    const lastSave = calls.filter((call) => call.method === 'annotations.save').pop()
+    savedIds = (lastSave.payload.annotations || []).map((annotation) => annotation.id)
+    assert.equal(savedIds.includes('ann-stale') && savedIds.includes('ann-orphan'), false, 'deleted stale card is removed')
+    assert.equal(savedIds.filter((id) => id.startsWith('ann-')).length, 2, 'the other stale card is still kept')
   })
 
   await t.test('chat module contract: history, streaming frames and error mapping', async () => {

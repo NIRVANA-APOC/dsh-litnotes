@@ -75,11 +75,13 @@ Other host tokens used directly (not re-exported): `--dsw-alias-interactive-bg-h
   statusbar 30px. The rail/margin widths live in `--mru-rail-width` / `--mru-margin-width` on the
   workspace; the reading sheet and both graph views share `--mru-doc-width` (default **880px**,
   adjustable 720 / 880 / 1040 / 1200 from the reader runhead).
-- Paper padding 56px 60px; body measure 56ch; body margin `0 0 1.05em`. The **sheet** follows
-  `--mru-doc-width` (so 阅读 ↔ 图谱 never change the column width), while the **type area** inside
-  it stays centered at 680px (56ch + paper padding + rules). Widening the sheet therefore grows
-  the page margins and the room for figures/tables, not the prose measure; figures, tables, code
-  and formulas use the full 560px type-area content width inside the sheet.
+- Paper padding 56px 60px; body margin `0 0 1.05em`. The **sheet** follows `--mru-doc-width`
+  (so 阅读 ↔ 图谱 never change the column width) and the **type area** inside follows
+  `--mru-measure`: 窄 500 / 标准 560 / 宽 700 / 全宽 840px (default 560). The column outer width is
+  `measure + 120px` of paper padding, so switching a preset visibly changes the line length as
+  well as the page width; figures, tables, code blocks and formulas use the full type-area
+  content width. At 1440px the column is clamped by the available main column (standard shows
+  560px of text inside an 800px sheet).
 - Radii: 6px controls (buttons, inputs, segments, tabs, tools), 10px cards/menus/modals/slips,
   14px paper, 999px chips.
 - Motion: only the paper entry (fade + 6px rise, 180ms `cubic-bezier(.2,.7,.2,1)`), popovers
@@ -112,11 +114,11 @@ Two voices, never mixed:
   tracked eyebrows anywhere.
 - Page marks: 10.5px serif numerals in the left gutter with a 13px leader hairline — the only
   place numbers are used as typography rather than data.
-- The measure still decides the type area: inside the variable-width sheet, the 56ch English
-  column, the title block and the figures share the same 680px centered page area ("page margins
-  grow, measure does not"). The running head aligns its title to that type area and lets its
-  action row use the page margin on the right, so the width/legend/reading controls breathe
-  without pushing the title out of view.
+- The measure follows the preset: inside the sheet, the English column, the title block and the
+  figures share the same centered type area (500–840px). The running head aligns its title to
+  that type area (`max(60px, (sheet − measure) / 2)`) and lets its action row use the page margin
+  on the right, so the width/legend/reading controls breathe without pushing the title out of
+  view.
 
 ---
 
@@ -484,14 +486,22 @@ new floating pieces are paper slips rather than dashboard widgets.
 
 ### 12b.2 One document width for reading and graph
 
-- `--mru-doc-width` (default 880px) is set on `.mru-root` by the app from the persisted layout
-  preset. `.mru-paper`, `.mru-main--graph > .mru-graph` and the doc-graph sheet all use
-  `min(100%, var(--mru-doc-width, 880px))`; the old independent 1040/1120px widths are gone, so
-  switching 阅读 ↔ 图谱 keeps the column identical.
-- Inside the sheet the type area remains 680px centered (56ch measure + page padding); the wide
-  presets deliberately grow the page margins and the space available to figures/tables, not the
-  line length. Wide-sheet reading therefore looks like a folio page with generous margins rather
-  than a long banner.
+- `--mru-doc-width` (default 880px) and `--mru-measure` (default 560px) are set on `.mru-root` by
+  the app from the persisted layout preset. `.mru-paper`, `.mru-main--graph > .mru-graph` and the
+  doc-graph sheet all use `min(100%, var(--mru-doc-width, 880px))`; the old independent 1040/1120px
+  widths are gone, so switching 阅读 ↔ 图谱 keeps the column identical and the graphs never shrink
+  to the text measure.
+- Inside the sheet the type area follows `--mru-measure`: 窄 500 / 标准 560 / 宽 700 / 全宽 840px.
+  `.mru-paper__col` is `max-width: calc(var(--mru-measure, 560px) + 120px)` (60px paper padding
+  each side), and all eight type caps (headings, paragraphs, translations, translated-mode body,
+  lists, quotes, modal section copy) use `max-width: var(--mru-measure, 56ch)`. The block tools
+  follow the text edge: `right: max(-42px, calc(100% - var(--mru-measure, 56ch) - 34px))` keeps
+  the 8px gap after the last line and stays inside the paper padding when the column is clamped.
+  Figures/tables/code/formulas keep `max-width: 100%` = the full type area.
+- Measured in Chromium at 1920px: 窄 sheet 720 / col 620 / type 500; 标准 880 / 680 / 560;
+  宽 1040 / 820 / 700; 全宽 1200 / 960 / 840 — no horizontal overflow in any preset, the figure
+  always matches the type area, and the graph view keeps `--mru-doc-width` (1200 / 880) regardless
+  of measure. At 360px the column is 360 with 320px of text (preset caps clamp naturally).
 - The runhead title aligns with the type area's left edge and the action row uses the page
   margin on the right; the 窄/标准/宽/全宽 control (`.mru-runhead__width-group`,
   `--active`/`aria-pressed`) is a compact 4-item group (20px rows, 10.5px labels) styled like the
@@ -518,14 +528,21 @@ new floating pieces are paper slips rather than dashboard widgets.
 ### 12b.4 Aspect-colour legend in four places
 
 `.mru-aspect-legend` is one small row of dot + always-visible text labels (never colour alone;
-WCAG 1.4.1). Dots reuse the four annotation inks: yellow = definition/context, sage = method,
-sky = result, rose = limitation. The same component is placed:
+WCAG 1.4.1). The dots are literal samples of the highlight inks: `background: var(--mru-hl-yellow /
+sage / sky / rose)` (the exact tokens behind `.mru-hl--*` text highlights) plus a same-hue 1px
+inset ring for definition on light surfaces; yellow = definition/context, sage = method,
+sky = result, rose = limitation. Pixel-sampled in the harness, dot and real highlight composite to
+identical RGB in light (`247,231,184` / `211,223,207` / `208,221,231` / `237,214,217`) and dark
+(`73,64,40` / `50,59,51` / `47,56,65` / `65,50,54`). The same component is placed:
 
 1. under the margin tabs on the 批注 tab (`.mru-margin__legend`), including the empty state;
-2. above the AI composer (`.mru-ai__legend`, with a small `批注颜色` title + hint head row);
+2. above the AI composer (`.mru-ai__legend`, with a small `批注颜色` title row);
 3. under the graph canvas (`.mru-graph__aspect-legend`, with a 批注颜色 label);
-4. in the runhead 图例 popover (`.mru-aspect-popover`, a fixed paper slip with title, one-line
-   hint and the legend), opened from the `.mru-runhead__legend` ghost button.
+4. in the runhead 图例 popover (`.mru-aspect-popover`, a fixed paper slip with title and legend),
+   opened from the `.mru-runhead__legend` ghost button.
+
+The old `.mru-ai__legend-hint` and `.mru-aspect-popover__hint` styles were removed with their
+markup; both surfaces now read as title + legend only.
 
 All new text uses secondary ink on the host surface: aspect labels **5.80:1 light / 10.42:1 dark**,
 runhead width labels **5.56:1 / 10.81:1**, popover title **18.9:1 / 15.0:1**, popover hint and
@@ -542,10 +559,33 @@ flips the transform origin). It never overflows at 360px (max-width is relative 
 container and the module clamps the position); no caret is drawn because the card scrolls its
 own content and a protruding caret would be clipped.
 
-### 12b.6 Checks
+### 12b.6 Stale annotations after a reparse
+
+When a reparse moves an anchor, the annotation keeps its quote and aspect ink but is shown as
+stale in the 批注 tab (markup added by client-ui):
+
+- `.mru-margin__stale` / `.mru-margin__stale-title` — the stale annotations are grouped at the
+  end of the 批注 list under a hairline, with a quiet 10.5px section title.
+- `.mru-note--stale` — normal note language with a **2px dashed left edge** in secondary ink, a
+  slightly flatter surface, secondary-ink quote/body, default cursor and no hover mutation, so the
+  card no longer reads as a jump affordance. The aspect swatch keeps its ink colour.
+- `.mru-note__stale-tag` — 10px uppercase/quiet tag (`位置已变化` / "Position changed") in
+  secondary ink with a dotted underline, placed in the head row right after the aspect dot (the
+  time is pushed to the far edge). Contrast 5.80:1 light / 10.42:1 dark.
+- `.mru-margin__notice--stale` — neutral info variant of the margin notice: hairline border with a
+  soft secondary-ink left rule and a 3% ink wash instead of the warning tint; text in secondary
+  ink (same 5.80 / 10.42 contrast).
+
+### 12b.7 Checks
 
 - Light/dark, 1440/1000/390/360 and 720/880/1040/1200 doc-width presets verified in the same
   headless-Chromium harness (removed afterwards): resizer grip/active states, runhead fit at
   360px (width group hidden, legend icon-only), width consistency, margin/AI/graph legends,
-  navigator + preview + to-latest, anchored card at 1440 and 360, popover.
+  navigator + preview + to-latest, anchored card at 1440 and 360, popover, and the stale-note
+  cards/notice in light + dark.
+- Text measure now follows the presets (500/560/700/840px), verified by measured geometry:
+  no horizontal overflow, figures equal to the type area, block tools 8px after the last text
+  column, graph widths tied to `--mru-doc-width` only.
+- Legend dots match the real highlight inks pixel-for-pixel (above), and the removed hint styles
+  leave clean title+legend surfaces.
 - Braces balanced, no `@import`/external `url()`; only `ui/styles.css` + this file changed.

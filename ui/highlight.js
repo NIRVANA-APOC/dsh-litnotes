@@ -172,6 +172,13 @@ export function normalizeAnnotation(annotation, block) {
     && typeof annotation.model.provider === 'string' && typeof annotation.model.model === 'string') {
     out.model = { provider: annotation.model.provider, model: annotation.model.model }
   }
+  if (annotation.stale === true) {
+    out.stale = true
+    if (typeof annotation.staleReason === 'string' && annotation.staleReason !== '') {
+      out.staleReason = annotation.staleReason
+    }
+  }
+  if (annotation.reanchored === true) out.reanchored = true
   return out
 }
 

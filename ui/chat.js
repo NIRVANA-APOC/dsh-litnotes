@@ -108,7 +108,6 @@ const mruAiCopy = {
     'ai.errGeneric': '这次提问没有完成。',
     'ai.followups': '继续追问',
     'ai.legendTitle': '颜色图例',
-    'ai.legendHint': '高亮颜色表示批注的侧重：黄色为定义与背景，绿色为方法，蓝色为结果，玫红为局限。',
     'ai.navLabel': '问题导航',
     'ai.navJump': '跳到第 {index} 个问题',
     'ai.navQuestion': '问题 {index}',
@@ -170,7 +169,6 @@ const mruAiCopy = {
     'ai.errGeneric': 'This question did not finish.',
     'ai.followups': 'Follow up',
     'ai.legendTitle': 'Colour legend',
-    'ai.legendHint': 'Highlight colours mark the annotation aspect: yellow for definitions and context, sage for methods, sky for results, rose for limitations.',
     'ai.navLabel': 'Question navigator',
     'ai.navJump': 'Jump to question {index}',
     'ai.navQuestion': 'Question {index}',
@@ -2343,8 +2341,7 @@ export function MruAiPanel(props) {
   const legendNode = historyState === 'ready' && messages.length > 0
     ? h('div', { className: 'mru-ai__legend', 'aria-label': tr('ai.legendTitle') },
         h('div', { className: 'mru-ai__legend-head' },
-          h('span', { className: 'mru-ai__legend-title' }, tr('ai.legendTitle')),
-          h('span', { className: 'mru-ai__legend-hint' }, tr('ai.legendHint'))),
+          h('span', { className: 'mru-ai__legend-title' }, tr('ai.legendTitle'))),
         h('div', { className: 'mru-aspect-legend' },
           mruAiAspectLegendItems(t).map((item) => h('span', {
             key: item.aspect,

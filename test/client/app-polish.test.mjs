@@ -35,8 +35,9 @@ function loadLayoutHelpers() {
   }
   const source = `const mruClamp = (value, min, max) => Math.max(min, Math.min(max, Number(value)));\n`
     + constants + '\n' + functions + `
-    ;({ mruLayoutRead, mruLayoutWrite, mruLayoutClamp, mruLayoutDocWidth, mruLayoutWidthLabelKey,
-         MRU_LAYOUT_DEFAULTS, MRU_LAYOUT_LIMITS, MRU_DOC_WIDTH_PRESETS, MRU_LAYOUT_KEY })`
+    ;({ mruLayoutRead, mruLayoutWrite, mruLayoutClamp, mruLayoutDocWidth, mruLayoutMeasure,
+         mruLayoutWidthLabelKey, MRU_LAYOUT_DEFAULTS, MRU_LAYOUT_LIMITS, MRU_DOC_WIDTH_PRESETS,
+         MRU_DOC_MEASURE_BY_WIDTH, MRU_LAYOUT_KEY })`
   const helpers = vm.runInNewContext(source, { window: windowStub, JSON, Object, Number, Math, Array })
   return { helpers, windowStub, storage }
 }
@@ -73,7 +74,7 @@ test('layout clamps rail/margin widths and ignores garbage', () => {
   assert.equal(helpers.mruLayoutRead().docWidth, 880)
 })
 
-test('reading-width presets map to labels and normalize unknown values', () => {
+test('reading-width presets map to labels, container width and text measure', () => {
   const { helpers } = loadLayoutHelpers()
   assert.equal(helpers.mruLayoutWidthLabelKey(720), 'layout.widthNarrow')
   assert.equal(helpers.mruLayoutWidthLabelKey(880), 'layout.widthStandard')
@@ -83,6 +84,14 @@ test('reading-width presets map to labels and normalize unknown values', () => {
   assert.equal(helpers.mruLayoutDocWidth('1040'), 1040)
   assert.equal(helpers.mruLayoutDocWidth(1234), 880)
   assert.equal(helpers.mruLayoutDocWidth(undefined), 880)
+  // The readable text measure must follow the preset, not just the sheet width.
+  assert.deepEqual({ ...helpers.MRU_DOC_MEASURE_BY_WIDTH }, { 720: 500, 880: 560, 1040: 700, 1200: 840 })
+  assert.equal(helpers.mruLayoutMeasure(720), 500)
+  assert.equal(helpers.mruLayoutMeasure(880), 560)
+  assert.equal(helpers.mruLayoutMeasure('1040'), 700)
+  assert.equal(helpers.mruLayoutMeasure(1200), 840)
+  assert.equal(helpers.mruLayoutMeasure(1234), 560)
+  assert.equal(helpers.mruLayoutMeasure(undefined), 560)
 })
 
 test('corrupted localStorage falls back to defaults without throwing', () => {
@@ -108,6 +117,10 @@ test('app markup emits the resizer, width-control and legend contract classes', 
   for (const aspect of ['definition', 'context', 'method', 'result', 'limitation']) {
     assert.ok(app.includes(`aspect: '${aspect}'`), `legend must include the ${aspect} aspect`)
   }
+  // The explanatory sentence was removed: dot+label is the whole legend.
+  assert.equal(app.includes('mru-aspect-popover__hint'), false)
+  assert.equal(app.includes("'aspect.legendHint'"), false)
+  assert.ok(app.includes("'--mru-measure'"), 'root must publish the text-measure variable')
 })
 
 test('app copy deck registers the legend and layout keys (zh + en)', () => {
@@ -115,7 +128,7 @@ test('app copy deck registers the legend and layout keys (zh + en)', () => {
     'layout.resizeRail', 'layout.resizeMargin', 'layout.resizeHint', 'layout.widthGroup',
     'layout.widthNarrow', 'layout.widthStandard', 'layout.widthWide', 'layout.widthFull',
     'aspect.legendTitle', 'aspect.definition', 'aspect.context', 'aspect.method',
-    'aspect.result', 'aspect.limitation', 'aspect.legendHint',
+    'aspect.result', 'aspect.limitation',
   ]) {
     const occurrences = app.split(`'${key}':`).length - 1
     assert.ok(occurrences >= 2, `dictionary key ${key} must exist in both zh and en dictionaries (found ${occurrences})`)

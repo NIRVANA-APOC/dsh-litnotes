@@ -80,6 +80,10 @@ open it **next to that node**:
   small menu). Choice persists as `docWidth` in the layout storage above.
   The effective width is clamped to the available main column; switching
   阅读 ↔ 图谱 must not visibly change the column width (same max-width var).
+- **Readable text follows the preset too** (user feedback): each preset also
+  sets `--mru-measure` (content px) on `.mru-root` — 窄 500 / 标准 560 /
+  宽 700 / 全宽 840. `.mru-paper__col` and the 56ch type caps consume it, so
+  宽/全宽 give visibly longer lines, not just wider page margins.
 - Keyboard: the control is a normal button/radiogroup; no drag required.
 
 ## 5. Aspect colour legend in several places (all three scopes)
@@ -103,13 +107,15 @@ Single source of truth for the copy (app `t()` keys, chat local deck, graph `t()
   2. AI panel: under the citations footer / above the composer
      (`.mru-ai__legend`, rendered once per answer card is fine);
   3. reader runhead help: a 「图例」 button opening a small popover with the
-     legend + one-line explanation;
+     legend only (the long explanatory sentence was removed after user
+     feedback — the dot+label legend is the explanation);
   4. graph: legend footer under the type filters (`.mru-graph__aspect-legend`)
      and the aspect label already shown in the node card.
-- app `t()` keys to add: `aspect.legendTitle`, `aspect.definition`,
-  `aspect.context`, `aspect.method`, `aspect.result`, `aspect.limitation`,
-  `aspect.legendHint`; chat deck: `legendTitle`/`legendHint` + the five labels;
-  graph: `graph.aspectLegend`, `graph.aspectHint` (+ reuse type labels).
+- app `t()` keys: `aspect.legendTitle`, `aspect.definition`, `aspect.context`,
+  `aspect.method`, `aspect.result`, `aspect.limitation`; chat deck:
+  `legendTitle` + the five labels; graph: `graph.aspectLegend`, `graph.aspect.*`
+  (+ reuse type labels). No explanatory hint sentence is rendered (removed per
+  user feedback 2026-11-06); the dot+label legend is the explanation.
 
 ## 6. Acceptance (all owners)
 

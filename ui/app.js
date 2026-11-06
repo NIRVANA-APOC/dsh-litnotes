@@ -101,6 +101,11 @@ const MRU_LAYOUT_LIMITS = Object.freeze({
 });
 /** Reading-width presets (px): 窄 / 标准 / 宽 / 全宽. */
 const MRU_DOC_WIDTH_PRESETS = Object.freeze([720, 880, 1040, 1200]);
+/**
+ * Readable-text measure per preset (px). The preset changes both the sheet
+ * container and the text column so the reading line itself widens/narrows.
+ */
+const MRU_DOC_MEASURE_BY_WIDTH = Object.freeze({ 720: 500, 880: 560, 1040: 700, 1200: 840 });
 /** Aspect colour legend, single source of truth for the client legend rows. */
 const MRU_ASPECT_LEGEND = Object.freeze([
   Object.freeze({ aspect: 'definition', color: 'yellow', labelKey: 'aspect.definition' }),
@@ -198,6 +203,9 @@ const ZH = {
   'margin.empty': '选中正文后，可以高亮或写下批注。',
   'margin.noteDelete': '删除批注',
   'margin.dropped': '有 {count} 条批注在当前解析稿里找不到位置，已暂时收起。',
+  'notes.staleSection': '位置已变化',
+  'notes.staleTag': '位置已变化',
+  'notes.staleNotice': '重新解析后，{count} 条批注的位置发生变化，原文引用已保留',
   'sel.translate': '翻译',
   'sel.highlight': '高亮',
   'sel.removeHighlight': '取消高亮',
@@ -252,7 +260,6 @@ const ZH = {
   'aspect.method': '方法',
   'aspect.result': '结果',
   'aspect.limitation': '局限',
-  'aspect.legendHint': '高亮颜色表示批注的侧重：黄色为定义与背景，绿色为方法，蓝色为结果，玫红为局限。',
   'settings.graphAutoBuild': '解析完成后自动生成知识图谱',
   'settings.scale': '正文字号',
   'settings.sectionStorage': '存储',
@@ -503,6 +510,9 @@ const EN = {
   'margin.empty': 'Select text to highlight it or leave a note.',
   'margin.noteDelete': 'Delete note',
   'margin.dropped': '{count} notes no longer match this draft and are hidden.',
+  'notes.staleSection': 'Position changed',
+  'notes.staleTag': 'Position changed',
+  'notes.staleNotice': 'After the reparse, {count} annotations changed position; their original quotes are kept.',
   'sel.translate': 'Translate',
   'sel.highlight': 'Highlight',
   'sel.removeHighlight': 'Remove highlight',
@@ -557,7 +567,6 @@ const EN = {
   'aspect.method': 'Method',
   'aspect.result': 'Result',
   'aspect.limitation': 'Limitation',
-  'aspect.legendHint': 'Highlight colours mark the annotation aspect: yellow for definitions and context, sage for methods, sky for results, rose for limitations.',
   'settings.graphAutoBuild': 'Build the knowledge graph after parsing',
   'settings.scale': 'Reading size',
   'settings.sectionStorage': 'Storage',
@@ -816,6 +825,12 @@ function mruLayoutClamp(value, limits) {
 function mruLayoutDocWidth(value) {
   const number = Number(value);
   return MRU_DOC_WIDTH_PRESETS.includes(number) ? number : MRU_LAYOUT_DEFAULTS.docWidth;
+}
+
+/** Text measure (px) paired with a reading-width preset. */
+function mruLayoutMeasure(value) {
+  const width = mruLayoutDocWidth(value);
+  return MRU_DOC_MEASURE_BY_WIDTH[width] || MRU_DOC_MEASURE_BY_WIDTH[MRU_LAYOUT_DEFAULTS.docWidth];
 }
 
 /** Dictionary key for one reading-width preset. */
@@ -1477,6 +1492,60 @@ function mruVisibleBlock(body, model, threshold) {
     if (rect.top > threshold) return null;
   }
   return null;
+}
+
+/**
+ * Build the whole-list `annotations.save` payload: normalized (rendered)
+ * annotations win by id, while orphan/stale ones are preserved untouched so a
+ * reparse can never erase a user's note. (docs: stale-anchor bug)
+ */
+function mruMergeAnnotations(normalized, orphans) {
+  const merged = new Map();
+  for (const annotation of Array.isArray(normalized) ? normalized : []) {
+    if (!annotation || typeof annotation.id !== 'string' || annotation.id === '') continue;
+    merged.set(annotation.id, annotation);
+  }
+  for (const annotation of Array.isArray(orphans) ? orphans : []) {
+    if (!annotation || typeof annotation.id !== 'string' || annotation.id === '') continue;
+    if (!merged.has(annotation.id)) merged.set(annotation.id, annotation);
+  }
+  return Array.from(merged.values());
+}
+
+/** Normalize an orphan/stale annotation (no readable block) for display + save. */
+function mruOrphanAnnotation(annotation) {
+  if (!annotation || typeof annotation !== 'object' || Array.isArray(annotation)) return null;
+  const id = typeof annotation.id === 'string' ? annotation.id.trim() : '';
+  if (id === '') return null;
+  const createdAt = typeof annotation.createdAt === 'string' && annotation.createdAt !== ''
+    ? annotation.createdAt
+    : new Date(0).toISOString();
+  const out = {
+    id,
+    blockKey: typeof annotation.blockKey === 'string' ? annotation.blockKey : '',
+    start: Math.max(0, Math.trunc(Number(annotation.start)) || 0),
+    end: Math.max(0, Math.trunc(Number(annotation.end)) || 0),
+    quote: typeof annotation.quote === 'string' ? annotation.quote.slice(0, MRU_MAX_QUOTE) : '',
+    color: MRU_COLORS.includes(annotation.color) ? annotation.color : 'yellow',
+    note: typeof annotation.note === 'string' ? annotation.note : '',
+    createdAt,
+    updatedAt: typeof annotation.updatedAt === 'string' && annotation.updatedAt !== ''
+      ? annotation.updatedAt
+      : createdAt,
+    // A client-side orphan is by definition no longer anchored in the draft.
+    stale: true,
+  };
+  if (typeof annotation.staleReason === 'string' && annotation.staleReason !== '') out.staleReason = annotation.staleReason;
+  if (annotation.reanchored === true) out.reanchored = true;
+  if (annotation.origin === 'ai' || annotation.origin === 'user') out.origin = annotation.origin;
+  if (MRU_ASPECT_LEGEND.some((entry) => entry.aspect === annotation.aspect)) out.aspect = annotation.aspect;
+  if (typeof annotation.chatId === 'string' && annotation.chatId !== '') out.chatId = annotation.chatId;
+  if (typeof annotation.messageId === 'string' && annotation.messageId !== '') out.messageId = annotation.messageId;
+  if (annotation.model !== null && typeof annotation.model === 'object'
+    && typeof annotation.model.provider === 'string' && typeof annotation.model.model === 'string') {
+    out.model = { provider: annotation.model.provider, model: annotation.model.model };
+  }
+  return out;
 }
 
 /** Whether the model contains any formula worth loading KaTeX for. */
@@ -2345,7 +2414,6 @@ function MruPaper(props) {
             title: t('settings.close'),
             onClick: () => setLegendPopover(null),
           }, '×')),
-        h('p', { className: 'mru-aspect-popover__hint' }, t('aspect.legendHint')),
         h(MruAspectLegend, { t }))
       : null);
 }
@@ -2911,6 +2979,7 @@ function MruMargin(props) {
   const {
     t, tab, onTabChange, model, annotations, droppedCount, activeAnnotationId,
     activeHeadingKey, onOutlineClick, onNoteClick, onNoteDelete, docTitle, aiPanelProps,
+    staleAnnotations,
   } = props;
   const activeTab = MRU_MARGIN_TABS.includes(tab) ? tab : 'outline';
   const outlineAll = model && Array.isArray(model.outline) ? model.outline : [];
@@ -2942,11 +3011,19 @@ function MruMargin(props) {
     }
   } else {
     const notes = Array.isArray(annotations) ? annotations : [];
+    const stale = Array.isArray(staleAnnotations) ? staleAnnotations : [];
     const list = [];
     if (droppedCount > 0) {
       list.push(h('div', { key: 'notice', className: 'mru-margin__notice' }, t('margin.dropped', { count: droppedCount })));
     }
-    if (notes.length === 0) {
+    if (stale.length > 0) {
+      list.push(h('div', {
+        key: 'stale-notice',
+        className: 'mru-margin__notice mru-margin__notice--stale',
+        role: 'status',
+      }, t('notes.staleNotice', { count: stale.length })));
+    }
+    if (notes.length === 0 && stale.length === 0) {
       list.push(h('div', { key: 'empty', className: 'mru-margin__empty' }, t('margin.empty')));
     } else {
       notes.forEach((annotation) => {
@@ -2974,6 +3051,33 @@ function MruMargin(props) {
           annotation.note ? h('p', { className: 'mru-note__body' }, annotation.note) : null));
       });
     }
+    if (stale.length > 0) {
+      list.push(h('section', { key: 'stale-section', className: 'mru-margin__stale' },
+        h('h3', { className: 'mru-margin__stale-title' }, t('notes.staleSection')),
+        stale.map((annotation) => h('article', {
+          key: `stale-${annotation.id}`,
+          className: 'mru-note mru-note--stale',
+          'data-annotation-id': annotation.id,
+          'data-stale': annotation.staleReason || 'true',
+          // No jump-to-text affordance: this anchor no longer resolves.
+        },
+          h('div', { className: 'mru-note__head' },
+            h('span', { className: 'mru-note__swatch', 'data-color': annotation.color || 'yellow', 'aria-hidden': 'true' }),
+            h('span', { className: 'mru-note__stale-tag' }, t('notes.staleTag')),
+            h('span', { className: 'mru-note__time' }, mruFormatNoteTime(annotation.updatedAt || annotation.createdAt, t)),
+            h('button', {
+              type: 'button',
+              className: 'mru-icon-btn mru-note__delete',
+              'aria-label': t('margin.noteDelete'),
+              title: t('margin.noteDelete'),
+              onClick: (event) => {
+                event.stopPropagation();
+                onNoteDelete(annotation);
+              },
+            }, h(MruGlyph, { name: 'trash' }))),
+          h('blockquote', { className: 'mru-note__quote' }, mruDisplayText(annotation.quote)),
+          annotation.note ? h('p', { className: 'mru-note__body' }, annotation.note) : null))));
+    }
     body = h('div', { className: 'mru-notes' }, list);
   }
   return h('aside', { className: 'mru-margin' },
@@ -2991,7 +3095,7 @@ function MruMargin(props) {
         className: tabClass('notes'),
         'aria-selected': activeTab === 'notes' ? 'true' : 'false',
         onClick: () => onTabChange('notes'),
-      }, t('margin.notes'), h('span', { className: 'mru-tab__count' }, String(annotations ? annotations.length : 0))),
+      }, t('margin.notes'), h('span', { className: 'mru-tab__count' }, String((annotations ? annotations.length : 0) + (Array.isArray(staleAnnotations) ? staleAnnotations.length : 0)))),
       h('button', {
         type: 'button',
         role: 'tab',
@@ -3667,6 +3771,9 @@ function MineruApp(props) {
   const [reader, setReader] = React.useState({ phase: 'empty' });
   const [annotations, setAnnotations] = React.useState([]);
   const [droppedAnnotations, setDroppedAnnotations] = React.useState(0);
+  // Annotations whose anchor is gone after a reparse: kept, shown as stale cards
+  // and always included in the whole-list save (never silently erased).
+  const [staleAnnotations, setStaleAnnotations] = React.useState([]);
   const [translations, setTranslations] = React.useState({ targetLanguage: 'zh', entries: {} });
   const [translationJobs, setTranslationJobs] = React.useState({});
   const [translationFlash, setTranslationFlash] = React.useState(null);
@@ -3722,6 +3829,7 @@ function MineruApp(props) {
   const latestRef = React.useRef({});
   const apiRef = React.useRef({});
   const annotationsStoreRef = React.useRef([]);
+  const staleAnnotationsRef = React.useRef([]);
   const translationsStoreRef = React.useRef({ targetLanguage: 'zh', entries: {} });
   const translationInflightRef = React.useRef(new Set());
   const translationFlashTimerRef = React.useRef(null);
@@ -3839,7 +3947,12 @@ function MineruApp(props) {
       ? { ...previous, document: { ...previous.document, ...entry } }
       : previous));
     const previousStatus = previousStatuses.get(selected);
-    if (previousStatus === 'parsing' && entry.status === 'parsed') void loadReader(selected, entry);
+    if (previousStatus === 'parsing' && entry.status === 'parsed') {
+      void loadReader(selected, entry);
+      // A successful reparse / page repair re-anchors annotations host-side;
+      // reload them so highlights move with the quote instead of going stale.
+      void reloadAnnotations(selected);
+    }
     if (previousStatus === 'parsing' && entry.status !== 'parsing') {
       if (entry.status === 'uploaded' || entry.status === 'failed') setReader({ phase: 'idle', docId: selected });
     }
@@ -3923,6 +4036,8 @@ function MineruApp(props) {
   // --- document loading --------------------------------------------------
   const clearDocumentState = (id) => {
     annotationsStoreRef.current = [];
+    staleAnnotationsRef.current = [];
+    setStaleAnnotations([]);
     translationsStoreRef.current = { targetLanguage: 'zh', entries: {} };
     setAnnotations([]);
     setDroppedAnnotations(0);
@@ -4241,7 +4356,7 @@ function MineruApp(props) {
     const next = annotationsStoreRef.current.concat([annotation]);
     annotationsStoreRef.current = next;
     setAnnotations(next);
-    queueAnnotationsSave(latestRef.current.selectedId, next);
+    queueAnnotationsSave(latestRef.current.selectedId, mruMergeAnnotations(next, staleAnnotationsRef.current));
     flashAnnotation(annotation.id);
     return annotation;
   };
@@ -4257,14 +4372,19 @@ function MineruApp(props) {
     });
     annotationsStoreRef.current = next;
     setAnnotations(next);
-    queueAnnotationsSave(latestRef.current.selectedId, next);
+    queueAnnotationsSave(latestRef.current.selectedId, mruMergeAnnotations(next, staleAnnotationsRef.current));
   };
 
   const deleteAnnotation = (id) => {
-    const next = annotationsStoreRef.current.filter((annotation) => annotation.id !== id);
-    annotationsStoreRef.current = next;
-    setAnnotations(next);
-    queueAnnotationsSave(latestRef.current.selectedId, next);
+    // Deletion may target a normal annotation or an orphan/stale card; remove it
+    // from whichever list holds it and persist the merged remainder.
+    const normalizedNext = annotationsStoreRef.current.filter((annotation) => annotation.id !== id);
+    const staleNext = staleAnnotationsRef.current.filter((annotation) => annotation.id !== id);
+    annotationsStoreRef.current = normalizedNext;
+    staleAnnotationsRef.current = staleNext;
+    setAnnotations(normalizedNext);
+    setStaleAnnotations(staleNext);
+    queueAnnotationsSave(latestRef.current.selectedId, mruMergeAnnotations(normalizedNext, staleNext));
     if (activeAnnotationId === id) setActiveAnnotationId(null);
     toast(t('toast.deleted'));
   };
@@ -4426,7 +4546,7 @@ function MineruApp(props) {
     const next = annotationsStoreRef.current.filter((annotation) => !idSet.has(annotation.id));
     annotationsStoreRef.current = next;
     setAnnotations(next);
-    queueAnnotationsSave(latestRef.current.selectedId, next);
+    queueAnnotationsSave(latestRef.current.selectedId, mruMergeAnnotations(next, staleAnnotationsRef.current));
     if (activeAnnotationId && idSet.has(activeAnnotationId)) setActiveAnnotationId(null);
     mruClearBrowserSelection();
     setSelection(null);
@@ -5284,6 +5404,7 @@ function MineruApp(props) {
     reader,
     annotations,
     droppedAnnotations,
+    staleAnnotations,
     translations,
     translationJobs,
     translationProviders,
@@ -5462,11 +5583,19 @@ function MineruApp(props) {
       if (block && block.key) blocksByKey.set(block.key, block);
     }
     const normalized = [];
+    const stale = [];
     let dropped = 0;
     for (const annotation of Array.isArray(detailValue.annotations) ? detailValue.annotations : []) {
-      const block = annotation ? blocksByKey.get(annotation.blockKey) : null;
-      if (!block || !mruIsAnnotatableBlock(block)) {
+      if (!annotation || typeof annotation !== 'object') {
         dropped += 1;
+        continue;
+      }
+      const block = blocksByKey.get(annotation.blockKey);
+      const orphan = annotation.stale === true || !block || !mruIsAnnotatableBlock(block)
+        ? mruOrphanAnnotation(annotation)
+        : null;
+      if (orphan !== null) {
+        stale.push(orphan);
         continue;
       }
       const result = normalizeAnnotation(annotation, block);
@@ -5474,7 +5603,9 @@ function MineruApp(props) {
       else dropped += 1;
     }
     annotationsStoreRef.current = normalized;
+    staleAnnotationsRef.current = stale;
     setAnnotations(normalized);
+    setStaleAnnotations(stale);
     setDroppedAnnotations(dropped);
   }, [reader.phase, reader.model, reader.docId, detail]);
 
@@ -5941,6 +6072,7 @@ function MineruApp(props) {
   const rootStyle = {
     '--mru-read-scale': String(prefs.readingScale || 1),
     '--mru-doc-width': `${mruLayoutDocWidth(layout.docWidth)}px`,
+    '--mru-measure': `${mruLayoutMeasure(layout.docWidth)}px`,
   };
   const showMargin = Boolean(selectedDoc) && libraryView !== 'graph';
   const workspaceStyle = {
@@ -6062,6 +6194,7 @@ function MineruApp(props) {
         model: reader.model || null,
         docTitle: selectedDoc.title || selectedDoc.originalName || '',
         annotations,
+        staleAnnotations,
         droppedCount: droppedAnnotations,
         activeAnnotationId,
         activeHeadingKey,

@@ -92,6 +92,14 @@ Aspect → annotation color mapping (single source of truth in the host, `lib/ai
 New optional fields: `origin: "user" | "ai"`, `aspect`, `chatId`, `messageId`, `model`.
 The client normalizer (`ui/highlight.js normalizeAnnotation`) and the store both preserve these
 fields across the whole-list save round-trip; a regression test covers it.
+
+**Reparse re-anchoring.** Block keys and offsets can change when a document is parsed again
+(full reparse or page-scoped repair). After every successful parse the host
+`lib/reanchor.js` relocates each annotation by its verbatim `quote` (same block → offsets fixed;
+another block → `blockKey` + offsets fixed, preferring the block nearest the old page; quote
+gone → annotation kept with `stale: true` and `staleReason`). The store and the client
+normalizer preserve `stale`/`staleReason`/`reanchored`, so a stale annotation is displayed in the
+margin as “位置已变化” and is never erased by a whole-list save.
 The client keeps rendering existing annotations unchanged; AI annotations get a small sparkle
 marker in the margin list and in the note editor. Deduping rule: a new AI annotation is skipped
 (and reported) when an existing annotation on the same block covers an overlapping range with

@@ -37,8 +37,9 @@ test('app.js exposes the helper contract consumed by ui/chat.js and ui/graph.js'
     'mruScrollToElement', 'mruFormatCount', 'mruDisplayText', 'mruErrorText',
     'MruRichText', 'MruFormula', 'MruGlyph', 'MruSpinner', 'mruOverlayPos',
     'mruStreamNdjson', 'mruAiState', 'mruAiModelLabel',
-    'mruLayoutRead', 'mruLayoutWrite', 'mruLayoutClamp', 'mruLayoutDocWidth',
+    'mruLayoutRead', 'mruLayoutWrite', 'mruLayoutClamp', 'mruLayoutDocWidth', 'mruLayoutMeasure',
     'mruLayoutWidthLabelKey', 'MruResizer', 'MruAspectLegend',
+    'mruMergeAnnotations', 'mruOrphanAnnotation',
   ]
   for (const name of functions) {
     assert.match(app, new RegExp(`(?:^|\\n)(?:async\\s+)?function\\s+${name}\\s*\\(`), `${name} must be a top-level function declaration`)
@@ -97,6 +98,12 @@ test('the AI label set covers both client modules', () => {
   }
   const missing = [...used].filter((key) => !zh.has(key))
   assert.deepEqual(missing, [], `ui/chat.js or ui/graph.js use unregistered t() keys: ${missing.join(', ')}`)
+})
+
+test('a successful reparse reloads annotations before normalizing them', () => {
+  assert.match(app, /previousStatus === 'parsing' && entry\.status === 'parsed'[\s\S]{0,220}reloadAnnotations\(selected\)/,
+    'the parsing→parsed transition must reload library.get annotations')
+  assert.match(app, /mruMergeAnnotations\(/, 'the annotations save path must merge stale orphans')
 })
 
 test('build pipeline concatenates chat and graph before app', () => {

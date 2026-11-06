@@ -77,7 +77,6 @@ const MRU_GRAPH_TEXT = {
     'graph.aspect.method': '方法',
     'graph.aspect.result': '结果',
     'graph.aspect.limitation': '局限',
-    'graph.aspectHint': '黄色=定义/背景 · 绿色=方法 · 蓝色=结果 · 红色=局限',
     'graph.filters': '筛选',
     'graph.nodes': '{count} 个节点',
     'graph.edges': '{count} 条关系',
@@ -160,7 +159,6 @@ const MRU_GRAPH_TEXT = {
     'graph.aspect.method': 'method',
     'graph.aspect.result': 'result',
     'graph.aspect.limitation': 'limitation',
-    'graph.aspectHint': 'yellow=definition/context · green=method · blue=result · red=limitation',
     'graph.filters': 'Filters',
     'graph.nodes': '{count} nodes',
     'graph.edges': '{count} edges',
@@ -2056,7 +2054,6 @@ export function MruGraphView(props) {
       className: 'mru-graph__aspect-legend',
       role: 'group',
       'aria-label': tr('graph.aspectLegend'),
-      title: tr('graph.aspectHint'),
     },
     mruGraphH('span', { className: 'mru-graph__aspect-legend-label' }, tr('graph.aspectLegend')),
     aspectLegendItems)

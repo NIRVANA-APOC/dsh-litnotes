@@ -203,9 +203,9 @@ function mruAiT(t, key, params) {
   if (typeof value !== 'string' || value === '' || value === key) {
     const deck = mruAiCopy[mruAiCopyLanguage(t)] || mruAiCopy.zh
     value = typeof deck[key] === 'string' ? deck[key] : (mruAiCopy.zh[key] || key)
-    if (params !== undefined) {
-      value = value.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
-    }
+  }
+  if (params !== undefined && typeof value === 'string' && value.indexOf('{') !== -1) {
+    value = value.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
   }
   return value
 }
@@ -752,7 +752,9 @@ function mruAiCitationLookup(citations, unverified) {
   const unverifiedList = Array.isArray(unverified) ? unverified : []
   for (let i = 0; i < verifiedList.length; i += 1) {
     const citation = verifiedList[i]
-    if (citation && !map.has(citation.index)) map.set(citation.index, { citation, verified: true })
+    if (citation && !map.has(citation.index)) {
+      map.set(citation.index, { citation, verified: citation.verified !== false })
+    }
   }
   for (let i = 0; i < unverifiedList.length; i += 1) {
     const citation = unverifiedList[i]
@@ -952,25 +954,22 @@ function mruAiRenderRunText(run, runIndex, text, options) {
     }
     const literal = mruAiDisplayText(part.text)
     if (literal === '') continue
+    const key = `run-${runIndex}-${segment}`
     let node = literal
-    if (run.code === true) node = h('code', { className: 'mru-inline-code' }, node)
-    if (run.del === true) node = h('del', null, node)
-    if (run.em === true) node = h('em', null, node)
-    if (run.strong === true) node = h('strong', null, node)
+    if (run.code === true) node = h('code', { key, className: 'mru-inline-code' }, node)
+    if (run.del === true) node = h('del', { key }, node)
+    if (run.em === true) node = h('em', { key }, node)
+    if (run.strong === true) node = h('strong', { key }, node)
     if (typeof run.link === 'string' && run.link !== '') {
       node = h('a', {
+        key,
         className: 'mru-link',
         href: run.link,
         target: '_blank',
         rel: 'noopener noreferrer',
       }, node)
     }
-    if (typeof node === 'string') {
-      nodes.push(node)
-    } else {
-      node.key = `run-${runIndex}-${segment}`
-      nodes.push(node)
-    }
+    nodes.push(node)
     segment += 1
   }
   return nodes
@@ -1155,7 +1154,7 @@ function MruAiEvidenceFooter(props) {
     nodes.push(mruAiCitationChipFor(
       citation,
       citation.index,
-      true,
+      citation.verified !== false,
       handlers,
       `footer-cite-${citation.index}-${i}`,
     ))
@@ -1634,6 +1633,7 @@ export function MruAiPanel(props) {
       return
     }
     if (type === 'delta') {
+      if (run.answered) return
       const text = mruAiString(frame.text)
       if (text === '') return
       run.draft += text
@@ -1940,7 +1940,7 @@ export function MruAiPanel(props) {
     runChat(question, {
       appendUser: false,
       dropFromId: message.id,
-      regenerateOf: /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(candidate) ? candidate : '',
+      regenerateOf: candidate,
       focus: currentFocus(),
     })
   }

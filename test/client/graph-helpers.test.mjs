@@ -1,0 +1,362 @@
+/**
+ * Unit tests for the pure knowledge-graph helpers in ui/graph.js:
+ * normalizeGraph, visibleGraph, layoutGraph and mruGraphActivePath.
+ *
+ * Run: node --test test/client/graph-helpers.test.mjs
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  normalizeGraph,
+  visibleGraph,
+  layoutGraph,
+  mruGraphActivePath,
+} from '../../ui/graph.js'
+
+/** Small representative KG covering all provenance shapes. */
+function fixture() {
+  return {
+    version: 1,
+    scope: 'document',
+    documentId: 'doc-1',
+    overview: 'A small graph.',
+    nodes: [
+      { id: 'a', type: 'concept', label: 'Alpha', summary: 'First concept', blockKeys: ['b1:aa'], weight: 1 },
+      { id: 'b', type: 'method', label: 'Beta', summary: 'Second method', blockKeys: ['b2:bb'], weight: 2 },
+      { id: 'c', type: 'finding', label: 'Gamma', summary: 'Third finding', documentIds: ['doc-2'] },
+      { id: 'd', type: 'method', label: 'Delta', summary: 'Isolated method' },
+    ],
+    edges: [
+      { id: 'e1', from: 'a', to: 'b', type: 'uses', label: 'uses', weight: 2 },
+      { id: 'e2', from: 'b', to: 'c', type: 'supports' },
+      { id: 'e3', from: 'a', to: 'ghost', type: 'relates' },
+    ],
+  }
+}
+
+/** A deterministic 300-node graph for the scale sanity test. */
+function largeGraph(nodeCount = 300) {
+  const nodes = []
+  const edges = []
+  for (let i = 0; i < nodeCount; i += 1) {
+    nodes.push({
+      id: `n${i}`,
+      type: i % 5 === 0 ? 'method' : i % 5 === 1 ? 'finding' : 'concept',
+      label: `Node ${i}`,
+      summary: `Summary ${i}`,
+      weight: 1 + (i % 4),
+      blockKeys: [`b${i}:k${i}`],
+    })
+  }
+  for (let i = 1; i < nodeCount; i += 1) {
+    edges.push({ id: `e${i}`, from: `n${i - 1}`, to: `n${i}`, type: 'relates' })
+    if (i % 7 === 0) edges.push({ id: `x${i}`, from: `n${i}`, to: `n${Math.floor(i / 2)}`, type: 'uses' })
+  }
+  return { version: 1, scope: 'library', nodes, edges }
+}
+
+test('normalizeGraph dedupes nodes/links, merges provenance and drops dangling edges', () => {
+  const raw = fixture()
+  raw.nodes.push({
+    ...raw.nodes[0],
+    blockKeys: ['b9:zz'],
+    documentIds: ['doc-a'],
+    weight: 9,
+  })
+  raw.edges.push({ ...raw.edges[0] })
+  raw.edges.push({ id: 'e4', from: 'a', to: 'b', type: 'uses', label: 'uses' })
+  raw.edges.push({ id: 'e5', from: 'c', to: 'ghost', type: 'mentions' })
+  const snapshot = JSON.stringify(raw)
+
+  const graph = normalizeGraph(raw)
+  assert.equal(JSON.stringify(raw), snapshot, 'normalizeGraph must not mutate its input')
+  assert.deepEqual(graph.nodes.map((node) => node.id), ['a', 'b', 'c', 'd'])
+  assert.deepEqual(graph.nodes[0].blockKeys, ['b1:aa', 'b9:zz'])
+  assert.deepEqual(graph.nodes[0].documentIds, ['doc-a'])
+  assert.equal(graph.nodes[0].weight, 9)
+  assert.equal(graph.nodes[0].label, 'Alpha', 'the first label wins')
+  assert.equal(graph.edges.length, 2)
+  assert.deepEqual(graph.edges.map((edge) => edge.id), ['e1', 'e2'])
+  assert.equal(graph.stats.nodes, 4)
+  assert.equal(graph.stats.edges, 2)
+})
+
+test('normalizeGraph generates deterministic ids and rejects unusable nodes', () => {
+  const graph = normalizeGraph({
+    nodes: [
+      { type: 'concept', label: 'No Id!' },
+      { label: '' },
+      null,
+      { id: 'known', type: 'method', label: 'Known' },
+    ],
+    edges: [
+      { from: 'n:concept:no-id', to: 'n:concept:no-id', type: 'relates' },
+      { from: 'n:concept:no-id', to: 'known', type: 'uses' },
+    ],
+  })
+  assert.deepEqual(graph.nodes.map((node) => node.id), ['n:concept:no-id', 'known'])
+  assert.equal(graph.edges.length, 1, 'self-links are not navigable in this view')
+  assert.equal(graph.edges[0].from, 'n:concept:no-id')
+})
+
+test('normalizeGraph accepts object endpoints and keeps distinct edges with colliding ids', () => {
+  const graph = normalizeGraph({
+    nodes: [{ id: 'a', type: 'concept', label: 'A' }, { id: 'b', type: 'method', label: 'B' }],
+    edges: [
+      { id: 'e', from: { id: 'a' }, to: { id: 'b' }, type: 'uses' },
+      { id: 'e', from: 'a', to: 'b', type: 'supports' },
+    ],
+  })
+  assert.equal(graph.edges.length, 2)
+  assert.equal(graph.edges[0].from, 'a')
+  assert.notEqual(graph.edges[0].id, graph.edges[1].id)
+})
+
+test('normalizeGraph handles empty and malformed graphs', () => {
+  for (const value of [null, undefined, {}, [], { nodes: 'nope', edges: 3 }]) {
+    const graph = normalizeGraph(value)
+    assert.deepEqual(graph.nodes, [])
+    assert.deepEqual(graph.edges, [])
+    assert.equal(graph.stats.nodes, 0)
+    assert.equal(graph.stats.edges, 0)
+  }
+})
+
+test('visibleGraph filters by type and search query without dangling edges', () => {
+  const all = visibleGraph(fixture(), {})
+  assert.equal(all.nodes.length, 4)
+  assert.equal(all.edges.length, 2)
+  assert.equal(all.filteredNodes, 4)
+  assert.equal(all.collapsed, false)
+
+  const methods = visibleGraph(fixture(), { types: ['method'] })
+  assert.deepEqual(methods.nodes.map((node) => node.id), ['b', 'd'])
+  assert.equal(methods.edges.length, 0)
+  assert.deepEqual(methods.typeCounts, { concept: 1, method: 2, finding: 1 })
+
+  const setFiltered = visibleGraph(fixture(), { types: new Set(['method', 'finding']) })
+  assert.deepEqual(setFiltered.nodes.map((node) => node.id), ['b', 'c', 'd'])
+  assert.equal(setFiltered.edges.length, 1)
+
+  const none = visibleGraph(fixture(), { types: [] })
+  assert.equal(none.nodes.length, 0)
+  assert.equal(none.edges.length, 0)
+  assert.equal(none.collapsed, false)
+  assert.equal(none.totalNodes, 4)
+})
+
+test('visibleGraph search is case-insensitive and covers summary and provenance', () => {
+  const bySummary = visibleGraph(fixture(), { query: 'SECOND' })
+  assert.deepEqual(bySummary.nodes.map((node) => node.id), ['b'])
+
+  const byLabel = visibleGraph(fixture(), { query: 'alpha' })
+  assert.deepEqual(byLabel.nodes.map((node) => node.id), ['a'])
+
+  const byBlockKey = visibleGraph(fixture(), { query: 'b2:' })
+  assert.deepEqual(byBlockKey.nodes.map((node) => node.id), ['b'])
+
+  const byDocument = visibleGraph(fixture(), { query: 'doc-2' })
+  assert.deepEqual(byDocument.nodes.map((node) => node.id), ['c'])
+
+  const miss = visibleGraph(fixture(), { query: 'nothing-here' })
+  assert.equal(miss.nodes.length, 0)
+  assert.equal(miss.hiddenNodes, 4)
+  for (const graph of [bySummary, byLabel, byBlockKey, byDocument, miss]) {
+    const ids = new Set(graph.nodes.map((node) => node.id))
+    assert.ok(graph.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to)))
+  }
+})
+
+test('visibleGraph collapse=type groups multi-node types deterministically', () => {
+  const first = visibleGraph(fixture(), { collapse: 'type' })
+  const second = visibleGraph(fixture(), { collapse: 'type' })
+  assert.deepEqual(first, second, 'collapse output must be deterministic')
+  assert.equal(first.collapsed, true)
+  assert.deepEqual(first.nodes.map((node) => node.id), ['a', 'cluster:type:method', 'c'])
+  assert.equal(first.collapsedNodes, 2)
+
+  const cluster = first.nodes.find((node) => node.id === 'cluster:type:method')
+  assert.ok(cluster)
+  assert.equal(cluster.cluster, true)
+  assert.equal(cluster.type, 'method')
+  assert.equal(cluster.count, 2)
+  assert.deepEqual(cluster.members, ['b', 'd'])
+  assert.equal(first.edges.length, 2)
+  for (const edge of first.edges) {
+    assert.ok(edge.count >= 1)
+    assert.ok(first.nodes.some((node) => node.id === edge.from))
+    assert.ok(first.nodes.some((node) => node.id === edge.to))
+  }
+  const toCluster = first.edges.find((edge) => edge.to === 'cluster:type:method')
+  assert.ok(toCluster)
+  assert.equal(toCluster.count, 1)
+  assert.equal(toCluster.label, 'uses')
+})
+
+test('visibleGraph collapse=auto only folds at library scale and honours an explicit threshold', () => {
+  const small = visibleGraph(fixture(), { collapse: 'auto' })
+  assert.equal(small.collapsed, false)
+  assert.equal(small.nodes.length, 4)
+
+  const forced = visibleGraph(fixture(), { collapse: 'auto', collapseThreshold: 2 })
+  assert.equal(forced.collapsed, true)
+  assert.ok(forced.nodes.length < 4)
+
+  const big = largeGraph(180)
+  const auto = visibleGraph(big, { collapse: 'auto' })
+  assert.equal(auto.collapsed, true)
+  assert.ok(auto.nodes.length < auto.filteredNodes)
+  assert.ok(auto.collapsedNodes > 0)
+  const ids = new Set(auto.nodes.map((node) => node.id))
+  assert.ok(auto.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to)))
+})
+
+test('layoutGraph is deterministic and never emits NaN coordinates', () => {
+  const first = layoutGraph(fixture(), { width: 640, height: 420, seed: 11 })
+  const second = layoutGraph(fixture(), { width: 640, height: 420, seed: 11 })
+  assert.deepEqual(first, second, 'same graph/options/seed must produce identical layouts')
+  assert.equal(first.links.length, 2)
+  assert.deepEqual(Object.keys(first.positions).sort(), ['a', 'b', 'c', 'd'])
+
+  for (const point of Object.values(first.positions)) {
+    assert.ok(Number.isFinite(point.x), `x is finite: ${point.x}`)
+    assert.ok(Number.isFinite(point.y), `y is finite: ${point.y}`)
+    assert.ok(point.x >= 0 && point.x <= 640)
+    assert.ok(point.y >= 0 && point.y <= 420)
+  }
+  for (const link of first.links) {
+    assert.ok(Number.isFinite(link.x1) && Number.isFinite(link.y1))
+    assert.ok(Number.isFinite(link.x2) && Number.isFinite(link.y2))
+    assert.deepEqual({ x: link.x1, y: link.y1 }, first.positions[link.from])
+    assert.deepEqual({ x: link.x2, y: link.y2 }, first.positions[link.to])
+  }
+
+  const different = layoutGraph(fixture(), { width: 640, height: 420, seed: 12 })
+  assert.notDeepEqual(different.positions, first.positions, 'the seed must influence initial placement')
+})
+
+test('layoutGraph places isolated nodes and a single node', () => {
+  const isolated = layoutGraph({
+    nodes: Array.from({ length: 6 }, (_, index) => ({
+      id: `i${index}`,
+      type: 'concept',
+      label: `Isolated ${index}`,
+    })),
+    edges: [],
+  }, { width: 700, height: 500, seed: 5, iterations: 80 })
+  assert.ok(isolated.links.length === 0)
+  const points = Object.values(isolated.positions)
+  assert.equal(points.length, 6)
+  for (const point of points) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+    assert.ok(point.x > 0 && point.x < 700 && point.y > 0 && point.y < 500)
+  }
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = i + 1; j < points.length; j += 1) {
+      assert.ok(
+        Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) > 1,
+        'isolated nodes must not collapse onto the same point',
+      )
+    }
+  }
+
+  const single = layoutGraph({
+    nodes: [{ id: 'only', type: 'concept', label: 'Only' }],
+    edges: [],
+  }, { width: 500, height: 320, seed: 1 })
+  assert.deepEqual(single.positions.only, { x: 250, y: 160 })
+})
+
+test('layoutGraph keeps previous positions stable and pins dragged nodes', () => {
+  const base = layoutGraph(fixture(), { width: 800, height: 520, seed: 21 })
+  const nextGraph = fixture()
+  nextGraph.nodes.push({ id: 'e', type: 'insight', label: 'Epsilon', blockKeys: ['b9:ee'] })
+  const next = layoutGraph(nextGraph, {
+    width: 800,
+    height: 520,
+    seed: 21,
+    previous: base.positions,
+  })
+  for (const id of ['a', 'b', 'c', 'd']) {
+    assert.deepEqual(next.positions[id], base.positions[id], `previous node ${id} must stay put`)
+  }
+  assert.ok(Number.isFinite(next.positions.e.x) && Number.isFinite(next.positions.e.y))
+
+  const pinned = layoutGraph(fixture(), {
+    width: 800,
+    height: 520,
+    seed: 21,
+    pinned: { a: { x: 120, y: 140 } },
+  })
+  assert.deepEqual(pinned.positions.a, { x: 120, y: 140 })
+})
+
+test('layoutGraph handles empty/edge-only graphs without NaN', () => {
+  assert.deepEqual(layoutGraph(null, { width: 400, height: 300 }), {
+    positions: {},
+    links: [],
+    width: 400,
+    height: 300,
+    seed: layoutGraph(null, { width: 400, height: 300 }).seed,
+    iterations: 0,
+  })
+  const danglingOnly = layoutGraph({
+    nodes: [{ id: 'a', type: 'concept', label: 'A' }],
+    edges: [{ id: 'd', from: 'a', to: 'missing', type: 'relates' }],
+  }, { width: 400, height: 300 })
+  assert.deepEqual(Object.keys(danglingOnly.positions), ['a'])
+  assert.equal(danglingOnly.links.length, 0)
+})
+
+test('300-node layout sanity: finite, bounded, deterministic and fast', () => {
+  const graph = largeGraph(300)
+  const started = Date.now()
+  const first = layoutGraph(graph, { width: 1000, height: 680, seed: 42 })
+  const elapsed = Date.now() - started
+  assert.ok(elapsed < 5000, `300-node layout should not block for seconds (took ${elapsed}ms)`)
+  assert.equal(Object.keys(first.positions).length, 300)
+  assert.ok(first.links.length > 0)
+  assert.ok(first.links.length <= graph.edges.length)
+  for (const point of Object.values(first.positions)) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+    assert.ok(point.x >= 0 && point.x <= 1000)
+    assert.ok(point.y >= 0 && point.y <= 680)
+  }
+  for (const link of first.links) {
+    assert.ok(Number.isFinite(link.x1) && Number.isFinite(link.y1))
+    assert.ok(Number.isFinite(link.x2) && Number.isFinite(link.y2))
+  }
+  const second = layoutGraph(graph, { width: 1000, height: 680, seed: 42 })
+  assert.deepEqual(second, first, '300-node output must stay deterministic')
+})
+
+test('mruGraphActivePath highlights a root-to-selection path and neighbourhood', () => {
+  const graph = {
+    nodes: [
+      { id: 'p', type: 'paper', label: 'Paper' },
+      { id: 'c', type: 'concept', label: 'Concept' },
+      { id: 'm', type: 'method', label: 'Method' },
+      { id: 'x', type: 'finding', label: 'Other' },
+    ],
+    edges: [
+      { id: 'e1', from: 'p', to: 'c', type: 'mentions' },
+      { id: 'e2', from: 'c', to: 'm', type: 'uses' },
+      { id: 'e3', from: 'x', to: 'm', type: 'supports' },
+    ],
+  }
+  const path = mruGraphActivePath(graph, 'm')
+  assert.equal(path.rootId, 'p')
+  assert.deepEqual(path.nodeIds, ['p', 'c', 'm'])
+  assert.deepEqual(path.edgeIds, ['e1', 'e2'])
+  assert.deepEqual(path.relatedNodeIds.sort(), ['c', 'x'])
+  assert.deepEqual(path.relatedEdgeIds.sort(), ['e2', 'e3'])
+
+  const missing = mruGraphActivePath(graph, 'nope')
+  assert.deepEqual(missing, {
+    rootId: null,
+    nodeIds: [],
+    edgeIds: [],
+    relatedNodeIds: [],
+    relatedEdgeIds: [],
+  })
+})

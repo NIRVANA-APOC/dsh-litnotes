@@ -4692,6 +4692,20 @@ html[data-ds-dark-theme] .mru-root {
   border-color: color-mix(in srgb, var(--mru-accent) 24%, var(--mru-rule-strong));
 }
 
+/* The panel appends the caret as a sibling after the rich answer, so keep the
+   caret on the last text line by hiding that span and drawing it with ::after. */
+.mru-ai__answer > span.mru-ai__streaming {
+  display: none;
+}
+
+.mru-ai__msg--streaming .mru-ai__answer .mru-rich > :last-child::after {
+  content: "▍";
+  margin-left: 2px;
+  color: var(--mru-ink);
+  font-size: 0.9em;
+  animation: mru-ai-caret 1.1s steps(2, start) infinite;
+}
+
 span.mru-ai__streaming {
   display: inline-block;
   margin-left: 2px;
@@ -5377,6 +5391,141 @@ circle.mru-graph__node--insight {
 }
 
 /* --------------------------------------------------------------------------
+   18.2b Graph module hooks (ui/graph.js): SVG layers, hit lines, counters,
+        zoom controls and node-path states.
+   -------------------------------------------------------------------------- */
+
+/* pan/zoom layer: the module owns the transform attribute; CSS never overrides it */
+.mru-graph__viewport {
+  will-change: transform;
+}
+
+.mru-graph__canvas-bg {
+  fill: transparent;
+}
+
+/* edges are groups: the visible line and a wide invisible hit line */
+.mru-graph__edge-group {
+  pointer-events: visiblePainted;
+}
+
+.mru-graph__edge-group--dim {
+  opacity: 0.34;
+}
+
+.mru-graph__edge-group--active .mru-graph__edge {
+  stroke: var(--mru-accent);
+  stroke-width: 1.6;
+}
+
+.mru-graph__edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+}
+
+/* cluster nodes print their member count inside the dot */
+.mru-graph__node-count {
+  fill: currentColor;
+  font-family: var(--mru-font-ui);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* nodes on the active/related path keep a hint of the accent */
+.mru-graph__node[data-path="true"] > circle:last-of-type,
+circle.mru-graph__node[data-path="true"] {
+  stroke: var(--mru-accent);
+  stroke-width: 2.2;
+}
+
+.mru-graph__node[data-related="true"] > circle:last-of-type,
+circle.mru-graph__node[data-related="true"] {
+  stroke-width: 1.9;
+}
+
+/* type counters inside legend/filter chips */
+.mru-graph__legend-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.mru-graph__legend-count {
+  margin-left: 1px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.mru-graph__legend .mru-link-btn {
+  margin-left: 2px;
+  color: var(--mru-ink-soft);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* zoom controls live in the status line, right-aligned by the module */
+.mru-graph__zoom {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mru-graph__zoom > span {
+  font-variant-numeric: tabular-nums;
+}
+
+.mru-graph__zoom .mru-link-btn {
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.mru-graph__zoom .mru-link-btn:hover {
+  color: var(--mru-ink);
+}
+
+.mru-graph__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* empty-state spinner, card close clearance and link rows */
+.mru-graph__empty > .mru-spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.mru-graph__card-title {
+  padding-right: 26px;
+}
+
+.mru-graph__card-meta .mru-link-btn {
+  color: var(--mru-ink-soft);
+  font-size: 10.5px;
+  text-decoration-color: color-mix(in srgb, var(--mru-ink) 28%, transparent);
+}
+
+.mru-graph__card-meta .mru-link-btn:hover {
+  color: var(--mru-ink);
+}
+
+.mru-graph__card-meta + .mru-graph__card-meta {
+  margin-top: 7px;
+  padding-top: 6px;
+}
+
+/* indeterminate build strip (progress unknown: a moving 38% segment) */
+.mru-graph__progress[data-indeterminate="true"] > span {
+  animation: mru-graph-indeterminate 1.35s ease-in-out infinite;
+}
+
+/* --------------------------------------------------------------------------
    18.3 AI layer motion & reduced motion
    -------------------------------------------------------------------------- */
 
@@ -5391,8 +5540,18 @@ circle.mru-graph__node--insight {
   }
 }
 
+@keyframes mru-graph-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(270%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  span.mru-ai__streaming {
+  span.mru-ai__streaming,
+  .mru-ai__msg--streaming .mru-ai__answer .mru-rich > :last-child::after {
     animation: none;
     opacity: 0.75;
   }
@@ -5406,8 +5565,14 @@ circle.mru-graph__node--insight {
   circle.mru-graph__node,
   .mru-graph__node-label,
   .mru-graph__edge,
-  .mru-graph__progress > * {
+  .mru-graph__progress > *,
+  .mru-graph__viewport {
     transition: none;
+  }
+
+  .mru-graph__progress[data-indeterminate="true"] > span {
+    animation: none;
+    width: 38%;
   }
 }
 

@@ -4300,23 +4300,23 @@ html[data-ds-dark-theme] .mru-root {
   color: var(--mru-ink);
 }
 
+/* "Dimmed" is carried by voice + shape, never by opacity: secondary ink keeps
+   4.5:1+, the dotted underline and the footer chip border carry the state. */
 .mru-ai__citation--unverified {
-  color: var(--dsw-alias-label-tertiary);
-  opacity: 0.62;
-  text-decoration: underline dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 1px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--mru-ink-soft) 70%, transparent);
+  color: var(--mru-ink-soft);
+  font-weight: 500;
 }
 
-.mru-ai__citation--unverified:hover {
-  opacity: 1;
+.mru-ai__citation--unverified:hover,
+.mru-ai__citation--unverified:focus-visible {
+  color: var(--mru-ink);
 }
 
 .mru-ai__citation--missing {
-  color: color-mix(in srgb, var(--mru-warn) 62%, var(--mru-ink));
-  text-decoration: underline dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 1px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--mru-ink-soft) 70%, transparent);
+  color: color-mix(in srgb, var(--mru-warn) 50%, var(--mru-ink));
+  font-weight: 500;
 }
 
 /* citation hover card: a small paper quote, rendered as a fixed overlay by the
@@ -4361,7 +4361,7 @@ html[data-ds-dark-theme] .mru-root {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--mru-ink-soft);
   font-size: 10.5px;
   line-height: 1.5;
 }
@@ -4407,7 +4407,7 @@ html[data-ds-dark-theme] .mru-root {
   margin-top: 8px;
   padding-top: 7px;
   border-top: 1px solid var(--mru-rule);
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--mru-ink-soft);
   font-family: var(--mru-font-ui);
   font-size: 10.5px;
   line-height: 1.5;
@@ -5099,9 +5099,10 @@ div.mru-ai__streaming .mru-spinner {
 }
 
 .mru-graph__edge-label {
-  fill: var(--dsw-alias-label-tertiary);
+  fill: var(--mru-ink-soft);
   font-family: var(--mru-font-ui);
-  font-size: 9.5px;
+  font-size: 10px;
+  font-weight: 500;
   line-height: 1.3;
   paint-order: stroke;
   stroke: var(--mru-paper-bg);

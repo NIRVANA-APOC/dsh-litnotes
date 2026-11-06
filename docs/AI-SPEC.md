@@ -90,6 +90,8 @@ Aspect → annotation color mapping (single source of truth in the host, `lib/ai
 ### Annotation extension (existing `annotations.json` items)
 
 New optional fields: `origin: "user" | "ai"`, `aspect`, `chatId`, `messageId`, `model`.
+The client normalizer (`ui/highlight.js normalizeAnnotation`) and the store both preserve these
+fields across the whole-list save round-trip; a regression test covers it.
 The client keeps rendering existing annotations unchanged; AI annotations get a small sparkle
 marker in the margin list and in the note editor. Deduping rule: a new AI annotation is skipped
 (and reported) when an existing annotation on the same block covers an overlapping range with
@@ -270,12 +272,12 @@ raw NDJSON over POST (each line one JSON frame; `Content-Type: application/x-ndj
 | method | route | body | response |
 |---|---|---|---|
 | POST | `/chat` | see §3 chat request | NDJSON stream |
-| GET | `/chat.history?documentId=…` | — | `{ messages: ChatMessage[] }` |
+| POST | `/chat.history` | `{ documentId }` | `{ messages: ChatMessage[] }` |
 | POST | `/chat.clear` | `{ documentId }` | `{ cleared: true }` |
-| GET | `/graph.doc?documentId=…` | — | `{ graph: KG }` |
+| POST | `/graph.doc` | `{ documentId }` | `{ graph: KG }` |
 | POST | `/graph.build` | `{ documentId, force? }` | NDJSON stream (progress/graph/error) |
 | POST | `/graph.update` | `{ documentId, nodes?, edges? }` | `{ graph: KG }` |
-| GET | `/graph.library` | — | `{ graph: KG }` |
+| POST | `/graph.library` | `{}` | `{ graph: KG }` |
 | POST | `/graph.library.rebuild` | `{}` | NDJSON stream |
 
 Streaming implementation notes: `ctx.webServer.register({ kind:'exact', path:'/dsh-litnotes/api/chat', handler })`;

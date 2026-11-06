@@ -251,14 +251,14 @@ test('chat routes fail cleanly when no LLM is configured (ai-unavailable)', asyn
   }
   assert.equal(stream.res.state.writableEnded, true)
 
-  // JSON route: the shared envelope carries the branchable code + 503.
+  // Read-only history is model-independent: it still works without an LLM route.
   const history = await harness.invokeJson(AI_ROUTES.history, {
     method: 'POST',
     payload: { documentId: harness.documentId },
   })
-  assert.equal(history.status, 503)
-  assert.equal(history.body.ok, false)
-  assert.match(String(history.body.error.code), /ai-unavailable|llm-unavailable/)
+  assert.equal(history.status, 200)
+  assert.equal(history.body.ok, true)
+  assert.deepEqual(history.body.value.messages, [])
 })
 
 test('chat rejects a malformed request with an error frame instead of crashing', async (t) => {

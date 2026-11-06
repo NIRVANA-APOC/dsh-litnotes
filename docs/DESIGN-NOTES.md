@@ -411,6 +411,14 @@ modifier classes beyond §8:
 - `.mru-ai--placeholder`, `.mru-graph--placeholder` and `.mru-graph__empty-text` — the
   intermediate surfaces rendered while the modules were still placeholders.
 
+**Planned hooks (not yet emitted by the markup, documented for a later round):** an AI-origin
+marker on margin notes (proposed `.mru-note--ai` with the `.mru-ai__spark` glyph in
+`.mru-note__head`) and an "AI 批注" margin filter chip (proposed `.mru-note-filter--ai`, reusing
+the `.mru-chip` / `.mru-tab` control language and the aspect dots). Per the QA round these are
+not styled yet because the notes/filter markup does not exist; the AI-origin provenance is
+currently carried by the existing annotation model (`origin: 'ai'`, aspect color + spark in the
+margin note head once app.js renders it).
+
 ### 12.5 Verification
 
 - `node scripts/build-client.mjs` — PASS (589.2 KiB bundle, 124,836 B CSS inlined);
@@ -418,6 +426,12 @@ modifier classes beyond §8:
   in the bundle, order chat < graph < app).
 - Class coverage: AI-SPEC §8 61/61; chat 47/47 emitted tokens; graph 43/43 emitted tokens; all
   app-side AI hooks present. CSS braces balanced; no external assets or `url()`.
+- Contrast pass (QA follow-up): the two dimmed AI states no longer use opacity for text.
+  `.mru-ai__citation--unverified` is secondary ink + dotted underline (5.61:1 light / 10.68:1 dark
+  on the assistant slip), `.mru-ai__citation--missing` is a dark amber mix (6.06:1 / 10.66:1), the
+  citation-card meta line went tertiary → secondary ink (5.80:1 / 10.42:1), and
+  `.mru-graph__edge-label` went tertiary → secondary ink with the paper halo (5.56:1 / 10.81:1 on
+  the paper canvas) — all ≥4.5:1 while still reading as quiet/secondary.
 - The disposable headless-Chromium harness rendered the **real** chat and graph markup in light
   and dark at 1440px, in the 296px margin sheet at 390px, and the library graph at 900/1000/360px,
   covering: message bubbles (user note / assistant slip), inline `[n]` superscripts with the

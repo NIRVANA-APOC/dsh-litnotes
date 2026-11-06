@@ -1115,6 +1115,10 @@ html[data-ds-dark-theme] .mru-root {
   gap: 2px;
 }
 
+.mru-paper__runhead-actions .mru-segmented--view + .mru-segmented {
+  margin-left: 5px;
+}
+
 /* reading mode segmented control */
 .mru-segmented {
   display: inline-flex;
@@ -2175,6 +2179,17 @@ html[data-ds-dark-theme] .mru-root {
 .mru-tab--active::after,
 .mru-tab[aria-selected="true"]::after {
   background: var(--mru-accent);
+}
+
+.mru-tab svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.mru-tab__label {
+  display: inline-flex;
+  align-items: center;
 }
 
 .mru-tab__count {
@@ -3964,27 +3979,35 @@ html[data-ds-dark-theme] .mru-root {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-height: 38px;
-  padding: 0 12px;
+  padding: 0 10px 0 12px;
   border-bottom: 1px solid var(--mru-rule);
   background: var(--mru-surface);
 }
 
 .mru-ai__title {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  overflow: hidden;
   color: var(--mru-ink);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.3;
   white-space: nowrap;
+}
+
+.mru-ai__title > span:last-child {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .mru-ai__model {
   flex: none;
-  max-width: 116px;
+  max-width: 112px;
   margin-left: auto;
   padding: 1px 6px;
   overflow: hidden;
@@ -3999,6 +4022,22 @@ html[data-ds-dark-theme] .mru-root {
   text-overflow: ellipsis;
 }
 
+.mru-ai__model[data-available="false"] {
+  border-color: color-mix(in srgb, var(--mru-warn) 32%, transparent);
+  color: color-mix(in srgb, var(--mru-warn) 70%, var(--mru-ink));
+}
+
+.mru-ai__head > .mru-ai__actions {
+  flex: none;
+  flex-wrap: nowrap;
+  margin: 0 0 0 2px;
+}
+
+.mru-ai__head .mru-ai__action {
+  padding: 3px 5px;
+  font-size: 10.5px;
+}
+
 .mru-ai__spark {
   display: inline-flex;
   flex: none;
@@ -4007,6 +4046,8 @@ html[data-ds-dark-theme] .mru-root {
   width: 14px;
   height: 14px;
   color: var(--mru-ink-soft);
+  font-size: 12px;
+  line-height: 1;
 }
 
 .mru-ai__spark svg {
@@ -4040,17 +4081,30 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-ai__empty-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   max-width: 24ch;
   color: var(--mru-ink);
   font-family: var(--mru-font-read);
   font-size: 16px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.35;
   letter-spacing: -0.006em;
+}
+
+.mru-ai__empty-title .mru-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+.mru-ai__empty-title .mru-ai__spark {
+  color: var(--mru-ink-soft);
 }
 
 .mru-ai__empty-text {
   max-width: 32ch;
+  margin-top: 2px;
   color: var(--mru-ink-soft);
   font-size: 12px;
   line-height: 1.65;
@@ -4218,58 +4272,62 @@ html[data-ds-dark-theme] .mru-root {
   color: var(--mru-ink);
 }
 
-/* editorial citation superscripts: small, tabular, anchored to the claim */
+/* Editorial citation marks: the panel renders the literal [n], so the inline
+   mark stays typographic — a bracketed superscript, not a badge. The footer
+   turns the same mark into a small bordered chip. */
 .mru-ai__citation {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  height: 14px;
-  margin: 0 1px;
-  padding: 0 3px;
-  border: 1px solid var(--mru-rule-strong);
+  display: inline;
+  margin: 0;
+  padding: 0 1px;
+  border: 0;
   border-radius: 3px;
-  background: var(--mru-surface);
+  background: transparent;
   color: var(--mru-ink-soft);
   font-family: var(--mru-font-ui);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 500;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
-  vertical-align: 0.55em;
+  vertical-align: 0.52em;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
 .mru-ai__citation:hover,
 .mru-ai__citation:focus-visible {
-  border-color: var(--mru-ink-soft);
-  background: var(--mru-surface-2);
+  background: color-mix(in srgb, var(--mru-ink) 8%, transparent);
   color: var(--mru-ink);
 }
 
 .mru-ai__citation--unverified {
-  border-style: dashed;
-  border-color: var(--mru-rule-strong);
   color: var(--dsw-alias-label-tertiary);
-  opacity: 0.72;
+  opacity: 0.62;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 1px;
 }
 
 .mru-ai__citation--unverified:hover {
   opacity: 1;
 }
 
-/* hover preview: a small paper quote, hung above the chip */
+.mru-ai__citation--missing {
+  color: color-mix(in srgb, var(--mru-warn) 62%, var(--mru-ink));
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 1px;
+}
+
+/* citation hover card: a small paper quote, rendered as a fixed overlay by the
+   panel (the stylesheet supplies the surface and the double title rule) */
 .mru-ai__citation-card {
-  position: absolute;
-  right: -4px;
-  bottom: calc(100% + 7px);
-  z-index: 9;
+  position: fixed;
   display: block;
-  width: min(252px, calc(100vw - 40px));
-  padding: 9px 11px 10px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60vh, 340px);
+  padding: 11px 13px 12px;
+  overflow-y: auto;
   border: 1px solid var(--mru-rule-strong);
   border-top: 2px solid var(--mru-ink);
   border-radius: 10px;
@@ -4283,12 +4341,9 @@ html[data-ds-dark-theme] .mru-root {
   line-height: 1.6;
   text-align: left;
   white-space: normal;
-  vertical-align: baseline;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(3px);
-  transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
-  pointer-events: none;
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
 }
 
 .mru-ai__citation-card::before {
@@ -4301,27 +4356,46 @@ html[data-ds-dark-theme] .mru-root {
   background: var(--mru-rule-strong);
 }
 
-.mru-ai__citation:hover .mru-ai__citation-card,
-.mru-ai__citation:focus-visible .mru-ai__citation-card,
-.mru-ai__citation:focus-within .mru-ai__citation-card {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  transition: opacity 120ms ease, transform 120ms ease;
-  pointer-events: auto;
+.mru-ai__citation-card > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 
-.mru-ai__citation-card blockquote,
-.mru-ai__citation-card .mru-rich__paragraph {
+.mru-ai__citation-card .mru-ai__citation {
+  background: transparent;
+  font-size: 10px;
+}
+
+.mru-ai__citation-card blockquote {
+  margin: 7px 0 0;
+  padding: 0 0 0 9px;
+  border-left: 2px solid var(--mru-rule-strong);
   color: var(--mru-ink-soft);
   font-family: var(--mru-font-read);
-  font-size: 12px;
+  font-size: 12.5px;
   font-style: italic;
   line-height: 1.55;
 }
 
 .mru-ai__citation-card p {
-  margin: 0;
+  margin: 6px 0 0;
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mru-ai__citation-card .mru-ai__actions {
+  margin-top: 7px;
+  justify-content: flex-end;
+}
+
+.mru-ai__citation-card .mru-ai__action {
+  font-size: 10.5px;
 }
 
 /* citation footer (aggregated references under an answer) */
@@ -4339,12 +4413,26 @@ html[data-ds-dark-theme] .mru-root {
   line-height: 1.5;
 }
 
+.mru-ai__citations > span {
+  margin-right: 1px;
+}
+
 .mru-ai__citations .mru-ai__citation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 17px;
   min-width: 17px;
+  padding: 0 4px;
+  border: 1px solid var(--mru-rule-strong);
   border-radius: 4px;
+  background: var(--mru-surface);
   font-size: 10px;
   vertical-align: baseline;
+}
+
+.mru-ai__citations .mru-ai__citation:hover {
+  background: var(--mru-surface-2);
 }
 
 /* answer actions / follow-up questions */
@@ -4375,6 +4463,17 @@ html[data-ds-dark-theme] .mru-root {
 .mru-ai__action:hover {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--mru-ink);
+}
+
+.mru-ai__action[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mru-ai__action--compact {
+  gap: 3px;
+  padding: 1px 4px;
+  font-size: 10.5px;
 }
 
 .mru-ai__action svg {
@@ -4416,8 +4515,8 @@ html[data-ds-dark-theme] .mru-root {
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 7px 10px;
+  gap: 5px;
+  padding: 6px 10px;
   border-top: 1px solid var(--mru-rule);
   background: var(--mru-surface);
 }
@@ -4425,10 +4524,10 @@ html[data-ds-dark-theme] .mru-root {
 .mru-ai__chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   max-width: 100%;
-  height: 20px;
-  padding: 0 6px;
+  height: 22px;
+  padding: 0 3px 0 7px;
   border: 1px solid var(--mru-rule-strong);
   border-radius: 999px;
   background: color-mix(in srgb, var(--mru-ink) 4%, transparent);
@@ -4438,25 +4537,54 @@ html[data-ds-dark-theme] .mru-root {
   line-height: 1;
 }
 
+.mru-ai__chip::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mru-ink-soft);
+}
+
+.mru-ai__chip--selection::before {
+  background: var(--mru-accent);
+}
+
+.mru-ai__chip--visible::before {
+  background: var(--mru-ink-soft);
+}
+
 .mru-ai__chip-label {
-  max-width: 180px;
+  display: block;
+  min-width: 0;
+  max-width: 170px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  cursor: pointer;
 }
 
-.mru-ai__chip .mru-icon-btn {
-  width: 14px;
-  height: 14px;
-  font-size: 10px;
+.mru-ai__chip-label:hover {
+  color: var(--mru-ink);
 }
 
-/* composer — host control language, pinned to the margin bottom */
+.mru-ai__chip .mru-ai__action--compact {
+  flex: none;
+  padding: 1px;
+}
+
+/* composer — host control language, pinned to the margin bottom.
+   The panel lays out textarea + a small action row (hint left, send right). */
 .mru-ai__composer {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 6px;
   padding: 8px 10px 9px;
   border-top: 1px solid var(--mru-rule);
@@ -4468,11 +4596,10 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-ai__input {
-  flex: 1 1 120px;
   width: 100%;
   min-width: 0;
-  min-height: 34px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 128px;
   padding: 8px 10px;
   border: 1px solid var(--mru-rule-strong);
   border-radius: 8px;
@@ -4492,24 +4619,30 @@ html[data-ds-dark-theme] .mru-root {
   border-color: var(--mru-ink-soft);
 }
 
+.mru-ai__composer .mru-ai__actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+}
+
 .mru-ai__send,
 .mru-ai__stop {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 30px;
+  padding: 0 12px;
   border-radius: 6px;
   font-family: var(--mru-font-ui);
   font-size: 11.5px;
   font-weight: 500;
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .mru-ai__send {
-  width: 32px;
-  padding: 0;
   background: var(--dsw-alias-button-primary-fill);
   color: var(--dsw-alias-label-primary-inverted);
 }
@@ -4530,7 +4663,6 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-ai__stop {
-  padding: 0 9px;
   border: 1px solid var(--mru-rule-strong);
   background: transparent;
   color: var(--mru-ink-soft);
@@ -4542,35 +4674,53 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-ai__hint {
-  flex-basis: 100%;
-  padding: 0 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   line-height: 1.4;
-  text-align: right;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.mru-ai__hint .mru-kbd {
-  min-width: 16px;
-  height: 16px;
-  font-size: 9.5px;
+/* streaming: the panel renders a block caret glyph after the answer, and a
+   thinking row before the first token. Both share the .mru-ai__streaming class. */
+.mru-ai__msg--streaming .mru-ai__bubble {
+  border-color: color-mix(in srgb, var(--mru-accent) 24%, var(--mru-rule-strong));
 }
 
-/* streaming caret: the one moving thing in the margin */
-.mru-ai__streaming::after {
-  content: "";
+span.mru-ai__streaming {
   display: inline-block;
-  width: 2px;
-  height: 1.02em;
   margin-left: 2px;
-  vertical-align: -0.12em;
-  background: var(--mru-ink);
+  color: var(--mru-ink);
+  font-size: 0.9em;
+  line-height: 1;
   animation: mru-ai-caret 1.1s steps(2, start) infinite;
+}
+
+div.mru-ai__streaming {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mru-ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+div.mru-ai__streaming .mru-spinner {
+  width: 13px;
+  height: 13px;
 }
 
 /* error / notice lines */
 .mru-ai__error {
+  display: flex;
   flex: none;
+  flex-direction: column;
+  gap: 4px;
   margin: 8px 10px 0;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--mru-error) 30%, transparent);
@@ -4581,9 +4731,25 @@ html[data-ds-dark-theme] .mru-root {
   line-height: 1.55;
 }
 
+.mru-ai__messages > .mru-ai__error {
+  margin: 0;
+}
+
+.mru-ai__error p {
+  margin: 0;
+}
+
+.mru-ai__error .mru-ai__actions {
+  margin-top: 2px;
+}
+
 .mru-ai__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   flex: none;
-  margin: 7px 10px 0;
+  margin: 7px 0 0;
   padding: 6px 9px;
   border-left: 2px solid color-mix(in srgb, var(--mru-warn) 60%, transparent);
   border-radius: 0 4px 4px 0;
@@ -4591,6 +4757,20 @@ html[data-ds-dark-theme] .mru-root {
   color: var(--mru-ink-soft);
   font-size: 11px;
   line-height: 1.55;
+}
+
+.mru-ai > .mru-ai__notice {
+  margin: 7px 10px 0;
+}
+
+.mru-ai__notice .mru-ai__spark {
+  width: 12px;
+  height: 12px;
+  font-size: 11px;
+}
+
+.mru-ai__notice .mru-ai__action {
+  margin-left: auto;
 }
 
 /* aspect inks, reused from the four annotation colors: definition/method/
@@ -5032,8 +5212,7 @@ circle.mru-graph__node--insight {
   right: 14px;
   bottom: 14px;
   z-index: 6;
-  display: flex;
-  flex-direction: column;
+  display: block;
   width: 300px;
   max-width: calc(100% - 28px);
   max-height: calc(100% - 28px);
@@ -5094,8 +5273,9 @@ circle.mru-graph__node--insight {
 }
 
 .mru-graph__card .mru-btn {
+  display: inline-flex;
   height: 26px;
-  margin-top: 8px;
+  margin: 8px 4px 0 0;
   font-size: 11px;
 }
 
@@ -5144,21 +5324,52 @@ circle.mru-graph__node--insight {
 }
 
 .mru-graph__empty :is(h2, h3, strong) {
-  max-width: 24ch;
+  max-width: 30ch;
   color: var(--mru-ink);
   font-family: var(--mru-font-read);
   font-size: 19px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.32;
   letter-spacing: -0.008em;
+  text-wrap: balance;
 }
 
-.mru-graph__empty p {
+.mru-graph__empty p,
+.mru-graph__empty-text {
   max-width: 46ch;
   color: var(--mru-ink-soft);
   font-family: var(--mru-font-ui);
   font-size: 12.5px;
   line-height: 1.65;
+}
+
+.mru-graph__empty-text {
+  margin: 0 auto;
+}
+
+/* placeholder surfaces: the graph module is absent, so its status line is
+   copy, not the real bottom status bar */
+.mru-graph--placeholder .mru-graph__empty {
+  gap: 9px;
+}
+
+.mru-graph--placeholder .mru-graph__status {
+  display: block;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  color: var(--mru-ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+}
+
+.mru-graph--placeholder .mru-graph__empty-text {
+  text-align: center;
 }
 
 .mru-graph__empty .mru-btn {
@@ -5181,7 +5392,7 @@ circle.mru-graph__node--insight {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mru-ai__streaming::after {
+  span.mru-ai__streaming {
     animation: none;
     opacity: 0.75;
   }
@@ -5292,6 +5503,21 @@ circle.mru-graph__node--insight {
 }
 
 @container mru-desk (max-width: 560px) {
+  .mru-graph__toolbar {
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 10px;
+  }
+
+  .mru-graph__filters {
+    flex: 1 1 100%;
+  }
+
+  .mru-graph__search {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
   .mru-graph__head {
     gap: 6px;
     min-height: 38px;
@@ -5342,7 +5568,7 @@ circle.mru-graph__node--insight {
     padding: 8px 8px 6px;
   }
 
-  .mru-ai__msg--user .mru-bubble {
+  .mru-ai__msg--user .mru-ai__bubble {
     max-width: 92%;
   }
 
@@ -5357,10 +5583,232 @@ circle.mru-graph__node--insight {
 
   .mru-ai__send,
   .mru-ai__stop {
-    height: 30px;
+    height: 28px;
+    padding: 0 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   18.5 AI integration hooks — app.js view switches, quick AI actions,
+        jump-to-block flash, and the two graph placements.
+   (Markup reported by client-ui, task-14.)
+   -------------------------------------------------------------------------- */
+
+/* compact view switch (文献库 | 全景图谱, 阅读 | 图谱) */
+.mru-segmented--view {
+  height: 24px;
+  margin-right: 4px;
+  margin-left: 2px;
+  padding: 2px;
+  gap: 1px;
+}
+
+.mru-segmented--view .mru-segmented__item {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.mru-topbar__view {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+.mru-topbar__view .mru-segmented {
+  margin-right: 2px;
+}
+
+/* 问 AI in the selection toolbar: same quiet button, one accent pin */
+.mru-selbar__btn--ai {
+  gap: 5px;
+}
+
+.mru-selbar__btn--ai svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.mru-selbar__btn-label {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* 问 AI in the per-block tools (third tool) */
+.mru-block__tools .mru-block__ask {
+  color: var(--mru-ink-soft);
+}
+
+.mru-block__tools .mru-block__ask:hover {
+  color: var(--mru-accent);
+}
+
+/* citation / graph-node jump: one soft accent wash over the target block */
+.mru-block--flash {
+  border-radius: 6px;
+  animation: mru-block-flash 1.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes mru-block-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--mru-accent) 16%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--mru-accent) 7%, transparent);
+  }
+  65% {
+    background-color: color-mix(in srgb, var(--mru-accent) 7%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mru-accent) 3%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* library graph: the whole center column is the map (no paper wrapper) */
+.mru-main--graph {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+}
+
+.mru-main--graph > .mru-graph {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1120px;
+  height: auto;
+  min-height: 0;
+  margin: 0 auto;
+}
+
+/* doc graph: printed on the reading sheet, under the running head */
+.mru-paper:has(.mru-paper__body--graph) {
+  max-width: 1040px;
+}
+
+.mru-paper:has(.mru-paper__body--graph) .mru-paper__col {
+  padding: 40px 28px 44px;
+}
+
+.mru-paper__body--graph .mru-graph__head {
+  min-height: 36px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.mru-paper__body--graph .mru-graph__title {
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.mru-paper__body--graph .mru-graph__legend-item {
+  height: 20px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.mru-paper__body--graph .mru-graph__search {
+  width: 132px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.mru-paper__body--graph {
+  display: flex;
+  flex-direction: column;
+  min-height: min(72vh, 820px);
+}
+
+.mru-paper__body--graph > .mru-graph {
+  flex: 1 1 auto;
+  min-height: min(60vh, 640px);
+}
+
+/* nested in the sheet, the map drops its own border: it is printed on the page */
+.mru-paper__body--graph .mru-graph {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.mru-paper__body--graph .mru-graph__head,
+.mru-paper__body--graph .mru-graph__toolbar {
+  padding-right: 0;
+  padding-left: 0;
+  background: transparent;
+}
+
+.mru-paper__body--graph .mru-graph__status {
+  padding-right: 0;
+  padding-left: 0;
+  background: transparent;
+}
+
+/* module placeholders (only while the real chat/graph modules land) */
+.mru-ai--placeholder .mru-ai__empty,
+.mru-graph--placeholder .mru-graph__empty {
+  min-height: 180px;
+}
+
+.mru-ai--placeholder {
+  opacity: 0.85;
+}
+
+.mru-graph--placeholder {
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-block--flash {
+    animation: none;
+    background-color: color-mix(in srgb, var(--mru-accent) 9%, transparent);
+  }
+}
+
+@container mru-desk (max-width: 900px) {
+  .mru-main--graph {
+    padding: 0;
   }
 
-  .mru-ai__send {
-    width: 30px;
+  .mru-main--graph > .mru-graph {
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .mru-paper:has(.mru-paper__body--graph) {
+    max-width: none;
+  }
+
+  .mru-paper__body--graph {
+    min-height: min(70vh, 620px);
+  }
+
+  .mru-topbar__view .mru-segmented__item {
+    padding: 0 6px;
+    font-size: 10.5px;
+  }
+
+  .mru-segmented--view {
+    margin-right: 2px;
+  }
+}
+
+@container mru-desk (max-width: 560px) {
+  /* keep the view switch reachable on phones, just tighter */
+  .mru-topbar__view .mru-segmented__item {
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
+  .mru-paper__runhead .mru-segmented--view .mru-segmented__item {
+    padding: 0 5px;
+    font-size: 10px;
   }
 }

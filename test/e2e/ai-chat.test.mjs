@@ -137,7 +137,9 @@ test('chat streams NDJSON frames, validates citations and creates AI annotations
   assert.equal(annotation.origin, 'ai')
   assert.equal(annotation.blockKey, target.blockKey)
   assert.equal(annotation.aspect, 'context')
-  assert.equal(annotation.chatId, answer.messageId)
+  // One conversation per document: chatId is doc-scoped, messageId identifies the turn.
+  assert.equal(annotation.chatId, `doc:${harness.documentId}`)
+  assert.equal(annotation.messageId, answer.messageId)
   assert.ok(annotation.model !== undefined && annotation.model !== null, 'annotation records the model')
   assert.equal(annotation.start >= 0, true)
 

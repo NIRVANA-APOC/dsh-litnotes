@@ -279,3 +279,140 @@ One edge case is now covered end-to-end: in 译文 mode an untranslated block re
 English inside `.mru-para__translation--source`, and the stylesheet keeps that fallback in the
 serif reading voice at body size — so a not-yet-translated block reads as the original page
 rather than switching to the translation voice.
+
+## 12. AI layer — the margin voice and the knowledge map
+
+The AI features do not add a second product; they extend the same desk. `ui/styles.css` §18 is
+the AI layer, and it inherits everything above: host tokens for chrome, the paper tint, the four
+annotation inks, the same 6/10/14px radius language, the same focus ring, the same motion budget.
+
+### 12.1 Chat panel — the margin becomes the conversation
+
+The right margin (296px) already held annotations and the outline; now it also holds a
+conversation. It stays a **quiet conversation column, not a chat app**:
+
+- **Assistant answers are paper slips.** `.mru-ai__msg--assistant .mru-ai__bubble` is a warm
+  paper-tinted block (paper token mixed into the surface) with a hairline border, an asymmetric
+  corner (3px top-left, 10px elsewhere) and no avatar, no tail, no floating card shadow. The
+  answer itself is set in the translator's sans voice (12.8px / 1.72); quotes pulled from the
+  paper inside the answer switch to the serif reading voice with a rule, exactly like the
+  translation block.
+- **User questions are pinned notes.** `.mru-ai__msg--user` aligns right; the bubble is a small
+  tinted note with a 2px accent edge on the margin side (like a sticky note pinned toward the
+  edge of the page), 12.5px UI type.
+- **Citations are editorial superscripts.** `.mru-ai__citation` is a 9.5px tabular chip raised on
+  the text (14px box, 3px radius, hairline), not a link — `[1]` in a book. `.mru-ai__citation--unverified`
+  is dashed and dimmed ("未通过校验"). Hovering/focusing opens `.mru-ai__citation-card`: a small
+  paper quote with the same **2px ink + 1px rule double top edge** as the selection translation
+  card, then page/block coordinates. The footer aggregation (`4 条引用`) uses the same chip at
+  body size.
+- **Controls stay host-shaped.** Composer = 8px-radius textarea on the host surface-2 fill, 32px
+  primary send square, ghost stop; context chips are 999px, 10.5px; quick prompts are outline
+  rectangles (not pills) so they read as "questions to ask", and follow-ups are outline pills.
+  `.mru-ai__action` is a tiny text action (copy / regenerate / highlight).
+- **The AI origin marker** (`.mru-ai__spark`) is the only place the assistant's provenance is
+  decorated; when an aspect is known, `[data-aspect]` dots on chips/spark reuse the four
+  annotation inks (definition yellow, method sage, result/finding sky, limitation rose) — the same
+  color language as the margin notes.
+- **Streaming** is one 2px caret (`.mru-ai__streaming::after`) — the only moving thing in the
+  margin. The panel fills the margin body (`.mru-margin__body:has(> .mru-ai)` drops padding and
+  double scroll), with head, scrolling messages, context row and a pinned composer.
+
+### 12.2 Knowledge graph — a map drawn on the paper
+
+The graph is a **quiet knowledge map on the paper surface**, not a dashboard. Two placements:
+
+- **Library graph** (`.mru-main--graph`): the whole center column is the map sheet — 1120px max,
+  14px radius, hairline border, soft lift; head + toolbar are quiet surface bands, the canvas is
+  the paper.
+- **Doc graph** (`.mru-paper__body--graph`): the map is *printed on the reading sheet* — the
+  paper widens (up to 1040px), the graph drops its own border/shadow, its head/toolbar become
+  unboxed hairlines, and the graph title becomes a small UI caption under the paper title. The
+  module owns pan/zoom; the body gives it `min(72vh, 820px)` to breathe.
+
+Canvas: paper tint with a **functional graph-paper dot grid** (1px ink dots at 9% alpha, 22px
+pitch via a CSS radial-gradient — texture that helps pan/zoom orientation, not decoration).
+Nodes are labeled dots with a **type ring**; labels carry a paper-colored halo (`paint-order`
++ 3px stroke) so they stay legible over edges and the dot grid.
+
+| node type | ring / ink | notes |
+|---|---|---|
+| concept | host ink | the neutral center of the map |
+| method | sage | derived from the sage annotation ink |
+| finding | sky | derived from the sky annotation ink |
+| definition | yellow | derived from the yellow annotation ink |
+| limitation | rose | derived from the rose annotation ink |
+| section | tertiary grey | structural, quieter |
+| question | accent, dashed ring | a question the reader asked |
+| insight | accent | an AI insight that emerged in conversation |
+| paper | ink, solid fill | library scale, larger |
+| topic | accent, larger ring | library scale, cluster centers |
+
+Hover deepens the fill, the active node uses the accent stroke, and edges are 1.1px hairlines at
+20% ink; the active edge turns accent. Legend/filter chips repeat the same dot colors
+(`[data-type]`), the filter state is `aria-pressed="true"`, and the search box matches the host
+control. Build progress is one 2px accent line. The bottom status line carries node/edge counts
+in tabular numerals. The **details card** (`.mru-graph__card`) reuses the translator-slip language
+(2px ink + 1px rule top edge, paper-warm surface, serif title) and offers jump-to-source /
+ask-AI actions in a row.
+
+### 12.3 Theme, motion, responsiveness
+
+- **No dark-mode-specific overrides** were needed: node/aspect colors are `color-mix` of the
+  annotation inks with `--mru-ink`, so they lighten on dark; the assistant slip and the canvas
+  use `--mru-paper-bg`; all chrome remains host tokens. The dotted grid and hairlines use ink
+  mixes and stay visible in both themes.
+- **Motion:** the streaming caret blinks (steps), the citation card and graph details card pop
+  in 120–140ms, and a citation/node jump washes the target block with a 1.6s accent flash.
+  `prefers-reduced-motion` removes the caret blink, the card pop, the flash animation (static
+  wash) and all node/edge/progress transitions.
+- **Responsive** uses the same `@container mru-desk` breakpoints: the chat panel lives in the
+  existing 296px margin (inline on the desk, right sheet at 900–1280, margin sheet on phones);
+  the library graph goes full-bleed below 900 (no radius/borders), and below 560 the toolbar
+  wraps into a scrollable legend row plus a full-width search, while the details card becomes a
+  bottom overlay (`left/right:10px`, max 46% height). The graph stays readable and pannable at
+  360px; the chat column is usable at 296px.
+- **Focus/a11y:** every new control uses the existing 2px accent ring; graph nodes (SVG `<g>`
+  or `<circle>` with `tabindex`) suppress the outline in favor of an accent node ring;
+  citations, follow-ups, legend chips, composer and send/stop are real buttons. Aspect/filter
+  states are announced with `aria-pressed`, the graph card is an overlay (not a modal) and the
+  composer hint shows the keyboard shortcut.
+
+### 12.4 AI-layer classes and integration hooks
+
+The AI-SPEC §8 contract is fully styled (**61/61 classes**, chat + graph), including the graph
+node-type modifiers and `--unverified`/`--active` states. In addition, the stylesheet carries the
+integration hooks client-ui reported for `ui/app.js`:
+
+- `.mru-segmented--view` + `.mru-topbar__view` — compact view switches (文献库 | 全景图谱,
+  阅读 | 图谱), 11px, sitting in the topbar actions and the runhead;
+- `.mru-selbar__btn--ai`, `.mru-selbar__btn-label` — 问 AI in the selection toolbar (spark glyph
+  from the client + label);
+- `.mru-block__ask` — sparkle block-tool beside 翻译/批注;
+- `.mru-tab svg` + `.mru-tab__label` — spark + label in the AI margin tab;
+- `.mru-block--flash` — citation/node jump flash (reduced-motion aware);
+- `.mru-main--graph`, `.mru-paper__body--graph` — the two graph placements;
+- `.mru-ai--placeholder`, `.mru-graph--placeholder` and `.mru-graph__empty-text` — the
+  intermediate surfaces rendered while `ui/chat.js` / `ui/graph.js` are still placeholders.
+
+### 12.5 Verification
+
+- Every AI-SPEC §8 class plus all integration hooks above is present in `ui/styles.css`; CSS is
+  braces-balanced and the client build inlines it (`node scripts/build-client.mjs`).
+- The same disposable headless-Chromium harness used for the reading desk rendered the AI panel
+  (messages / empty / dark / phone margin sheet) and the graph (library light+dark, doc-printed
+  variant, 360px, empty) against the §8 markup and host theme tokens; the class contract was
+  reviewed for both themes before hand-off.
+
+### 12.6 Intentionally excluded from the AI layer
+
+- No chat-app furniture: no avatars, no tails, no typing dots, no gradient "AI glow", no
+  full-width hero for the assistant, no dashboard cards.
+- No second palette: aspect and graph colors are derived from the four annotation inks mixed with
+  host ink; nothing new is introduced.
+- No graph hairball by default: the client curates visible nodes; CSS only provides the quiet
+  map language (hairlines, halos, progressive filter chips).
+- No external assets, fonts, icon sets or graph libraries: SVG + CSS only, all chrome on host
+  tokens.
+- No new motion vocabulary: the caret, the popovers and the jump flash are the entire AI-layer
+  motion budget.

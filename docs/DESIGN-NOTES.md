@@ -311,9 +311,11 @@ conversation. It stays a **quiet conversation column, not a chat app**:
   rectangles (not pills) so they read as "questions to ask", and follow-ups are outline pills.
   `.mru-ai__action` is a tiny text action (copy / regenerate / highlight).
 - **The AI origin marker** (`.mru-ai__spark`) is the only place the assistant's provenance is
-  decorated; when an aspect is known, `[data-aspect]` dots on chips/spark reuse the four
-  annotation inks (definition yellow, method sage, result/finding sky, limitation rose) — the same
-  color language as the margin notes.
+  decorated. The four annotation inks keep carrying the aspect language across the product: the
+  host turns verified citations into aspect-colored margin annotations (existing swatches), and
+  graph nodes use the same ink-derived ring colors; the chat citation card names the aspect in
+  its meta line. The stylesheet also provides `[data-aspect]` dot hooks on chips/sparks so a
+  future module can surface the aspect directly.
 - **Streaming** is one 2px caret (`.mru-ai__streaming::after`) — the only moving thing in the
   margin. The panel fills the margin body (`.mru-margin__body:has(> .mru-ai)` drops padding and
   double scroll), with head, scrolling messages, context row and a pinned composer.
@@ -378,31 +380,52 @@ ask-AI actions in a row.
   states are announced with `aria-pressed`, the graph card is an overlay (not a modal) and the
   composer hint shows the keyboard shortcut.
 
-### 12.4 AI-layer classes and integration hooks
+### 12.4 AI-layer classes and integration hooks (final reconciliation)
 
-The AI-SPEC §8 contract is fully styled (**61/61 classes**, chat + graph), including the graph
-node-type modifiers and `--unverified`/`--active` states. In addition, the stylesheet carries the
-integration hooks client-ui reported for `ui/app.js`:
+The AI-SPEC §8 contract is fully styled (**61/61 classes**, chat + graph), including all ten
+graph node-type modifiers and `--unverified` / `--missing` / `--active` / `--streaming` states.
+Reconciled against the landed `ui/chat.js` (47 emitted class tokens) and `ui/graph.js` (43
+emitted class tokens): **zero missing classes** in `ui/styles.css`, including the documented
+modifier classes beyond §8:
+
+- chat: `.mru-ai__msg--streaming` (live answer, accent-tinted slip + inline block caret),
+  `.mru-ai__citation--missing` (citation number with no data — amber dotted, distinct from the
+  grey dotted unverified state), `.mru-ai__chip--selection` / `.mru-ai__chip--visible`
+  (context chips with an accent/ink dot), `.mru-ai__action--compact` (dense text/icon action);
+- graph: `.mru-graph__canvas-bg`, `.mru-graph__viewport` (the module owns the transform attribute;
+  CSS only adds `will-change`), `.mru-graph__edge-group` (+`--active`/`--dim`), `.mru-graph__edge-hit`
+  (14px invisible hit line), `.mru-graph__node-count` (cluster count printed inside the dot),
+  `.mru-graph__legend-count` (type counters in filter chips), `.mru-graph__zoom` (status-line zoom
+  controls), `.mru-graph__glyph`, `.mru-graph__node--unknown` (malformed-type fallback).
+
+`ui/app.js` integration hooks are covered too:
 
 - `.mru-segmented--view` + `.mru-topbar__view` — compact view switches (文献库 | 全景图谱,
   阅读 | 图谱), 11px, sitting in the topbar actions and the runhead;
-- `.mru-selbar__btn--ai`, `.mru-selbar__btn-label` — 问 AI in the selection toolbar (spark glyph
-  from the client + label);
+- `.mru-selbar__btn--ai`, `.mru-selbar__btn-label` — 问 AI in the selection toolbar (client spark
+  glyph + label);
 - `.mru-block__ask` — sparkle block-tool beside 翻译/批注;
 - `.mru-tab svg` + `.mru-tab__label` — spark + label in the AI margin tab;
 - `.mru-block--flash` — citation/node jump flash (reduced-motion aware);
 - `.mru-main--graph`, `.mru-paper__body--graph` — the two graph placements;
 - `.mru-ai--placeholder`, `.mru-graph--placeholder` and `.mru-graph__empty-text` — the
-  intermediate surfaces rendered while `ui/chat.js` / `ui/graph.js` are still placeholders.
+  intermediate surfaces rendered while the modules were still placeholders.
 
 ### 12.5 Verification
 
-- Every AI-SPEC §8 class plus all integration hooks above is present in `ui/styles.css`; CSS is
-  braces-balanced and the client build inlines it (`node scripts/build-client.mjs`).
-- The same disposable headless-Chromium harness used for the reading desk rendered the AI panel
-  (messages / empty / dark / phone margin sheet) and the graph (library light+dark, doc-printed
-  variant, 360px, empty) against the §8 markup and host theme tokens; the class contract was
-  reviewed for both themes before hand-off.
+- `node scripts/build-client.mjs` — PASS (589.2 KiB bundle, 124,836 B CSS inlined);
+  `node scripts/check.mjs --require-client-ai` — 11/11 PASS, 389 tests (chat and graph modules
+  in the bundle, order chat < graph < app).
+- Class coverage: AI-SPEC §8 61/61; chat 47/47 emitted tokens; graph 43/43 emitted tokens; all
+  app-side AI hooks present. CSS braces balanced; no external assets or `url()`.
+- The disposable headless-Chromium harness rendered the **real** chat and graph markup in light
+  and dark at 1440px, in the 296px margin sheet at 390px, and the library graph at 900/1000/360px,
+  covering: message bubbles (user note / assistant slip), inline `[n]` superscripts with the
+  fixed hover card, evidence footer, unverified notice, follow-up chips, context chips, composer
+  + send/stop, streaming caret and thinking row, error line; graph head/toolbar/legend with
+  counts, dotted canvas, type rings for all ten node types, cluster nodes (dashed ring + count),
+  active path edges, details card, determinate/indeterminate progress, empty/loading/error states
+  and the two placements (full-column library map, printed-on-paper doc map).
 
 ### 12.6 Intentionally excluded from the AI layer
 

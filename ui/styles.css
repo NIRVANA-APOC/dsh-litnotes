@@ -4948,6 +4948,15 @@ div.mru-ai__streaming .mru-spinner {
   color: var(--dsw-alias-label-tertiary);
 }
 
+.mru-root .mru-graph__search::-webkit-search-decoration,
+.mru-root .mru-graph__search::-webkit-search-cancel-button,
+.mru-root .mru-graph__search::-webkit-search-results-button,
+.mru-root .mru-graph__search::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .mru-graph__search:hover {
   border-color: var(--mru-ink-soft);
 }
@@ -5179,6 +5188,14 @@ circle.mru-graph__node:focus-visible {
   color: var(--mru-accent);
 }
 
+.mru-graph__node--unknown {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mru-graph__node[data-cluster="true"] .mru-graph__node-label {
+  font-weight: 600;
+}
+
 .mru-graph__node--question > circle:last-of-type,
 circle.mru-graph__node--question {
   stroke-dasharray: 3 2;
@@ -5224,7 +5241,7 @@ circle.mru-graph__node--insight {
 .mru-graph__card {
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  bottom: 40px;
   z-index: 6;
   display: block;
   width: 300px;
@@ -5637,7 +5654,7 @@ circle.mru-graph__node[data-related="true"] {
 
   .mru-graph__card {
     right: 10px;
-    bottom: 10px;
+    bottom: 34px;
     left: 10px;
     width: auto;
     max-width: none;
@@ -5726,6 +5743,10 @@ circle.mru-graph__node[data-related="true"] {
     gap: 6px;
     padding: 4px 10px;
     font-size: 10px;
+  }
+
+  .mru-graph__status > span:not(.mru-graph__zoom):nth-child(n + 3) {
+    display: none;
   }
 
   .mru-ai__messages {

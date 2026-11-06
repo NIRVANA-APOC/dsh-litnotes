@@ -94,3 +94,5 @@ export function apply(ctx, config) {
 
   logger.info?.('[dsh-litnotes] mounted (data=%s, api=%s)', resolved.dataDir, resolved.apiBase)
 }
+
+// reload marker: 1793968084

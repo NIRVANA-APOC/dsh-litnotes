@@ -17,7 +17,7 @@ const EMPTY_ART = __MINERU_EMPTY_ART_JSON__;
 // ===========================================================================
 
 const NS = 'dsh-litnotes';
-const PANEL_ID = 'scholar';
+const PANEL_ID = 'litnotes';
 const MRU_CLIENT_VERSION = 'client';
 
 /** Accept string for the file picker (mirrors lib/mime.js SUPPORTED_EXTENSIONS). */

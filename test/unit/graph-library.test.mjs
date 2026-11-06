@@ -506,3 +506,42 @@ test('library edges are value-bearing: typed relations propagate and shared conc
   assert.match(graph.overview, /Shared concepts/)
   assert.match(graph.tldr, /concepts? appear in two or more papers|concept appear/)
 })
+
+
+test('library curation merges alias labels within and across papers (no duplicate concepts)', async () => {
+  const documents = [
+    { id: 'doc-alias-1', title: 'Papers One', createdAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'doc-alias-2', title: 'Papers Two', createdAt: '2026-01-02T00:00:00.000Z' },
+  ]
+  const graphs = {
+    'doc-alias-1': docGraph('doc-alias-1', [
+      { id: 'n-1a', type: 'concept', label: 'Subgraph Matching', summary: 'matching task', blockKeys: ['b1:aaaaaaaa'] },
+      { id: 'n-1b', type: 'method', label: 'Spectral Dominance', summary: '', blockKeys: [] },
+    ], [{ id: 'e-1', from: 'n-1b', to: 'n-1a', type: 'uses', weight: 1 }]),
+    'doc-alias-2': docGraph('doc-alias-2', [
+      { id: 'n-2a', type: 'concept', label: 'exact subgraph matching', summary: '', blockKeys: [] },
+      { id: 'n-2b', type: 'method', label: 'Full Spectral Dominance', summary: '', blockKeys: [] },
+    ], [{ id: 'e-2', from: 'n-2b', to: 'n-2a', type: 'uses', weight: 1 }]),
+  }
+  const env = createFakeStore({ docs: documents, graphs })
+  const service = makeService(env, createFakeGateway({ available: false }))
+  const graph = (await collect(service.rebuildLibraryGraph())).at(-1).graph
+  const topics = graph.nodes.filter((node) => node.type === 'topic')
+  assert.equal(topics.length, 2, 'aliases merge into one concept per meaning')
+  const matching = topics.find((topic) => /subgraph matching/i.test(topic.label))
+  const dominance = topics.find((topic) => /spectral dominance/i.test(topic.label))
+  assert.ok(matching, 'merged subgraph-matching concept present')
+  assert.ok(dominance, 'merged spectral-dominance concept present')
+  assert.equal(matching.documentIds.length, 2, 'cross-paper alias merged with both papers')
+  assert.equal(dominance.documentIds.length, 2, 'within+cross-paper alias merged')
+  assert.ok(matching.blockKeys.length >= 1, 'evidence keys survive the alias merge')
+
+  const mentions = graph.edges.filter((edge) => edge.type === 'mentions')
+  assert.equal(mentions.length, 4, 'each paper mentions both merged concepts')
+  const shares = graph.edges.filter((edge) => edge.type === 'shares')
+  assert.equal(shares.length, 1)
+  assert.equal(shares[0].weight, 2, 'two shared concepts make the paper link weigh 2')
+  const relation = graph.edges.filter((edge) => edge.type === 'uses')
+  assert.equal(relation.length, 1, 'the same typed relation from both papers aggregates once')
+  assert.equal(relation[0].weight, 2)
+})

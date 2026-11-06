@@ -251,7 +251,9 @@ Library aggregation: for each parsed doc ensure a doc graph (read from disk; if 
 lightweight graph from headings + annotations only, no LLM); create `paper` nodes; create `topic`
 nodes by normalized label across docs. It is **curated, not a union**: each paper contributes at
 most 10 nodes chosen by an importance score (type, weight, degree, evidence blockKeys, provenance),
-concepts appearing in ≥2 papers are always kept, and the total is capped at 28 topics. Edges are
+concepts appearing in ≥2 papers are always kept, near-duplicate labels (word-set aliases such as
+"spectral dominance" / "full spectral dominance") merge into one concept, and the total is capped at
+28 topics. Edges are
 value-bearing only: paper→topic `mentions`, topic→topic relations propagated from the real document
 graphs (typed, weight = number of papers), and paper↔paper `shares` edges weighted by shared
 concept count. There are no "any two co-occurring topics" edges. Clusters = connected components of

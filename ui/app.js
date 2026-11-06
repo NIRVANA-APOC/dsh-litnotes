@@ -132,6 +132,12 @@ const ZH = {
   'setup.langAr': 'العربية',
   'parsing.text': 'MinerU 正在解析 · {done} / {total} 页',
   'parsing.textNoProgress': 'MinerU 正在解析…',
+  'parsing.phaseWaiting': '等待 MinerU 接收文件…',
+  'parsing.phaseQueued': 'MinerU 排队中…',
+  'parsing.phaseRunning': 'MinerU 正在解析…',
+  'parsing.phaseConverting': '正在生成解析结果…',
+  'parsing.elapsed': '已用时 {time}',
+  'parsing.slowHint': 'pipeline 模型或 OCR 解析较慢（MinerU 侧可能排队数分钟）；完成后会自动进入阅读。',
   'parsing.cancel': '取消',
   'fail.title': '解析没有完成',
   'fail.retry': '重试',
@@ -317,6 +323,12 @@ const EN = {
   'setup.langAr': 'Arabic',
   'parsing.text': 'MinerU is parsing · {done} / {total} pages',
   'parsing.textNoProgress': 'MinerU is parsing…',
+  'parsing.phaseWaiting': 'Waiting for MinerU to receive the file…',
+  'parsing.phaseQueued': 'Queued at MinerU…',
+  'parsing.phaseRunning': 'MinerU is parsing…',
+  'parsing.phaseConverting': 'Preparing the parsed result…',
+  'parsing.elapsed': 'Elapsed {time}',
+  'parsing.slowHint': 'The pipeline model and OCR are slower on MinerU (queueing can take minutes); the paper opens automatically when done.',
   'parsing.cancel': 'Cancel',
   'fail.title': "Parsing didn't finish",
   'fail.retry': 'Retry',
@@ -546,6 +558,44 @@ function mruProblemPages(contentList) {
 /** Replace U+FFFD in display-only text with a deliberate box marker. */
 function mruDisplayText(value) {
   return String(value === undefined || value === null ? '' : value).replace(/\ufffd/g, '□');
+}
+
+/**
+ * Upstream MinerU task states mapped to the copy key the client shows.
+ * `extract_progress` is only reported while MinerU is `running`, so a queued
+ * (`pending` / `waiting-file`) or `converting` task has no page progress at
+ * all; naming the phase keeps the wait legible instead of looking frozen.
+ */
+const MRU_REMOTE_STATE_KEYS = {
+  'waiting-file': 'parsing.phaseWaiting',
+  uploading: 'parsing.phaseWaiting',
+  pending: 'parsing.phaseQueued',
+  running: 'parsing.phaseRunning',
+  converting: 'parsing.phaseConverting',
+};
+
+/** Copy key for the upstream MinerU state of a parsing document. */
+function mruParsePhaseKey(doc) {
+  const state = doc && doc.parse && typeof doc.parse.remoteState === 'string' ? doc.parse.remoteState : '';
+  return MRU_REMOTE_STATE_KEYS[state] || 'parsing.textNoProgress';
+}
+
+/** Short elapsed time for the liveness line: "42s" or "3:07". */
+function mruFormatElapsed(startedAt, nowValue) {
+  const started = Date.parse(String(startedAt || ''));
+  const now = Number(nowValue);
+  if (!Number.isFinite(started) || !Number.isFinite(now)) return '';
+  const seconds = Math.max(0, Math.floor((now - started) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes}:${String(seconds % 60).padStart(2, '0')}` : `${seconds}s`;
+}
+
+/** Whether this document is using the slow MinerU modes (pipeline / OCR). */
+function mruIsSlowParse(doc) {
+  const parse = doc && doc.parse;
+  if (!parse || typeof parse !== 'object') return false;
+  const options = parse.options && typeof parse.options === 'object' ? parse.options : {};
+  return parse.modelVersion === 'pipeline' || parse.ocr === true || options.isOcr === true;
 }
 
 /** Resolve an extracted-image asset URL for one parsed figure. */
@@ -1739,20 +1789,46 @@ function MruSetupPanel(props) {
       h('span', { className: 'mru-note-text' }, t('setup.note'))));
 }
 
-/** Parsing progress panel. */
-function MruParsingPanel({ t, doc, onCancel }) {
+/**
+ * Parsing progress panel.
+ *
+ * MinerU only reports page progress while the task is `running`, and the
+ * pipeline model / OCR often report `extracted_pages: 0` for the whole queue
+ * and warm-up phase. A determinate 0 % bar then looks frozen, so without a
+ * positive page count the panel shows the upstream phase, a live elapsed timer
+ * and an indeterminate bar. `inline` renders it above the old paper when an
+ * already-parsed document is being reparsed / page-repaired.
+ */
+function MruParsingPanel({ t, doc, onCancel, inline }) {
   const progress = doc && doc.parse && doc.parse.progress ? doc.parse.progress : null;
   const done = progress && Number.isFinite(Number(progress.extracted)) ? Number(progress.extracted) : 0;
   const total = progress && Number.isFinite(Number(progress.total)) ? Number(progress.total) : 0;
-  const percent = total > 0 ? mruClamp(Math.round((done / total) * 100), 0, 100) : 0;
-  const text = total > 0 ? t('parsing.text', { done, total }) : t('parsing.textNoProgress');
-  return h('div', { className: 'mru-parsing', 'aria-busy': 'true' },
+  const determinate = done > 0 && total > 0;
+  const percent = determinate ? mruClamp(Math.round((done / total) * 100), 0, 100) : 0;
+  const startedAt = doc && doc.parse ? doc.parse.startedAt : null;
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const elapsed = mruFormatElapsed(startedAt, now);
+  const text = determinate ? t('parsing.text', { done, total }) : t(mruParsePhaseKey(doc));
+  return h('div', { className: 'mru-parsing' + (inline ? ' mru-parsing--inline' : ''), 'aria-busy': 'true' },
     h('div', { className: 'mru-parsing__row' },
       h(MruSpinner),
       h('span', { className: 'mru-parsing__text' }, text),
+      elapsed ? h('span', { className: 'mru-parsing__elapsed' }, t('parsing.elapsed', { time: elapsed })) : null,
       h('button', { type: 'button', className: 'mru-btn mru-btn--ghost mru-btn--sm', onClick: onCancel }, t('parsing.cancel'))),
-    h('div', { className: 'mru-progress' },
-      h('div', { className: 'mru-progress__fill', style: { width: `${percent}%` } })));
+    h('div', {
+      className: 'mru-progress' + (determinate ? '' : ' mru-progress--indeterminate'),
+      role: 'progressbar',
+      'aria-valuemin': '0',
+      'aria-valuemax': '100',
+      'aria-valuenow': determinate ? String(percent) : undefined,
+      'aria-label': t('parsing.textNoProgress'),
+    },
+      h('div', { className: 'mru-progress__fill', style: determinate ? { width: `${percent}%` } : undefined })),
+    mruIsSlowParse(doc) ? h('p', { className: 'mru-parsing__hint' }, t('parsing.slowHint')) : null);
 }
 
 /** Parse failure panel. */
@@ -1788,13 +1864,22 @@ function MruMain(props) {
   }
 
   if (reader.phase === 'ready') {
-    return scroll(h(MruPaper, {
+    const paper = h(MruPaper, {
       ...props.paperProps,
       doc: selectedDoc,
       reader,
       key: selectedDoc.id,
       onReparse,
-    }));
+    });
+    // A reparse / page repair on an already-read document keeps the old paper
+    // on screen; without this inline panel the long pipeline/OCR wait looks
+    // like nothing is happening. The wrapper stays mounted between states so
+    // the paper is never remounted (scroll position / dismissed notices stay).
+    return scroll(h(React.Fragment, null,
+      selectedDoc.status === 'parsing'
+        ? h(MruParsingPanel, { t, doc: selectedDoc, onCancel: onCancelParse, inline: true })
+        : null,
+      paper));
   }
 
   if (reader.phase === 'loading') {
@@ -2115,7 +2200,9 @@ function MruStatusbar(props) {
       const progress = doc.parse && doc.parse.progress;
       const done = progress ? Number(progress.extracted) || 0 : 0;
       const total = progress ? Number(progress.total) || 0 : 0;
-      right.push(h('span', { key: 'parsing' }, total > 0 ? t('statusbar.parsing', { done, total }) : t('parsing.textNoProgress')));
+      const elapsed = mruFormatElapsed(doc.parse && doc.parse.startedAt, Date.now());
+      const label = done > 0 && total > 0 ? t('statusbar.parsing', { done, total }) : t(mruParsePhaseKey(doc));
+      right.push(h('span', { key: 'parsing' }, elapsed ? `${label} · ${elapsed}` : label));
     } else if (pages > 0) {
       right.push(h('span', { key: 'pages' }, t('statusbar.pages', { count: pages })));
     }
@@ -3076,7 +3163,12 @@ function MineruApp(props) {
         setDetail((previous) => (previous && previous.document && previous.document.id === document.id
           ? { ...previous, document: { ...previous.document, ...document } }
           : previous));
-        setReader((previous) => (previous.docId === document.id ? { phase: 'idle', docId: document.id } : previous));
+        // A cancelled page repair leaves the document parsed with its previous
+        // parse intact — the reader already shows exactly that, so keep it
+        // instead of dropping into a "loading" state that never resolves.
+        if (document.status !== 'parsed') {
+          setReader((previous) => (previous.docId === document.id ? { phase: 'idle', docId: document.id } : previous));
+        }
       }
     } catch (error) {
       toast(mruErrorText(t, error), 'error');

@@ -48,6 +48,12 @@ Authorization: Bearer <token>
 States: `waiting-file`, `pending`, `running`, `converting`, `done`, `failed`.
 Match the row by `data_id`, fall back to `file_name`.
 
+`extract_progress` is only filled while `state` is `running` (pending / waiting-file /
+converting rows carry no progress), and it can stay at `extracted_pages: 0` for a long
+time: the `pipeline` model and OCR run slower and may wait in the queue for minutes. Do not
+render `0 / total` as a determinate progress bar — show the phase and an elapsed time until
+the counter actually advances.
+
 ### A3. Result archive
 
 Zip contains `full.md` (markdown), `*_content_list.json` (structured content list; also

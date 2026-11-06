@@ -136,12 +136,13 @@ there is no separate index file (crash-safe by construction).
     "language": "ch",
     "options": { "isOcr": false, "enableFormula": true, "enableTable": true, "pageRanges": "" },
     "phase": "submitting | uploading | polling",
+    "remoteState": "waiting-file | uploading | pending | running | converting / null",
     "taskId": "agent task id / null",
     "batchId": "standard batch id / null",
     "startedAt": "…",
     "finishedAt": "…",
     "pages": 15,
-    "progress": { "extracted": 3, "total": 15 },
+    "progress": { "extracted": 3, "total": 15 }, // pages really extracted; null until > 0
     "hasContentList": true
   }
 }
@@ -297,7 +298,20 @@ timeout 30 min (`config.parseTimeoutMs`). Cancellation via an `AbortController` 
   poll loop (standard: batchId; agent: taskId). Any other phase is marked `failed` with
   `"解析被中断，请重试"` (an in-flight upload cannot be resumed safely).
 - `dispose()` aborts every task.
-- Progress: write `parse.progress` at each poll (throttled to ≥2 s) so the client sees movement.
+- Upstream state: each poll persists the MinerU task state (`waiting-file` / `pending` /
+  `running` / `converting`) to `parse.remoteState` whenever it changes, so the client can name
+  what MinerU is doing (queued vs parsing vs converting) instead of showing a stagnant bar.
+  `getDocument` returns it directly; `listDocuments` includes a compact `parse.remoteState` +
+  `parse.ocr` + `parse.startedAt` summary for the progress UI.
+- Progress: write `parse.progress` ({extracted,total}) at each poll (throttled to ≥2 s) so the
+  client sees movement. MinerU only reports `extract_progress` while `running`, and pipeline/OCR
+  tasks routinely report `extracted_pages: 0` for the whole queue/warm-up phase — a zero
+  extracted count is treated as "no page progress yet" and is not persisted (the client shows
+  the upstream phase + a ticking elapsed time + an indeterminate bar). The counter is monotonic
+  within a run, and `resume()` re-seeds it from the persisted value so a host restart cannot move
+  it backwards either. A successful parse keeps the final page count (a terminal poll reporting
+  zero pages falls back to the last real value); cancel, page-repair rollback and interrupted-parse
+  recovery clear progress together with the task ids.
 
 ---
 

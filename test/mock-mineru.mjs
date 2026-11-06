@@ -22,7 +22,10 @@
  *
  * Scripted states: every batch/task advances through its own state sequence on
  * each poll (the last element repeats), so tests can express "pending, running,
- * running, done" or "running, failed" without timing tricks.
+ * running, done" or "running, failed" without timing tricks. `extract_progress`
+ * is only attached in the states listed by `progressStates` (default just
+ * `running`, like the real API); `extractedScript` can pin the per-poll page
+ * counter to model the pipeline/OCR `0`-page warm-up.
  *
  * CLI:
  *   node test/mock-mineru.mjs --standalone [--port 9000] [--token my-token]
@@ -122,6 +125,17 @@ function createState(options) {
     agentStates: [...(options.agentStates ?? ['pending', 'running', 'done'])],
     /** Total page count exposed in standard progress metadata. */
     totalPages: options.totalPages ?? 3,
+    /**
+     * States that carry `extract_progress`. The real API only fills it while a
+     * task is `running`; pending/converting rows have no progress at all.
+     */
+    progressStates: [...(options.progressStates ?? ['running'])],
+    /**
+     * Optional scripted `extracted_pages` per running poll (the last element
+     * repeats): lets tests model the pipeline/OCR behaviour of reporting `0`
+     * pages for a long time. Omitted = `pollIndex` capped to total pages.
+     */
+    extractedScript: Array.isArray(options.extractedScript) ? [...options.extractedScript] : null,
     standardErrMsg: options.standardErrMsg ?? 'mock MinerU failure: task failed (-60010)',
     agentErrMsg: options.agentErrMsg ?? 'mock MinerU agent failure: too many pages (-30003)',
     agentErrCode: options.agentErrCode ?? -30003,
@@ -158,7 +172,10 @@ function createState(options) {
     /** Replace the standard poll script (e.g. make the next polls fail). */
     setStandardStates(states) {
       state.standardStates = [...states]
-      for (const batch of state.batches.values()) batch.pollIndex = 0
+      for (const batch of state.batches.values()) {
+        batch.pollIndex = 0
+        batch.runningIndex = 0
+      }
     },
     /** Replace the agent poll script. */
     setAgentStates(states) {
@@ -273,9 +290,11 @@ export async function startMockMineru(options = {}) {
         err_msg: row.fixedState === 'failed' ? state.standardErrMsg : '',
       }
       if (row.fixedState === 'done') result.full_zip_url = `${state.baseUrl}/files/${state.zipName}`
-      if (!['done', 'failed'].includes(row.fixedState)) {
+      if (state.progressStates.includes(row.fixedState)) {
         result.extract_progress = {
-          extracted_pages: 1,
+          extracted_pages: state.extractedScript !== null && state.extractedScript.length > 0
+            ? state.extractedScript[0]
+            : 1,
           total_pages: state.totalPages,
           start_time: new Date().toISOString(),
         }
@@ -294,9 +313,17 @@ export async function startMockMineru(options = {}) {
     }
     if (resultState === 'done') {
       result.full_zip_url = `${state.baseUrl}/files/${state.zipName}`
-    } else if (!['failed', 'waiting-file'].includes(resultState)) {
+    } else if (state.progressStates.includes(resultState)) {
+      const runningIndex = Number.isInteger(row.runningIndex) ? row.runningIndex : 0
+      row.runningIndex = runningIndex + 1
+      let extracted
+      if (state.extractedScript !== null && state.extractedScript.length > 0) {
+        extracted = state.extractedScript[Math.min(runningIndex, state.extractedScript.length - 1)]
+      } else {
+        extracted = Math.min(row.pollIndex, state.totalPages)
+      }
       result.extract_progress = {
-        extracted_pages: Math.min(row.pollIndex, state.totalPages),
+        extracted_pages: Number(extracted) || 0,
         total_pages: state.totalPages,
         start_time: new Date().toISOString(),
       }

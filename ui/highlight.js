@@ -17,6 +17,8 @@
 const HL_COLORS = Object.freeze(['yellow', 'sage', 'sky', 'rose'])
 
 const HL_DEFAULT_COLOR = 'yellow'
+/** Citation aspects accepted on annotations (mirrors docs/AI-SPEC.md §2). */
+const HL_ASPECTS = new Set(['definition', 'method', 'result', 'limitation', 'context'])
 
 /** Deterministic fallback timestamp for annotations missing one. */
 const HL_EPOCH = '1970-01-01T00:00:00.000Z'
@@ -148,7 +150,7 @@ export function normalizeAnnotation(annotation, block) {
   const updatedAt = typeof annotation.updatedAt === 'string' && annotation.updatedAt !== ''
     ? annotation.updatedAt
     : (typeof annotation.createdAt === 'string' && annotation.createdAt !== '' ? annotation.createdAt : HL_EPOCH)
-  return {
+  const out = {
     id,
     blockKey: blockKeyValue !== '' ? blockKeyValue : String(annotation.blockKey ?? ''),
     start,
@@ -159,6 +161,18 @@ export function normalizeAnnotation(annotation, block) {
     createdAt,
     updatedAt,
   }
+  // AI provenance survives client normalization and the whole-list save path
+  // (docs/AI-SPEC.md §2): the margin spark, the "AI 批注" filter and the chat
+  // provenance depend on these fields.
+  if (annotation.origin === 'ai' || annotation.origin === 'user') out.origin = annotation.origin
+  if (HL_ASPECTS.has(annotation.aspect)) out.aspect = annotation.aspect
+  if (typeof annotation.chatId === 'string' && annotation.chatId !== '') out.chatId = annotation.chatId
+  if (typeof annotation.messageId === 'string' && annotation.messageId !== '') out.messageId = annotation.messageId
+  if (annotation.model !== null && typeof annotation.model === 'object'
+    && typeof annotation.model.provider === 'string' && typeof annotation.model.model === 'string') {
+    out.model = { provider: annotation.model.provider, model: annotation.model.model }
+  }
+  return out
 }
 
 /** Group annotations by blockKey for fast per-block rendering. */

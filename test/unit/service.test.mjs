@@ -378,9 +378,9 @@ test('toolAnnotate locates a quote, derives the block key and round-trips remova
     const listed = await env.service.toolAnnotations(document.id)
     assert.equal(listed.annotations.length, 1)
 
-    // An explicit blockKey path also works.
+    // An explicit blockKey path also works (using a key that exists in the parse).
     const explicit = await env.service.toolAnnotate(document.id, {
-      blockKey: 'b9:0123abcd',
+      blockKey: added.annotation.blockKey,
       start: 1,
       end: 4,
       quote: 'abc',
@@ -388,7 +388,15 @@ test('toolAnnotate locates a quote, derives the block key and round-trips remova
       color: 'sage',
     })
     assert.equal(explicit.count, 2)
-    assert.equal(explicit.annotation.blockKey, 'b9:0123abcd')
+    assert.equal(explicit.annotation.blockKey, added.annotation.blockKey)
+
+    // A stale/unknown blockKey is rejected instead of saving an unrenderable note.
+    await assert.rejects(env.service.toolAnnotate(document.id, {
+      blockKey: 'b9:0123abcd',
+      start: 1,
+      end: 4,
+      quote: 'abc',
+    }), /不存在/)
 
     const removed = await env.service.toolUnannotate(document.id, added.annotation.id)
     assert.equal(removed.removed, true)

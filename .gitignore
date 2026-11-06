@@ -8,3 +8,5 @@ Thumbs.db
 
 # local scratch
 /tmp/
+
+.design-harness/

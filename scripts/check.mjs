@@ -1,9 +1,12 @@
 /**
  * dsh-litnotes pre-install gate.
  *
- *   node scripts/check.mjs            # full gate (what the Lead runs)
- *   node scripts/check.mjs --no-tests # skip the node:test run while iterating
- *   node scripts/check.mjs --no-build # skip the client-bundle build check
+ *   node scripts/check.mjs                  # full gate (what the Lead runs)
+ *   node scripts/check.mjs --no-tests       # skip the node:test run while iterating
+ *   node scripts/check.mjs --no-build       # skip the client-bundle build check
+ *   node scripts/check.mjs --require-client-ai
+ *        # AI client modules (MruAiPanel/MruGraphView) must be implemented;
+ *        # without the flag they are only WARNed while the UI modules are stubs.
  *
  * Validates, in order:
  *   1. package.json: name, dsh.bundle.patch target, dsh.client (web + exports
@@ -16,8 +19,12 @@
  *      scripts/**, test/**).
  *   6. generated client bundle sanity (lib/client.js: loader shell, no
  *      unreplaced __MINERU_ placeholders).
- *   7. `node scripts/build-client.mjs --check`.
- *   8. `node --test test/` (unit + reader + e2e), parsing the runner summary.
+ *   7. AI client modules: ui/chat.js defines `function MruAiPanel`, ui/graph.js
+ *      defines `function MruGraphView`, both reach the bundle in the documented
+ *      order (chat < graph < app after markdown/highlight) and build-client.mjs
+ *      keeps concatenating them.
+ *   8. `node scripts/build-client.mjs --check`.
+ *   9. `node --test test/` (unit + reader + e2e), parsing the runner summary.
  *
  * Prints a compact PASS/FAIL table and exits non-zero on any failure.
  * Dependency-free; no npm install, no network.
@@ -31,6 +38,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ARGS = new Set(process.argv.slice(2))
 const SKIP_TESTS = ARGS.has('--no-tests')
 const SKIP_BUILD = ARGS.has('--no-build')
+const REQUIRE_CLIENT_AI = ARGS.has('--require-client-ai')
 
 /** Collected check results. @type {{name: string, status: 'PASS'|'FAIL'|'WARN', detail: string}[]} */
 const results = []
@@ -47,6 +55,21 @@ function check(name, fn) {
     add(name, 'PASS', detail ?? '')
   } catch (error) {
     add(name, 'FAIL', error instanceof Error ? error.message : String(error))
+  }
+}
+
+/**
+ * Run a check that may still be waiting on another workstream. Failures become
+ * WARN by default (the gate stays green while a feature lands) or FAIL when the
+ * check is marked `required` (e.g. --require-client-ai after integration).
+ */
+function softCheck(name, fn, options = {}) {
+  try {
+    add(name, 'PASS', fn() ?? '')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (options.required === true) add(name, 'FAIL', message)
+    else add(name, 'WARN', `${message} (placeholder tolerated; use --require-client-ai to enforce)`)
   }
 }
 
@@ -266,6 +289,50 @@ check('generated client bundle', () => {
   if (problems.length > 0) throw new Error(problems.join('; '))
   return `${(Buffer.byteLength(source) / 1024).toFixed(1)} KiB`
 })
+
+// ---------------------------------------------------------------------------
+// 7b. AI client modules (chat panel + knowledge graph) — WARN until implemented
+// ---------------------------------------------------------------------------
+
+/** Whether a source file defines one of the bundled React components. */
+function definesFunction(source, name) {
+  return new RegExp(`function\\s+${name}\\s*\\(`).test(source)
+}
+
+/** Validate the AI client modules in the sources, the bundle and the build script. */
+function checkAiClientModules() {
+  const problems = []
+  const bundle = read('lib/client.js')
+  const chat = read('ui/chat.js')
+  const graph = read('ui/graph.js')
+
+  if (!definesFunction(chat, 'MruAiPanel')) problems.push('ui/chat.js does not define function MruAiPanel')
+  if (!definesFunction(graph, 'MruGraphView')) problems.push('ui/graph.js does not define function MruGraphView')
+  if (!definesFunction(bundle, 'MruAiPanel')) problems.push('lib/client.js is missing function MruAiPanel')
+  if (!definesFunction(bundle, 'MruGraphView')) problems.push('lib/client.js is missing function MruGraphView')
+
+  const chatAt = bundle.indexOf('function MruAiPanel')
+  const graphAt = bundle.indexOf('function MruGraphView')
+  const appAt = bundle.indexOf('function clientMain')
+  if (chatAt >= 0 && graphAt >= 0 && appAt >= 0) {
+    if (!(chatAt < graphAt)) problems.push('bundle order: MruAiPanel (ui/chat.js) must precede MruGraphView (ui/graph.js)')
+    if (!(graphAt < appAt)) problems.push('bundle order: MruGraphView must precede clientMain (ui/app.js)')
+  }
+
+  const buildSource = read('scripts/build-client.mjs')
+  if (!/read\('ui\/chat\.js'\)/.test(buildSource)) problems.push('build-client.mjs does not read ui/chat.js')
+  if (!/read\('ui\/graph\.js'\)/.test(buildSource)) problems.push('build-client.mjs does not read ui/graph.js')
+  const chatReadAt = buildSource.indexOf("'ui/chat.js'")
+  const graphReadAt = buildSource.indexOf("'ui/graph.js'")
+  if (chatReadAt >= 0 && graphReadAt >= 0 && chatReadAt > graphReadAt) {
+    problems.push('build-client.mjs reads ui/graph.js before ui/chat.js')
+  }
+
+  if (problems.length > 0) throw new Error(problems.join('; '))
+  return 'MruAiPanel + MruGraphView in sources and bundle (chat < graph < app)'
+}
+
+softCheck('AI client modules (chat + graph)', checkAiClientModules, { required: REQUIRE_CLIENT_AI })
 
 // ---------------------------------------------------------------------------
 // 8. build-client.mjs --check

@@ -45,6 +45,11 @@ const MRU_DEFAULT_PREFS = {
   defaultEnableFormula: true,
   defaultEnableTable: true,
   showPageMarks: true,
+  // AI upgrade (docs/AI-SPEC.md §6/§9): host-persisted view state.
+  aiPanelOpen: false,
+  libraryView: 'library',
+  docView: 'read',
+  graphAutoBuild: false,
 };
 
 /** MinerU document language options (value -> dictionary key). */
@@ -77,6 +82,15 @@ const MRU_MAX_QUOTE = 2000;
 
 /** Translation concurrency cap for "translate all". */
 const MRU_TRANSLATE_CONCURRENCY = 4;
+
+/** Margin tabs: outline / notes / AI conversation (docs/AI-SPEC.md §6). */
+const MRU_MARGIN_TABS = ['outline', 'notes', 'ai'];
+
+/** Library-topbar views: the library rail or the library-wide knowledge graph. */
+const MRU_LIBRARY_VIEWS = ['library', 'graph'];
+
+/** Paper runhead views: the reading paper or the per-document knowledge graph. */
+const MRU_DOC_VIEWS = ['read', 'graph'];
 
 /** zh dictionary — primary copy deck (docs/UI-SPEC.md §5). */
 const ZH = {
@@ -206,6 +220,7 @@ const ZH = {
   'settings.provider': '翻译服务',
   'settings.providerAuto': '自动',
   'settings.pageMarks': '显示页面标记',
+  'settings.graphAutoBuild': '解析完成后自动生成知识图谱',
   'settings.scale': '正文字号',
   'settings.sectionStorage': '存储',
   'settings.dataDir': '数据目录',
@@ -267,6 +282,104 @@ const ZH = {
   'paper.metaModel': 'MinerU {model}',
   'parse.reparseTitle': '重新解析',
   'parse.starting': '正在开始解析…',
+  // AI upgrade: margin tab, view switches, quick actions, panel + graph copy.
+  'margin.ai': 'AI',
+  'margin.aiTitle': 'AI 阅读助手',
+  'topbar.viewLibrary': '文献库',
+  'topbar.viewGraph': '全景图谱',
+  'topbar.viewGroup': '文献库视图',
+  'reader.viewRead': '阅读',
+  'reader.viewGraph': '图谱',
+  'reader.viewGroup': '文档视图',
+  'sel.askAi': '问 AI',
+  'ai.askBlock': '问 AI（这段）',
+  'ai.title': 'AI 阅读助手',
+  'ai.model': '模型 {model}',
+  'ai.placeholderTitle': 'AI 阅读助手',
+  'ai.placeholderText': 'AI 对话面板正在载入…',
+  'ai.unavailable': 'AI 暂不可用',
+  'ai.unavailableText': '当前 Harness 配置没有可用的语言模型。配置默认模型后即可在这里提问。',
+  'ai.emptyTitle': '从这一页开始提问',
+  'ai.emptyText': '答案只根据本文内容生成，并标注来源段落。',
+  'ai.promptSummary': '总结全文',
+  'ai.promptProblem': '这篇论文解决了什么',
+  'ai.promptMethod': '方法是什么',
+  'ai.promptLimit': '有什么局限',
+  'ai.promptExplain': '解释这个概念',
+  'ai.placeholder': '问点关于这篇论文的问题…',
+  'ai.send': '发送',
+  'ai.stop': '停止',
+  'ai.regenerate': '重新生成',
+  'ai.thinking': '正在阅读…',
+  'ai.loading': '正在载入对话…',
+  'ai.historyFailed': '对话记录载入失败。',
+  'ai.retry': '重试',
+  'ai.copy': '复制答案',
+  'ai.copied': '已复制',
+  'ai.copyFailed': '复制失败',
+  'ai.contextSelection': '选中文本',
+  'ai.contextParagraph': '当前段落',
+  'ai.clearContext': '清除上下文',
+  'ai.clearSelection': '清除选中',
+  'ai.clearParagraph': '清除段落',
+  'ai.citations': '引用',
+  'ai.citationJump': '跳转到原文',
+  'ai.page': '第 {page} 页',
+  'ai.unverified': '{count} 条引用未通过校验',
+  'ai.annotationsCreated': 'AI 新增 {count} 条高亮',
+  'ai.error': 'AI 生成失败：{message}',
+  'ai.stopped': '已停止生成',
+  'ai.insufficient': '现有内容不足以回答这个问题。可以换个问法，或先精读全文生成图谱。',
+  'ai.openGraph': '查看知识图谱',
+  'ai.askAbout': '问 AI 关于「{label}」',
+  'ai.followup': '继续追问',
+  'ai.sendHint': 'Enter 发送 · Shift+Enter 换行',
+  'graph.titleDoc': '本文知识图谱',
+  'graph.titleLibrary': '全景图谱',
+  'graph.placeholderTitle': '知识图谱',
+  'graph.placeholderText': '知识图谱视图正在载入…',
+  'graph.unavailable': '知识图谱引擎不可用。',
+  'graph.error': '知识图谱载入失败。',
+  'graph.retry': '重试',
+  'graph.build': 'AI 精读全文',
+  'graph.rebuild': '重建图谱',
+  'graph.refresh': '刷新',
+  'graph.building': '正在生成图谱…',
+  'graph.progress': '正在生成 · {done} / {total}',
+  'graph.reading': '正在阅读…',
+  'graph.extracting': '正在抽取概念…',
+  'graph.merging': '正在合并…',
+  'graph.emptyDoc': '这篇论文还没有知识图谱。',
+  'graph.emptyLibrary': '文献库还没有全景图谱。',
+  'graph.emptyHint': 'AI 精读全文后，会自动抽取概念、方法与结论。',
+  'graph.jump': '跳转到原文',
+  'graph.ask': '问 AI 关于此概念',
+  'graph.search': '搜索节点',
+  'graph.legend': '节点类型',
+  'graph.filters': '筛选',
+  'graph.nodes': '{count} 个节点',
+  'graph.edges': '{count} 条关系',
+  'graph.loading': '正在载入图谱…',
+  'graph.modeDoc': '本文图谱',
+  'graph.modeLibrary': '全景图谱',
+  'graph.close': '关闭',
+  'graph.collapseClusters': '折叠次要节点',
+  'graph.expandAll': '展开全部',
+  'graph.concept': '概念',
+  'graph.method': '方法',
+  'graph.finding': '发现',
+  'graph.definition': '定义',
+  'graph.limitation': '局限',
+  'graph.section': '章节',
+  'graph.question': '问题',
+  'graph.insight': '洞见',
+  'graph.paper': '论文',
+  'graph.topic': '主题',
+  'toast.graphBuilt': '知识图谱已生成',
+  'toast.graphUpdated': '知识图谱已更新',
+  'err.aiUnavailable': 'AI 服务不可用（{message}）',
+  'err.aiFailed': 'AI 生成失败（{message}）',
+  'err.contextTooLarge': '上下文超出模型限制，请缩小选中范围。',
 };
 
 /** en dictionary — fallback locale (docs/UI-SPEC.md §5). */
@@ -397,6 +510,7 @@ const EN = {
   'settings.provider': 'Translation service',
   'settings.providerAuto': 'Auto',
   'settings.pageMarks': 'Show page marks',
+  'settings.graphAutoBuild': 'Build the knowledge graph after parsing',
   'settings.scale': 'Reading size',
   'settings.sectionStorage': 'Storage',
   'settings.dataDir': 'Data directory',
@@ -458,6 +572,104 @@ const EN = {
   'paper.metaModel': 'MinerU {model}',
   'parse.reparseTitle': 'Reparse',
   'parse.starting': 'Starting parse…',
+  // AI upgrade: margin tab, view switches, quick actions, panel + graph copy.
+  'margin.ai': 'AI',
+  'margin.aiTitle': 'AI reading assistant',
+  'topbar.viewLibrary': 'Library',
+  'topbar.viewGraph': 'Library graph',
+  'topbar.viewGroup': 'Library view',
+  'reader.viewRead': 'Read',
+  'reader.viewGraph': 'Graph',
+  'reader.viewGroup': 'Document view',
+  'sel.askAi': 'Ask AI',
+  'ai.askBlock': 'Ask AI (this paragraph)',
+  'ai.title': 'AI reading assistant',
+  'ai.model': 'Model {model}',
+  'ai.placeholderTitle': 'AI reading assistant',
+  'ai.placeholderText': 'The AI panel is loading…',
+  'ai.unavailable': 'AI is unavailable',
+  'ai.unavailableText': 'No language-model route is configured in Harness. Set a default model to ask questions here.',
+  'ai.emptyTitle': 'Start from this page',
+  'ai.emptyText': 'Answers are generated from this paper only, with source paragraphs cited.',
+  'ai.promptSummary': 'Summarize the paper',
+  'ai.promptProblem': 'What problem does it solve',
+  'ai.promptMethod': 'What is the method',
+  'ai.promptLimit': 'What are the limitations',
+  'ai.promptExplain': 'Explain this concept',
+  'ai.placeholder': 'Ask something about this paper…',
+  'ai.send': 'Send',
+  'ai.stop': 'Stop',
+  'ai.regenerate': 'Regenerate',
+  'ai.thinking': 'Reading…',
+  'ai.loading': 'Loading conversation…',
+  'ai.historyFailed': "Couldn't load the conversation.",
+  'ai.retry': 'Retry',
+  'ai.copy': 'Copy answer',
+  'ai.copied': 'Copied',
+  'ai.copyFailed': 'Copy failed',
+  'ai.contextSelection': 'Selection',
+  'ai.contextParagraph': 'Current paragraph',
+  'ai.clearContext': 'Clear context',
+  'ai.clearSelection': 'Clear selection',
+  'ai.clearParagraph': 'Clear paragraph',
+  'ai.citations': 'Citations',
+  'ai.citationJump': 'Jump to source',
+  'ai.page': 'Page {page}',
+  'ai.unverified': '{count} citations failed verification',
+  'ai.annotationsCreated': 'AI added {count} highlights',
+  'ai.error': 'AI failed: {message}',
+  'ai.stopped': 'Generation stopped',
+  'ai.insufficient': 'The available content is not enough to answer. Rephrase the question, or build the paper graph first.',
+  'ai.openGraph': 'Open knowledge graph',
+  'ai.askAbout': 'Ask AI about "{label}"',
+  'ai.followup': 'Follow up',
+  'ai.sendHint': 'Enter to send · Shift+Enter for a new line',
+  'graph.titleDoc': 'Paper knowledge graph',
+  'graph.titleLibrary': 'Library graph',
+  'graph.placeholderTitle': 'Knowledge graph',
+  'graph.placeholderText': 'The knowledge-graph view is loading…',
+  'graph.unavailable': 'The knowledge-graph engine is unavailable.',
+  'graph.error': 'The knowledge graph failed to load.',
+  'graph.retry': 'Retry',
+  'graph.build': 'Build with AI',
+  'graph.rebuild': 'Rebuild graph',
+  'graph.refresh': 'Refresh',
+  'graph.building': 'Building the graph…',
+  'graph.progress': 'Building · {done} / {total}',
+  'graph.reading': 'Reading…',
+  'graph.extracting': 'Extracting concepts…',
+  'graph.merging': 'Merging…',
+  'graph.emptyDoc': 'This paper has no knowledge graph yet.',
+  'graph.emptyLibrary': 'The library graph is empty.',
+  'graph.emptyHint': 'Building the graph extracts concepts, methods, and findings automatically.',
+  'graph.jump': 'Jump to source',
+  'graph.ask': 'Ask AI about this concept',
+  'graph.search': 'Search nodes',
+  'graph.legend': 'Node types',
+  'graph.filters': 'Filters',
+  'graph.nodes': '{count} nodes',
+  'graph.edges': '{count} edges',
+  'graph.loading': 'Loading graph…',
+  'graph.modeDoc': 'Paper graph',
+  'graph.modeLibrary': 'Library graph',
+  'graph.close': 'Close',
+  'graph.collapseClusters': 'Collapse minor nodes',
+  'graph.expandAll': 'Expand all',
+  'graph.concept': 'Concept',
+  'graph.method': 'Method',
+  'graph.finding': 'Finding',
+  'graph.definition': 'Definition',
+  'graph.limitation': 'Limitation',
+  'graph.section': 'Section',
+  'graph.question': 'Question',
+  'graph.insight': 'Insight',
+  'graph.paper': 'Paper',
+  'graph.topic': 'Topic',
+  'toast.graphBuilt': 'Knowledge graph built',
+  'toast.graphUpdated': 'Knowledge graph updated',
+  'err.aiUnavailable': 'AI service unavailable ({message})',
+  'err.aiFailed': 'AI generation failed ({message})',
+  'err.contextTooLarge': 'The context exceeds the model limit. Select less text.',
 };
 
 /** Fallback translation used by components rendered outside the locale seat. */
@@ -638,6 +850,105 @@ async function mruPost(method, payload, options) {
   throw new MruApiError(`http-${response.status}`, `HTTP ${response.status}`, response.status);
 }
 
+/**
+ * POST one NDJSON-streaming method and deliver each decoded frame to
+ * `options.onFrame(frame)` (docs/AI-SPEC.md §4). Resolves when the stream ends;
+ * rethrows transport/host failures as `MruApiError` so callers can branch.
+ */
+async function mruStreamNdjson(method, payload, options) {
+  const opts = options || {};
+  let response;
+  try {
+    response = await fetch(mruApiUrl(method), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/x-ndjson' },
+      body: JSON.stringify(payload || {}),
+      credentials: 'same-origin',
+      signal: opts.signal,
+    });
+  } catch (error) {
+    if (error && (error.name === 'AbortError' || opts.signal?.aborted)) throw new MruApiError('aborted', 'aborted');
+    throw new MruApiError('network', error instanceof Error ? error.message : 'network');
+  }
+  if (!response.ok) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    if (data && data.ok === false) {
+      const info = data.error || {};
+      throw new MruApiError(info.code || `http-${response.status}`, info.message || '', response.status);
+    }
+    if (response.status === 403 || response.status === 404 || response.status === 405) {
+      throw new MruApiError('host-unavailable', `HTTP ${response.status}`, response.status);
+    }
+    throw new MruApiError(`http-${response.status}`, `HTTP ${response.status}`, response.status);
+  }
+  const headers = response.headers;
+  const contentType = headers && typeof headers.get === 'function' ? headers.get('content-type') || '' : '';
+  // A JSON envelope answer means the host declined to stream (e.g. unavailable).
+  if (contentType.indexOf('application/json') !== -1) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    if (data && data.ok === true) return data.value;
+    if (data && data.ok === false) {
+      const info = data.error || {};
+      throw new MruApiError(info.code || 'ai-failed', info.message || '', response.status);
+    }
+    throw new MruApiError('bad-response', 'bad response', response.status);
+  }
+  const onFrame = typeof opts.onFrame === 'function' ? opts.onFrame : null;
+  const decoder = typeof TextDecoder === 'function' ? new TextDecoder() : null;
+  let buffer = '';
+  const emitLine = (line) => {
+    const trimmed = line.trim();
+    if (trimmed === '') return;
+    let frame = null;
+    try {
+      frame = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    if (frame && typeof frame === 'object' && onFrame) onFrame(frame);
+  };
+  const consume = (chunk) => {
+    buffer += chunk;
+    let index = buffer.indexOf('\n');
+    while (index !== -1) {
+      emitLine(buffer.slice(0, index));
+      buffer = buffer.slice(index + 1);
+      index = buffer.indexOf('\n');
+    }
+  };
+  try {
+    const body = response.body;
+    if (body && typeof body.getReader === 'function') {
+      const reader = body.getReader();
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        if (step.value !== undefined && step.value !== null) {
+          consume(decoder ? decoder.decode(step.value, { stream: true }) : String(step.value));
+        }
+      }
+      if (decoder) consume(decoder.decode());
+    } else if (typeof response.text === 'function') {
+      consume(await response.text());
+    }
+    if (buffer.trim() !== '') emitLine(buffer);
+  } catch (error) {
+    if (opts.signal?.aborted || (error && error.name === 'AbortError')) throw new MruApiError('aborted', 'aborted');
+    throw new MruApiError('network', error instanceof Error ? error.message : 'network');
+  }
+  return undefined;
+}
+
 /** Raw XHR upload with progress; resolves `{document}` like the JSON API. */
 function mruUpload(file, options) {
   const opts = options || {};
@@ -742,8 +1053,35 @@ function mruErrorText(t, error) {
   if (code === 'network' || code === 'aborted') return t('err.network');
   if (code === 'translate-unavailable') return t('err.noTranslation');
   if (code === 'forbidden') return t('err.forbidden');
+  if (code === 'ai-unavailable' || code === 'llm-unavailable' || code === 'ai-disabled') {
+    return t('err.aiUnavailable', { message: (error && error.message) || '' });
+  }
+  if (code === 'ai-failed' || code === 'llm-failed') {
+    return t('err.aiFailed', { message: (error && error.message) || '' });
+  }
+  if (code === 'context-too-large') return t('err.contextTooLarge');
   if (error && typeof error.message === 'string' && error.message.trim() !== '') return error.message;
   return t('err.generic');
+}
+
+/** Normalized AI availability facts from the host `status` payload (docs/AI-SPEC.md §9). */
+function mruAiState(status) {
+  const ai = status && status.ai && typeof status.ai === 'object' ? status.ai : null;
+  return {
+    available: Boolean(ai && ai.available),
+    graph: Boolean(ai && ai.graph),
+    route: ai && ai.route && typeof ai.route === 'object' ? ai.route : null,
+  };
+}
+
+/** Human label for the AI model route ("deepseek-flash" / "provider · model"). */
+function mruAiModelLabel(status) {
+  const route = mruAiState(status).route;
+  if (!route) return '';
+  const model = typeof route.model === 'string' ? route.model.trim() : '';
+  const provider = typeof route.provider === 'string' ? route.provider.trim() : '';
+  if (model !== '') return model;
+  return provider;
 }
 
 // ===========================================================================
@@ -873,6 +1211,8 @@ const MRU_GLYPHS = {
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.4 1.4M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.4-1.4',
   check: 'm5 13 4 4L19 7',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-14v5l3 2',
+  spark: 'M12 3l2.1 6.3L21 12l-6.9 2.7L12 21l-2.1-6.3L3 12l6.9-2.7L12 3Z',
+  graph: 'M6 4.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm12 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-6 11a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-4.6-6.9 4.1 5.6m4.1-5.6-4.1 5.6',
 };
 
 /** Render one inline stroke glyph. */
@@ -1001,6 +1341,30 @@ function mruBuildModel(markdown, contentList, showPageMarks) {
   }
   if (!model || !Array.isArray(model.blocks)) model = { blocks: [], outline: [], stats: { blocks: 0, headings: 0, chars: 0, words: 0 } };
   return model;
+}
+
+/**
+ * The text block currently crossing the reading line (`threshold`), used for
+ * the AI context chip. Returns `{ blockKey, text }` or null.
+ */
+function mruVisibleBlock(body, model, threshold) {
+  if (!body || !model || !Array.isArray(model.blocks)) return null;
+  for (const block of model.blocks) {
+    if (!mruIsTextBlock(block) || typeof block.plainText !== 'string' || block.plainText.trim() === '') continue;
+    let element = null;
+    try {
+      element = body.querySelector(`[data-block-key="${String(block.key).replace(/"/g, '\\"')}"]`);
+    } catch {
+      element = null;
+    }
+    if (!element) continue;
+    const rect = element.getBoundingClientRect();
+    if (rect.top <= threshold && rect.bottom > threshold - 24) {
+      return { blockKey: block.key, text: block.plainText.slice(0, 800) };
+    }
+    if (rect.top > threshold) return null;
+  }
+  return null;
 }
 
 /** Whether the model contains any formula worth loading KaTeX for. */
@@ -1341,7 +1705,15 @@ function mruBlockTools(t, block, options) {
       title: t('block.annotate'),
       onMouseDown: (event) => event.preventDefault(),
       onClick: () => opts.onAnnotateBlock && opts.onAnnotateBlock(block),
-    }, h(MruGlyph, { name: 'annotate' })));
+    }, h(MruGlyph, { name: 'annotate' })),
+    h('button', {
+      type: 'button',
+      className: 'mru-icon-btn mru-block__ask',
+      'aria-label': t('ai.askBlock'),
+      title: t('ai.askBlock'),
+      onMouseDown: (event) => event.preventDefault(),
+      onClick: () => opts.onAskBlock && opts.onAskBlock(block),
+    }, h(MruGlyph, { name: 'spark' })));
 }
 
 /** Normalize the table block's head/rows into arrays of row arrays. */
@@ -1358,6 +1730,7 @@ function MruBlockView(props) {
   const {
     t, block, docId, annotations, translations, jobs, providers, mode, katexReady,
     activeAnnotationId, onTranslateBlock, onAnnotateBlock, onRetryTranslation, onMarkClick,
+    onAskBlock, flashBlock,
   } = props;
   const anns = Array.isArray(annotations) ? annotations : [];
   const blocksTranslations = translations || {};
@@ -1372,14 +1745,15 @@ function MruBlockView(props) {
   });
   const translationNode = mruTranslationNode(t, block, translation, job, provider, mode, onRetryTranslation, katexReady, Boolean(props.translationFlash) && props.translationFlash === block.key);
   const tools = mruBlockTools(t, block, {
-    onTranslateBlock, onAnnotateBlock, translated: hasTranslation, job,
+    onTranslateBlock, onAnnotateBlock, onAskBlock, translated: hasTranslation, job,
   });
+  const flashClass = flashBlock && block.key && flashBlock === block.key ? ' mru-block--flash' : '';
 
   if (block.kind === 'heading') {
     const level = mruClamp(Number(block.level) || 1, 1, 4);
     const tag = 'h' + Math.min(level + 1, 6);
     return h('div', {
-      className: `mru-block mru-block--h${level}${translatedClass}`,
+      className: `mru-block mru-block--h${level}${translatedClass}${flashClass}`,
       'data-block-key': block.key,
     },
       tools,
@@ -1389,7 +1763,7 @@ function MruBlockView(props) {
 
   if (block.kind === 'paragraph') {
     const showOriginal = mode !== 'translated' || hasTranslation || Boolean(job);
-    return h('div', { className: `mru-block mru-block--p${translatedClass}`, 'data-block-key': block.key },
+    return h('div', { className: `mru-block mru-block--p${translatedClass}${flashClass}`, 'data-block-key': block.key },
       tools,
       showOriginal ? h('p', { className: 'mru-para__text' }, inline(block.runs || [], 0)) : null,
       showOriginal ? translationNode : h('div', { className: 'mru-para__translation mru-para__translation--source' }, inline(block.runs || [], 0)));
@@ -1397,7 +1771,7 @@ function MruBlockView(props) {
 
   if (block.kind === 'quote') {
     const showOriginal = mode !== 'translated' || hasTranslation || Boolean(job);
-    return h('blockquote', { className: `mru-block mru-block--quote${translatedClass}`, 'data-block-key': block.key },
+    return h('blockquote', { className: `mru-block mru-block--quote${translatedClass}${flashClass}`, 'data-block-key': block.key },
       showOriginal ? h('p', { className: 'mru-para__text' }, inline(block.runs || [], 0)) : null,
       showOriginal ? translationNode : h('div', { className: 'mru-para__translation mru-para__translation--source' }, inline(block.runs || [], 0)));
   }
@@ -1423,7 +1797,7 @@ function MruBlockView(props) {
         baseOffset: itemStart, katexReady, activeAnnotationId, onMarkClick,
       }));
     });
-    return h('div', { className: `mru-block mru-block--list${translatedClass}`, 'data-block-key': block.key },
+    return h('div', { className: `mru-block mru-block--list${translatedClass}${flashClass}`, 'data-block-key': block.key },
       tools,
       h(listTag, { className: listClass, start: block.ordered && block.start ? block.start : undefined }, lis),
       translationNode);
@@ -1501,6 +1875,109 @@ function MruBlockView(props) {
   return null;
 }
 
+// --- AI / graph module surfaces -------------------------------------------
+// ui/chat.js (`MruAiPanel`) and ui/graph.js (`MruGraphView`) are concatenated
+// into the same bundle scope before app.js. These resolvers keep the reading
+// desk renderable while either module is absent (placeholders during the AI
+// workstream) and switch to the real component as soon as it defines itself.
+
+/** Resolve the AI panel module (ui/chat.js), or null while it is absent. */
+function mruAiPanelComponent() {
+  return typeof MruAiPanel === 'function' ? MruAiPanel : null;
+}
+
+/** Resolve the graph view module (ui/graph.js), or null while it is absent. */
+function mruGraphViewComponent() {
+  return typeof MruGraphView === 'function' ? MruGraphView : null;
+}
+
+/** Minimal AI panel used only while ui/chat.js is a placeholder. */
+function MruAiPanelFallback(props) {
+  const { t, available, modelLabel } = props;
+  return h('div', { className: 'mru-ai mru-ai--placeholder' },
+    h('div', { className: 'mru-ai__head' },
+      h('h3', { className: 'mru-ai__title' }, t('ai.title')),
+      modelLabel ? h('span', { className: 'mru-ai__model' }, t('ai.model', { model: modelLabel })) : null),
+    h('div', { className: 'mru-ai__empty' },
+      h('p', { className: 'mru-ai__empty-title' }, available ? t('ai.placeholderTitle') : t('ai.unavailable')),
+      h('p', { className: 'mru-ai__empty-text' }, available ? t('ai.placeholderText') : t('ai.unavailableText'))));
+}
+
+/** Minimal graph surface used only while ui/graph.js is a placeholder. */
+function MruGraphPlaceholder(props) {
+  const { t, mode, graph, building, progress, available, error, onBuild, onRefresh } = props;
+  const titleKey = mode === 'library' ? 'graph.titleLibrary' : 'graph.titleDoc';
+  const nodeCount = graph && Array.isArray(graph.nodes) ? graph.nodes.length : 0;
+  let statusText;
+  if (available === false) statusText = t('graph.unavailable');
+  else if (error) statusText = error;
+  else if (building) {
+    statusText = progress && Number(progress.total) > 0
+      ? t('graph.progress', { done: Number(progress.done) || 0, total: Number(progress.total) || 0 })
+      : t('graph.building');
+  } else if (nodeCount > 0) statusText = t('graph.nodes', { count: nodeCount });
+  else statusText = mode === 'library' ? t('graph.emptyLibrary') : t('graph.emptyDoc');
+  return h('div', { className: 'mru-graph mru-graph--placeholder' },
+    h('div', { className: 'mru-graph__head' },
+      h('h2', { className: 'mru-graph__title' }, t(titleKey)),
+      h('div', { className: 'mru-graph__actions' },
+        onRefresh ? h('button', {
+          type: 'button',
+          className: 'mru-btn mru-btn--ghost mru-btn--sm',
+          onClick: () => onRefresh(),
+        }, t('graph.refresh')) : null,
+        onBuild ? h('button', {
+          type: 'button',
+          className: 'mru-btn mru-btn--primary mru-btn--sm',
+          'data-action': 'graph-build',
+          disabled: Boolean(building),
+          onClick: () => onBuild(),
+        }, building ? t('graph.building') : (mode === 'library' ? t('graph.rebuild') : t('graph.build'))) : null)),
+    h('div', { className: 'mru-graph__empty' },
+      h('p', { className: 'mru-graph__status' }, statusText),
+      h('p', { className: 'mru-graph__empty-text' }, t('graph.emptyHint'))));
+}
+
+/** Render the AI panel module, or the placeholder while it is absent. */
+function MruAiSurface(props) {
+  const Component = mruAiPanelComponent();
+  if (Component) return h(Component, props);
+  return h(MruAiPanelFallback, { t: props.t, available: props.available, modelLabel: props.modelLabel });
+}
+
+/** Render the graph view module, or the placeholder while it is absent. */
+function MruGraphSurface(props) {
+  const Component = mruGraphViewComponent();
+  if (Component) {
+    return h(Component, {
+      t: props.t,
+      mode: props.mode,
+      graph: props.graph || null,
+      building: Boolean(props.building),
+      progress: props.progress || null,
+      error: props.error || '',
+      available: props.available !== false,
+      loading: Boolean(props.loading),
+      onJump: props.onJump,
+      onAsk: props.onAsk,
+      onBuild: props.onBuild,
+      onRefresh: props.onRefresh,
+      onUpdateGraph: props.onUpdateGraph,
+    });
+  }
+  return h(MruGraphPlaceholder, {
+    t: props.t,
+    mode: props.mode,
+    graph: props.graph || null,
+    building: Boolean(props.building),
+    progress: props.progress || null,
+    available: props.available !== false,
+    error: props.error || '',
+    onBuild: props.onBuild,
+    onRefresh: props.onRefresh,
+  });
+}
+
 /** Paper meta line: file · format · pages · engine model · date. */
 function mruPaperMeta(t, doc, readerPages) {
   const parts = [];
@@ -1528,7 +2005,10 @@ function MruPaper(props) {
     translationFlash, activeAnnotationId, translateAll, bodyRef, onReaderMouseUp, onReaderKeyUp,
     onModeChange, onScaleDown, onScaleUp, onMoreMenu, onTranslateBlock, onAnnotateBlock,
     onRetryTranslation, onMarkClick, onCancelTranslateAll, onReparse,
+    docView, onDocViewChange, graphView, flashBlock, onAskBlock,
   } = props;
+  const view = MRU_DOC_VIEWS.includes(docView) ? docView : 'read';
+  const graph = graphView || {};
   const [unknownNoticeDismissed, setUnknownNoticeDismissed] = React.useState(false);
   const model = reader.model || { blocks: [], outline: [], stats: { blocks: 0, headings: 0, chars: 0, words: 0 } };
   const blocks = Array.isArray(model.blocks) ? model.blocks : [];
@@ -1555,7 +2035,24 @@ function MruPaper(props) {
     const text = block && typeof block.plainText === 'string' ? block.plainText : '';
     if (text.indexOf('\ufffd') !== -1) unknownCount += (text.match(/\ufffd/g) || []).length;
   }
-  const body = blocks.length === 0
+  const body = view === 'graph'
+    ? h('div', { className: 'mru-paper__body mru-paper__body--graph' },
+      h(MruGraphSurface, {
+        t,
+        mode: 'doc',
+        graph: graph.graph || null,
+        building: Boolean(graph.building),
+        progress: graph.progress || null,
+        error: graph.error || '',
+        available: graph.available !== false,
+        loading: Boolean(graph.loading),
+        onJump: graph.onJump,
+        onAsk: graph.onAsk,
+        onBuild: graph.onBuild,
+        onRefresh: graph.onRefresh,
+        onUpdateGraph: graph.onUpdateGraph,
+      }))
+    : blocks.length === 0
     ? h('div', { className: 'mru-empty mru-empty--quiet' }, h('p', { className: 'mru-empty__text' }, t('reader.emptyDoc')))
     : blocks.map((block) => {
       if (block.key && skipKey !== null && block.key === skipKey) return null;
@@ -1577,6 +2074,8 @@ function MruPaper(props) {
         onAnnotateBlock,
         onRetryTranslation,
         onMarkClick,
+        onAskBlock,
+        flashBlock,
       });
     });
   return h('article', {
@@ -1586,21 +2085,36 @@ function MruPaper(props) {
     h('header', { className: 'mru-paper__runhead' },
       h('div', { className: 'mru-paper__runhead-title' }, title),
       h('div', { className: 'mru-paper__runhead-actions' },
-        h('div', { className: 'mru-segmented', role: 'group', 'aria-label': t('reader.modeGroup') }, modeButtons),
-        h('button', {
+        h('div', { className: 'mru-segmented mru-segmented--view', role: 'group', 'aria-label': t('reader.viewGroup') },
+          h('button', {
+            type: 'button',
+            className: 'mru-segmented__item' + (view === 'read' ? ' mru-segmented__item--active' : ''),
+            'aria-pressed': view === 'read' ? 'true' : 'false',
+            onClick: () => onDocViewChange('read'),
+          }, t('reader.viewRead')),
+          h('button', {
+            type: 'button',
+            className: 'mru-segmented__item' + (view === 'graph' ? ' mru-segmented__item--active' : ''),
+            'aria-pressed': view === 'graph' ? 'true' : 'false',
+            onClick: () => onDocViewChange('graph'),
+          }, t('reader.viewGraph'))),
+        view === 'read'
+          ? h('div', { className: 'mru-segmented', role: 'group', 'aria-label': t('reader.modeGroup') }, modeButtons)
+          : null,
+        view === 'read' ? h('button', {
           type: 'button',
           className: 'mru-btn mru-btn--ghost mru-btn--icon mru-font-dec',
           'aria-label': t('reader.fontDec'),
           title: t('reader.fontDec'),
           onClick: onScaleDown,
-        }, 'A−'),
-        h('button', {
+        }, 'A−') : null,
+        view === 'read' ? h('button', {
           type: 'button',
           className: 'mru-btn mru-btn--ghost mru-btn--icon mru-font-inc',
           'aria-label': t('reader.fontInc'),
           title: t('reader.fontInc'),
           onClick: onScaleUp,
-        }, 'A+'),
+        }, 'A+') : null,
         h('button', {
           type: 'button',
           className: 'mru-btn mru-btn--ghost mru-btn--icon mru-more',
@@ -1640,12 +2154,14 @@ function MruPaper(props) {
           }, t('translate.cancel'))),
         h('div', { className: 'mru-progress' },
           h('div', { className: 'mru-progress__fill', style: { width: `${translatePct}%` } }))) : null,
-      h('div', {
-        className: 'mru-paper__body',
-        ref: bodyRef,
-        onMouseUp: onReaderMouseUp,
-        onKeyUp: onReaderKeyUp,
-      }, body)));
+      view === 'read'
+        ? h('div', {
+          className: 'mru-paper__body',
+          ref: bodyRef,
+          onMouseUp: onReaderMouseUp,
+          onKeyUp: onReaderKeyUp,
+        }, body)
+        : body));
 }
 
 /** Centered "loading the parsed draft…" state (shown after a 400ms delay). */
@@ -1856,6 +2372,11 @@ function MruMain(props) {
     h('div', { className: 'mru-paper-scroll', ref: props.scrollRef }, children));
   const wrap = scroll;
 
+  if (props.libraryView === 'graph') {
+    return h('main', { className: 'mru-main mru-main--graph' },
+      h(MruGraphSurface, Object.assign({ t, mode: 'library' }, props.libraryGraphProps || {})));
+  }
+
   if (selectedDoc === null || selectedDoc === undefined) {
     if (props.selectedId) return scroll(h(MruReaderLoading, { t }));
     if (!docsReady) return wrap(h('div', { className: 'mru-empty', 'aria-busy': 'true' }, h(MruSpinner)));
@@ -1930,7 +2451,7 @@ function MruMain(props) {
 function MruTopbar(props) {
   const {
     t, counts, menuOpen, onImportMenu, onToggleRail, onToggleMargin, onOpenSettings,
-    railOpen, marginOpen,
+    railOpen, marginOpen, libraryView, onLibraryView,
   } = props;
   return h('div', { className: 'mru-topbar' },
     h('div', { className: 'mru-brand' },
@@ -1943,6 +2464,20 @@ function MruTopbar(props) {
       h('span', { className: 'mru-brand__count' }, t('brand.count', { count: counts.total || 0 }))),
     h('div', { className: 'mru-topbar__spacer' }),
     h('div', { className: 'mru-topbar__actions' },
+      h('div', { className: 'mru-topbar__view' },
+        h('div', { className: 'mru-segmented mru-segmented--view', role: 'group', 'aria-label': t('topbar.viewGroup') },
+          h('button', {
+            type: 'button',
+            className: 'mru-segmented__item' + (libraryView !== 'graph' ? ' mru-segmented__item--active' : ''),
+            'aria-pressed': libraryView !== 'graph' ? 'true' : 'false',
+            onClick: () => onLibraryView('library'),
+          }, t('topbar.viewLibrary')),
+          h('button', {
+            type: 'button',
+            className: 'mru-segmented__item' + (libraryView === 'graph' ? ' mru-segmented__item--active' : ''),
+            'aria-pressed': libraryView === 'graph' ? 'true' : 'false',
+            onClick: () => onLibraryView('graph'),
+          }, t('topbar.viewGraph')))),
       h('button', {
         type: 'button',
         className: 'mru-btn mru-btn--primary',
@@ -2102,16 +2637,21 @@ function MruRail(props) {
 function MruMargin(props) {
   const {
     t, tab, onTabChange, model, annotations, droppedCount, activeAnnotationId,
-    activeHeadingKey, onOutlineClick, onNoteClick, onNoteDelete, docTitle,
+    activeHeadingKey, onOutlineClick, onNoteClick, onNoteDelete, docTitle, aiPanelProps,
   } = props;
+  const activeTab = MRU_MARGIN_TABS.includes(tab) ? tab : 'outline';
   const outlineAll = model && Array.isArray(model.outline) ? model.outline : [];
   const titleText = String(docTitle || '').trim().toLowerCase();
   const outline = outlineAll.filter((item) => !(titleText !== ''
     && Number(item.level) === 1
     && String(item.text || '').trim().toLowerCase() === titleText));
-  const tabClass = (value) => 'mru-tab' + (tab === value ? ' mru-tab--active' : '');
+  const tabClass = (value) => 'mru-tab' + (activeTab === value ? ' mru-tab--active' : '');
   let body;
-  if (tab === 'outline') {
+  if (activeTab === 'ai') {
+    body = aiPanelProps
+      ? h(MruAiSurface, Object.assign({ key: `ai-${aiPanelProps.documentId}` }, aiPanelProps))
+      : null;
+  } else if (activeTab === 'outline') {
     if (outline.length === 0) {
       body = h('div', { className: 'mru-margin__empty' }, t('margin.empty'));
     } else {
@@ -2169,16 +2709,23 @@ function MruMargin(props) {
         type: 'button',
         role: 'tab',
         className: tabClass('outline'),
-        'aria-selected': tab === 'outline' ? 'true' : 'false',
+        'aria-selected': activeTab === 'outline' ? 'true' : 'false',
         onClick: () => onTabChange('outline'),
       }, t('margin.outline')),
       h('button', {
         type: 'button',
         role: 'tab',
         className: tabClass('notes'),
-        'aria-selected': tab === 'notes' ? 'true' : 'false',
+        'aria-selected': activeTab === 'notes' ? 'true' : 'false',
         onClick: () => onTabChange('notes'),
-      }, t('margin.notes'), h('span', { className: 'mru-tab__count' }, String(annotations ? annotations.length : 0)))),
+      }, t('margin.notes'), h('span', { className: 'mru-tab__count' }, String(annotations ? annotations.length : 0))),
+      h('button', {
+        type: 'button',
+        role: 'tab',
+        className: tabClass('ai'),
+        'aria-selected': activeTab === 'ai' ? 'true' : 'false',
+        onClick: () => onTabChange('ai'),
+      }, h(MruGlyph, { name: 'spark', size: 13 }), h('span', { className: 'mru-tab__label' }, t('margin.ai')))),
     h('div', { className: 'mru-margin__body' }, body));
 }
 
@@ -2363,7 +2910,7 @@ function MruDrop({ t }) {
 // ===========================================================================
 
 /** Selection toolbar; focuses itself after a keyboard selection. */
-function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onRemoveHighlight }) {
+function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onRemoveHighlight, onAskAi }) {
   const firstRef = React.useRef(null);
   React.useEffect(() => {
     if (selection && selection.source === 'keyboard' && firstRef.current && typeof firstRef.current.focus === 'function') {
@@ -2371,7 +2918,7 @@ function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onR
     }
   }, [selection]);
   const removable = Array.isArray(selection.annotationIds) && selection.annotationIds.length > 0;
-  const pos = mruOverlayPos(selection.rect, removable ? 452 : 344, 44);
+  const pos = mruOverlayPos(selection.rect, removable ? 512 : 404, 44);
   return h('div', {
     className: 'mru-selbar',
     role: 'toolbar',
@@ -2384,6 +2931,11 @@ function MruSelbar({ t, selection, onTranslate, onHighlight, onNote, onCopy, onR
       className: 'mru-selbar__btn mru-selbar__btn--primary',
       onClick: () => onTranslate(),
     }, t('sel.translate')),
+    onAskAi ? h('button', {
+      type: 'button',
+      className: 'mru-selbar__btn mru-selbar__btn--ai',
+      onClick: () => onAskAi(),
+    }, h(MruGlyph, { name: 'spark', size: 13 }), h('span', { className: 'mru-selbar__btn-label' }, t('sel.askAi'))) : null,
     h('span', { className: 'mru-selbar__sep', 'aria-hidden': 'true' }),
     h('span', { className: 'mru-swatches', role: 'group', 'aria-label': t('sel.colors') },
       MRU_COLORS.map((color) => {
@@ -2647,6 +3199,22 @@ function MruSettingsModal(props) {
                 onUpdatePrefs({ showPageMarks: !prefs.showPageMarks });
               }
             },
+          })),
+        h('div', { className: 'mru-toggle-row mru-toggle-row--plain' },
+          h('span', { className: 'mru-toggle-row__text' },
+            h('span', { className: 'mru-toggle-row__title' }, t('settings.graphAutoBuild'))),
+          h('span', {
+            className: 'mru-switch' + (prefs.graphAutoBuild ? ' mru-switch--on' : ''),
+            role: 'switch',
+            'aria-checked': prefs.graphAutoBuild ? 'true' : 'false',
+            tabIndex: 0,
+            onClick: () => onUpdatePrefs({ graphAutoBuild: !prefs.graphAutoBuild }),
+            onKeyDown: (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onUpdatePrefs({ graphAutoBuild: !prefs.graphAutoBuild });
+              }
+            },
           }))),
       h('section', { className: 'mru-section' },
         h('h3', { className: 'mru-section__title' }, t('settings.sectionStorage')),
@@ -2784,6 +3352,13 @@ function mruNormalizePrefs(raw) {
   prefs.defaultEnableTable = prefs.defaultEnableTable !== false;
   if (typeof prefs.targetLanguage !== 'string' || prefs.targetLanguage === '') prefs.targetLanguage = 'zh';
   if (typeof prefs.translationProvider !== 'string' || prefs.translationProvider === '') prefs.translationProvider = 'auto';
+  prefs.aiPanelOpen = prefs.aiPanelOpen === true;
+  prefs.graphAutoBuild = prefs.graphAutoBuild === true;
+  prefs.libraryView = MRU_LIBRARY_VIEWS.includes(prefs.libraryView) ? prefs.libraryView : 'library';
+  prefs.docView = MRU_DOC_VIEWS.includes(prefs.docView) ? prefs.docView : 'read';
+  prefs.marginTab = MRU_MARGIN_TABS.includes(prefs.marginTab)
+    ? prefs.marginTab
+    : (prefs.aiPanelOpen ? 'ai' : 'outline');
   return prefs;
 }
 
@@ -2847,6 +3422,17 @@ function MineruApp(props) {
   const [toasts, setToasts] = React.useState([]);
   const [dropActive, setDropActive] = React.useState(false);
   const [katexReady, setKatexReady] = React.useState(MRU_KATEX.getStatus() === 'ready');
+  // AI upgrade (docs/AI-SPEC.md §6): view switches, margin conversation, graphs.
+  const [libraryView, setLibraryView] = React.useState('library');
+  const [docView, setDocView] = React.useState('read');
+  const [aiSelectionContext, setAiSelectionContext] = React.useState(null);
+  const [aiParagraphContext, setAiParagraphContext] = React.useState(null);
+  const [aiVisible, setAiVisible] = React.useState(null);
+  const [aiContextMuted, setAiContextMuted] = React.useState(false);
+  const [aiFocusSeq, setAiFocusSeq] = React.useState(0);
+  const [docGraph, setDocGraph] = React.useState({ phase: 'idle', docId: null, graph: null, building: false, progress: null, error: '', available: true });
+  const [libraryGraph, setLibraryGraph] = React.useState({ phase: 'idle', graph: null, building: false, progress: null, error: '', available: true });
+  const [flashBlock, setFlashBlock] = React.useState(null);
 
   // --- refs --------------------------------------------------------------
   const rootRef = React.useRef(null);
@@ -2879,12 +3465,21 @@ function MineruApp(props) {
     ? {
       documentId: navStateRef.current.documentId,
       scrollTop: Number(navStateRef.current.scrollTop) || 0,
-      marginTab: navStateRef.current.marginTab === 'notes' ? 'notes' : 'outline',
+      marginTab: MRU_MARGIN_TABS.includes(navStateRef.current.marginTab) ? navStateRef.current.marginTab : 'outline',
     }
     : null);
   const pendingScrollRef = React.useRef(null);
   const pendingMarginTabRef = React.useRef(null);
   const navSavedAtRef = React.useRef(0);
+  const docGraphAbortRef = React.useRef(null);
+  const libraryGraphAbortRef = React.useRef(null);
+  const docGraphDirtyRef = React.useRef(false);
+  const pendingJumpRef = React.useRef(null);
+  const flashBlockTimerRef = React.useRef(null);
+  const viewsInitializedRef = React.useRef(false);
+  const autoBuiltGraphsRef = React.useRef(new Set());
+  const aiContextMutedRef = React.useRef(false);
+  const aiVisibleAtRef = React.useRef(0);
 
   // --- toasts ------------------------------------------------------------
   const toast = (text, kind) => {
@@ -2913,7 +3508,15 @@ function MineruApp(props) {
     if (normalized.translatorAvailable === undefined && configured) normalized.translatorAvailable = Boolean(configured.translator);
     if (normalized.modelAvailable === undefined && configured) normalized.modelAvailable = Boolean(configured.model);
     setStatus(normalized);
-    setPrefs(mruNormalizePrefs(value.preferences));
+    const nextPrefs = mruNormalizePrefs(value.preferences);
+    setPrefs(nextPrefs);
+    // Adopt the persisted view switches once; later settings.update responses
+    // must not fight the switches the user just used.
+    if (!viewsInitializedRef.current) {
+      viewsInitializedRef.current = true;
+      setLibraryView(nextPrefs.libraryView);
+      setDocView(nextPrefs.docView);
+    }
   };
 
   const applyList = (value) => {
@@ -2936,6 +3539,14 @@ function MineruApp(props) {
           toast(mruDocErrorMessage({ error: doc.parse.repairError }), 'error');
         } else if (doc.status === 'parsed') toast(t('toast.parsed', { title: doc.title || doc.originalName || '' }));
         else if (doc.status === 'failed') toast(t('toast.parseFailed', { message: mruDocErrorMessage(doc) }), 'error');
+        if (doc.status === 'parsed' && previous !== 'parsed'
+          && latestRef.current.prefs.graphAutoBuild && mruAiState(latestRef.current.status).graph
+          && !autoBuiltGraphsRef.current.has(doc.id)) {
+          autoBuiltGraphsRef.current.add(doc.id);
+          window.setTimeout(() => {
+            if (mountedRef.current) void buildDocGraph(doc.id);
+          }, 800);
+        }
       }
     }
     prevStatusesRef.current = nextStatuses;
@@ -3086,7 +3697,22 @@ function MineruApp(props) {
     clearDocumentState(id);
     setSelectedId(id);
     setDetail(null);
-    setMarginTab(pendingMarginTabRef.current || 'outline');
+    if (docGraphAbortRef.current) {
+      docGraphAbortRef.current.abort();
+      docGraphAbortRef.current = null;
+    }
+    docGraphDirtyRef.current = false;
+    setDocGraph({ phase: 'idle', docId: id, graph: null, building: false, progress: null, error: '', available: true });
+    setAiSelectionContext(null);
+    setAiParagraphContext(null);
+    setAiVisible(null);
+    setAiContextMuted(false);
+    aiContextMutedRef.current = false;
+    setFlashBlock(null);
+    pendingJumpRef.current = null;
+    const initialTab = pendingMarginTabRef.current
+      || (latestRef.current.prefs.aiPanelOpen ? 'ai' : (latestRef.current.prefs.marginTab || 'outline'));
+    setMarginTab(MRU_MARGIN_TABS.includes(initialTab) ? initialTab : 'outline');
     pendingMarginTabRef.current = null;
     try {
       const value = await mruPost('library.get', { id });
@@ -3728,6 +4354,399 @@ function MineruApp(props) {
     else toast(t('translate.partial', { done: ok, failed }), 'error');
   };
 
+  // --- AI integration: view switches, conversation context, graphs --------
+  // Own the AI state that the chat panel (MruAiPanel) and graph view
+  // (MruGraphView) receive as props; the modules stay presentational.
+
+  const docGraphEnabled = () => mruAiState(latestRef.current.status).graph;
+
+  /** Persist and adopt the library/dock view switches. */
+  const changeLibraryView = (view) => {
+    if (!MRU_LIBRARY_VIEWS.includes(view) || latestRef.current.libraryView === view) return;
+    setLibraryView(view);
+    mruWriteNavState({ libraryView: view });
+    void updatePrefs({ libraryView: view });
+    if (view === 'graph') void loadLibraryGraph();
+  };
+
+  const changeDocView = (view) => {
+    if (!MRU_DOC_VIEWS.includes(view) || latestRef.current.docView === view) return;
+    setDocView(view);
+    if (view === 'graph') {
+      const id = latestRef.current.selectedId;
+      if (id) void loadDocGraph(id);
+    }
+    void updatePrefs({ docView: view });
+  };
+
+  const changeMarginTab = (tab) => {
+    if (!MRU_MARGIN_TABS.includes(tab) || latestRef.current.marginTab === tab) return;
+    setMarginTab(tab);
+    mruWriteNavState({ marginTab: tab });
+    void updatePrefs({ marginTab: tab, aiPanelOpen: tab === 'ai' });
+  };
+
+  /** Open the margin conversation (quick actions / Cmd-J). */
+  const openAiPanel = () => {
+    if (latestRef.current.libraryView === 'graph') {
+      setLibraryView('library');
+      void updatePrefs({ libraryView: 'library' });
+    }
+    setMarginTab('ai');
+    setMarginOpen(true);
+    setAiFocusSeq((value) => value + 1);
+    setAiContextMuted(false);
+    aiContextMutedRef.current = false;
+    mruWriteNavState({ marginTab: 'ai' });
+    void updatePrefs({ marginTab: 'ai', aiPanelOpen: true });
+    // The chat module owns its composer: focus it once the panel has mounted.
+    window.setTimeout(() => {
+      const root = rootRef.current;
+      if (!root || typeof root.querySelector !== 'function') return;
+      const input = root.querySelector('textarea.mru-ai__input, input.mru-ai__input');
+      if (input && typeof input.focus === 'function') input.focus();
+    }, 80);
+  };
+
+  const askBlockAi = (block) => {
+    if (!block || typeof block.key !== 'string') return;
+    setAiParagraphContext({ blockKey: block.key, text: String(block.plainText || '').slice(0, 800) });
+    openAiPanel();
+  };
+
+  const askSelectionAi = () => {
+    const info = latestRef.current.selection;
+    if (!info) return;
+    setAiSelectionContext({ blockKey: info.blockKey, quote: info.quote, start: info.start, end: info.end });
+    setSelection(null);
+    setSelCard(null);
+    setBlockCard(null);
+    openAiPanel();
+  };
+
+  const askGraphNode = (node) => {
+    if (!node || typeof node !== 'object') return;
+    const label = typeof node.label === 'string' ? node.label : '';
+    const summary = typeof node.summary === 'string' ? node.summary : '';
+    const quote = summary !== '' ? `${label}：${summary}` : label;
+    const blockKey = Array.isArray(node.blockKeys) && typeof node.blockKeys[0] === 'string' ? node.blockKeys[0] : '';
+    const documentId = (typeof node.documentId === 'string' && node.documentId !== '' ? node.documentId : '')
+      || (Array.isArray(node.documentIds) && typeof node.documentIds[0] === 'string' ? node.documentIds[0] : '')
+      || latestRef.current.selectedId;
+    if (latestRef.current.libraryView === 'graph') {
+      setLibraryView('library');
+      void updatePrefs({ libraryView: 'library' });
+    }
+    if (documentId && latestRef.current.selectedId !== documentId) void selectDoc(documentId);
+    setAiSelectionContext({ blockKey, quote: quote.slice(0, MRU_MAX_QUOTE), start: 0, end: 0 });
+    openAiPanel();
+  };
+
+  const clearAiContext = (kind) => {
+    if (kind === 'selection') {
+      setAiSelectionContext(null);
+      return;
+    }
+    setAiParagraphContext(null);
+    setAiVisible(null);
+    setAiContextMuted(true);
+    aiContextMutedRef.current = true;
+  };
+
+  const flashBlockNow = (blockKey) => {
+    if (!blockKey) return;
+    setFlashBlock(blockKey);
+    if (flashBlockTimerRef.current) clearTimeout(flashBlockTimerRef.current);
+    flashBlockTimerRef.current = setTimeout(() => {
+      flashBlockTimerRef.current = null;
+      if (mountedRef.current) setFlashBlock(null);
+    }, 1600);
+  };
+
+  /** Scroll the paper to a block (from a citation or a graph node) and flash it. */
+  const jumpToBlock = (blockKey, documentId) => {
+    if (!blockKey || typeof blockKey !== 'string') return;
+    const state = latestRef.current;
+    const targetDoc = documentId || state.selectedId;
+    if (state.libraryView === 'graph') {
+      setLibraryView('library');
+      void updatePrefs({ libraryView: 'library' });
+    }
+    if (documentId && state.selectedId !== documentId) {
+      pendingJumpRef.current = { documentId, blockKey };
+      void selectDoc(documentId);
+      return;
+    }
+    if (state.docView !== 'read') {
+      pendingJumpRef.current = { documentId: targetDoc, blockKey };
+      setDocView('read');
+      void updatePrefs({ docView: 'read' });
+      return;
+    }
+    const body = bodyRef.current;
+    let element = null;
+    if (body) {
+      try {
+        element = body.querySelector(`[data-block-key="${String(blockKey).replace(/"/g, '\\"')}"]`);
+      } catch {
+        element = null;
+      }
+    }
+    if (!element) {
+      pendingJumpRef.current = { documentId: targetDoc, blockKey };
+      return;
+    }
+    mruScrollToElement(element, 'center');
+    flashBlockNow(blockKey);
+    const related = (annotationsStoreRef.current || []).filter((annotation) => annotation && annotation.blockKey === blockKey);
+    if (related.length > 0) flashAnnotation(related[related.length - 1].id);
+  };
+
+  /** Accept both documented graph onJump shapes: onJump(blockKey) / onJump(documentId, blockKey). */
+  const graphJump = (first, second) => {
+    if (typeof second === 'string' && second !== '') jumpToBlock(second, typeof first === 'string' ? first : undefined);
+    else if (typeof first === 'string') jumpToBlock(first, undefined);
+  };
+
+  /** Reload the persisted annotations for a document (AI answers add highlights). */
+  const reloadAnnotations = async (documentId) => {
+    const id = documentId || latestRef.current.selectedId;
+    if (!id) return;
+    try {
+      const value = await mruPost('library.get', { id });
+      if (!value || latestRef.current.selectedId !== id) return;
+      setDetail((previous) => {
+        if (!previous || !previous.document) return previous;
+        return {
+          ...previous,
+          document: value.document || previous.document,
+          annotations: Array.isArray(value.annotations) ? value.annotations : previous.annotations,
+        };
+      });
+    } catch {
+      /* annotation refresh is best-effort */
+    }
+  };
+
+  /** Q&A added graph knowledge: refresh the graph when it is on screen. */
+  const handleGraphDelta = () => {
+    docGraphDirtyRef.current = true;
+    const state = latestRef.current;
+    if (state.docView === 'graph' && state.selectedId) void loadDocGraph(state.selectedId);
+  };
+
+  const loadDocGraph = async (documentId) => {
+    const id = documentId || latestRef.current.selectedId;
+    if (!id) return;
+    if (!docGraphEnabled()) {
+      setDocGraph({ phase: 'unavailable', docId: id, graph: null, building: false, progress: null, error: '', available: false });
+      return;
+    }
+    setDocGraph((previous) => ({
+      phase: 'loading',
+      docId: id,
+      graph: previous.docId === id ? previous.graph : null,
+      building: false,
+      progress: null,
+      error: '',
+      available: true,
+    }));
+    try {
+      const value = await mruPost('graph.doc', { documentId: id });
+      const graph = value && value.graph ? value.graph : null;
+      setDocGraph({ phase: 'ready', docId: id, graph, building: false, progress: null, error: '', available: true });
+      docGraphDirtyRef.current = false;
+    } catch (error) {
+      const unavailable = Boolean(error && (error.code === 'ai-unavailable' || error.code === 'llm-unavailable' || error.code === 'ai-disabled'));
+      setDocGraph({
+        phase: unavailable ? 'unavailable' : 'error',
+        docId: id,
+        graph: null,
+        building: false,
+        progress: null,
+        error: unavailable ? '' : mruErrorText(t, error),
+        available: !unavailable,
+      });
+    }
+  };
+
+  const buildDocGraph = async (documentId) => {
+    const id = documentId || latestRef.current.selectedId;
+    if (!id) return;
+    if (!docGraphEnabled()) {
+      setDocGraph((previous) => ({ ...previous, phase: 'unavailable', available: false, graph: null }));
+      toast(t('graph.unavailable'), 'error');
+      return;
+    }
+    if (docGraphAbortRef.current) docGraphAbortRef.current.abort();
+    const controller = new AbortController();
+    docGraphAbortRef.current = controller;
+    let sawGraph = false;
+    setDocGraph((previous) => ({
+      ...previous,
+      phase: previous.graph ? 'ready' : 'loading',
+      docId: id,
+      building: true,
+      progress: null,
+      error: '',
+      available: true,
+    }));
+    try {
+      await mruStreamNdjson('graph.build', { documentId: id, force: true }, {
+        signal: controller.signal,
+        onFrame: (frame) => {
+          if (!frame || typeof frame !== 'object') return;
+          if (frame.type === 'progress') {
+            setDocGraph((previous) => ({
+              ...previous,
+              building: true,
+              progress: {
+                phase: typeof frame.phase === 'string' ? frame.phase : '',
+                done: Number(frame.done) || 0,
+                total: Number(frame.total) || 0,
+              },
+            }));
+          } else if (frame.type === 'graph') {
+            sawGraph = true;
+            docGraphDirtyRef.current = false;
+            setDocGraph((previous) => ({
+              ...previous,
+              phase: 'ready',
+              graph: frame.graph || previous.graph,
+              available: true,
+              error: '',
+            }));
+          } else if (frame.type === 'error') {
+            setDocGraph((previous) => ({
+              ...previous,
+              building: false,
+              progress: null,
+              phase: previous.graph ? 'ready' : 'error',
+              error: typeof frame.message === 'string' && frame.message !== '' ? frame.message : t('graph.error'),
+            }));
+          }
+        },
+      });
+      setDocGraph((previous) => ({ ...previous, building: false, progress: null }));
+      if (sawGraph) toast(t('toast.graphBuilt'));
+    } catch (error) {
+      if (error && error.code === 'aborted') {
+        setDocGraph((previous) => ({ ...previous, building: false, progress: null }));
+        return;
+      }
+      const unavailable = Boolean(error && (error.code === 'ai-unavailable' || error.code === 'llm-unavailable' || error.code === 'ai-disabled'));
+      setDocGraph((previous) => ({
+        ...previous,
+        building: false,
+        progress: null,
+        available: !unavailable,
+        phase: previous.graph ? 'ready' : (unavailable ? 'unavailable' : 'error'),
+        error: unavailable ? '' : mruErrorText(t, error),
+      }));
+      toast(mruErrorText(t, error), 'error');
+    } finally {
+      if (docGraphAbortRef.current === controller) docGraphAbortRef.current = null;
+    }
+  };
+
+  const loadLibraryGraph = async () => {
+    if (!docGraphEnabled()) {
+      setLibraryGraph({ phase: 'unavailable', graph: null, building: false, progress: null, error: '', available: false });
+      return;
+    }
+    setLibraryGraph((previous) => ({
+      phase: 'loading',
+      graph: previous.graph,
+      building: false,
+      progress: null,
+      error: '',
+      available: true,
+    }));
+    try {
+      const value = await mruPost('graph.library', {});
+      setLibraryGraph({ phase: 'ready', graph: value && value.graph ? value.graph : null, building: false, progress: null, error: '', available: true });
+    } catch (error) {
+      const unavailable = Boolean(error && (error.code === 'ai-unavailable' || error.code === 'llm-unavailable' || error.code === 'ai-disabled'));
+      setLibraryGraph({
+        phase: unavailable ? 'unavailable' : 'error',
+        graph: null,
+        building: false,
+        progress: null,
+        error: unavailable ? '' : mruErrorText(t, error),
+        available: !unavailable,
+      });
+    }
+  };
+
+  const rebuildLibraryGraph = async () => {
+    if (!docGraphEnabled()) {
+      setLibraryGraph((previous) => ({ ...previous, phase: 'unavailable', available: false, graph: null }));
+      toast(t('graph.unavailable'), 'error');
+      return;
+    }
+    if (libraryGraphAbortRef.current) libraryGraphAbortRef.current.abort();
+    const controller = new AbortController();
+    libraryGraphAbortRef.current = controller;
+    let sawGraph = false;
+    setLibraryGraph((previous) => ({
+      ...previous,
+      phase: previous.graph ? 'ready' : 'loading',
+      building: true,
+      progress: null,
+      error: '',
+      available: true,
+    }));
+    try {
+      await mruStreamNdjson('graph.library.rebuild', {}, {
+        signal: controller.signal,
+        onFrame: (frame) => {
+          if (!frame || typeof frame !== 'object') return;
+          if (frame.type === 'progress') {
+            setLibraryGraph((previous) => ({
+              ...previous,
+              building: true,
+              progress: {
+                phase: typeof frame.phase === 'string' ? frame.phase : '',
+                done: Number(frame.done) || 0,
+                total: Number(frame.total) || 0,
+              },
+            }));
+          } else if (frame.type === 'graph') {
+            sawGraph = true;
+            setLibraryGraph((previous) => ({ ...previous, phase: 'ready', graph: frame.graph || previous.graph, available: true, error: '' }));
+          } else if (frame.type === 'error') {
+            setLibraryGraph((previous) => ({
+              ...previous,
+              building: false,
+              progress: null,
+              phase: previous.graph ? 'ready' : 'error',
+              error: typeof frame.message === 'string' && frame.message !== '' ? frame.message : t('graph.error'),
+            }));
+          }
+        },
+      });
+      setLibraryGraph((previous) => ({ ...previous, building: false, progress: null }));
+      if (sawGraph) toast(t('toast.graphBuilt'));
+    } catch (error) {
+      if (error && error.code === 'aborted') {
+        setLibraryGraph((previous) => ({ ...previous, building: false, progress: null }));
+        return;
+      }
+      const unavailable = Boolean(error && (error.code === 'ai-unavailable' || error.code === 'llm-unavailable' || error.code === 'ai-disabled'));
+      setLibraryGraph((previous) => ({
+        ...previous,
+        building: false,
+        progress: null,
+        available: !unavailable,
+        phase: previous.graph ? 'ready' : (unavailable ? 'unavailable' : 'error'),
+        error: unavailable ? '' : mruErrorText(t, error),
+      }));
+      toast(mruErrorText(t, error), 'error');
+    } finally {
+      if (libraryGraphAbortRef.current === controller) libraryGraphAbortRef.current = null;
+    }
+  };
+
   // --- preferences / settings -------------------------------------------
   const updatePrefs = async (patch) => {
     const previous = latestRef.current.prefs;
@@ -3900,6 +4919,12 @@ function MineruApp(props) {
           if (typeof input.select === 'function') input.select();
         }
       }, 0);
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && String(event.key).toLowerCase() === 'j') {
+      if (!latestRef.current.selectedId) return;
+      event.preventDefault();
+      apiRef.current.openAiPanel();
     }
   };
 
@@ -3963,6 +4988,16 @@ function MineruApp(props) {
     toasts,
     dropActive,
     katexReady,
+    libraryView,
+    docView,
+    aiSelectionContext,
+    aiParagraphContext,
+    aiVisible,
+    aiContextMuted,
+    aiFocusSeq,
+    docGraph,
+    libraryGraph,
+    flashBlock,
   };
 
   apiRef.current = {
@@ -3979,6 +5014,17 @@ function MineruApp(props) {
     translateAllBlocks,
     cancelTranslateAll,
     captureReaderSelection,
+    openAiPanel,
+    askSelectionAi,
+    changeLibraryView,
+    changeDocView,
+    changeMarginTab,
+    jumpToBlock,
+    loadDocGraph,
+    loadLibraryGraph,
+    buildDocGraph,
+    rebuildLibraryGraph,
+    reloadAnnotations,
   };
 
   // --- derived state -----------------------------------------------------
@@ -4144,6 +5190,20 @@ function MineruApp(props) {
         else break;
       }
       setActiveHeadingKey(active);
+      // Track the paragraph under the reading line so the AI panel can offer
+      // it as context. Throttled: queries during every scroll frame are costly.
+      const now = Date.now();
+      if (now - aiVisibleAtRef.current > 200) {
+        aiVisibleAtRef.current = now;
+        const visible = mruVisibleBlock(body, model, threshold);
+        if (visible) {
+          setAiVisible((previous) => (previous && previous.blockKey === visible.blockKey ? previous : visible));
+          if (aiContextMutedRef.current) {
+            aiContextMutedRef.current = false;
+            setAiContextMuted(false);
+          }
+        }
+      }
     };
     const onScroll = () => {
       if (frame === null) frame = window.requestAnimationFrame(update);
@@ -4317,6 +5377,63 @@ function MineruApp(props) {
     };
   }, []);
 
+  // Seed the AI context chip with the paragraph at the reading line.
+  React.useEffect(() => {
+    if (reader.phase !== 'ready' || !reader.model) return undefined;
+    const timer = window.setTimeout(() => {
+      const body = bodyRef.current;
+      const container = scrollRef.current;
+      if (!mountedRef.current || !body || !container) return;
+      const threshold = container.getBoundingClientRect().top + 72;
+      const visible = mruVisibleBlock(body, reader.model, threshold);
+      if (visible) {
+        setAiVisible(visible);
+        if (aiContextMutedRef.current) {
+          aiContextMutedRef.current = false;
+          setAiContextMuted(false);
+        }
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [reader.phase, reader.model, selectedId]);
+
+  // Lazy-load the document graph when its view is open (also retries once the
+  // AI engine becomes available after a host reload).
+  React.useEffect(() => {
+    if (docView !== 'graph' || !selectedId) return;
+    if (!mruAiState(latestRef.current.status).graph) return;
+    if (docGraph.docId !== selectedId || docGraph.phase === 'idle' || docGraph.phase === 'unavailable') {
+      void loadDocGraph(selectedId);
+    }
+  }, [docView, selectedId, docGraph.docId, docGraph.phase]);
+
+  // Lazy-load the library graph when its view is open.
+  React.useEffect(() => {
+    if (libraryView !== 'graph') return;
+    if (!mruAiState(latestRef.current.status).graph) return;
+    if (libraryGraph.phase === 'idle' || libraryGraph.phase === 'unavailable') void loadLibraryGraph();
+  }, [libraryView, libraryGraph.phase]);
+
+  // A citation / graph-node jump may arrive while the paper is still loading
+  // or while the graph view is open: replay it once the reader is ready.
+  React.useEffect(() => {
+    if (reader.phase !== 'ready' || docView !== 'read' || !selectedId) return undefined;
+    const pending = pendingJumpRef.current;
+    if (!pending || pending.documentId !== selectedId) return undefined;
+    pendingJumpRef.current = null;
+    const timer = window.setTimeout(() => {
+      if (mountedRef.current) jumpToBlock(pending.blockKey);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [reader.phase, docView, selectedId]);
+
+  // Unmount cleanup for graph streams and the citation flash timer.
+  React.useEffect(() => () => {
+    if (docGraphAbortRef.current) docGraphAbortRef.current.abort();
+    if (libraryGraphAbortRef.current) libraryGraphAbortRef.current.abort();
+    if (flashBlockTimerRef.current) clearTimeout(flashBlockTimerRef.current);
+  }, []);
+
   // --- popup content -----------------------------------------------------
   let menuItems = [];
   if (menu && menu.kind === 'topbar') {
@@ -4373,6 +5490,89 @@ function MineruApp(props) {
     }
   }
 
+  // --- AI / graph props --------------------------------------------------
+  const aiState = mruAiState(status);
+  const contextBlock = aiParagraphContext
+    || (!aiContextMuted ? aiVisible : null);
+  const aiPanelProps = selectedDoc ? {
+    t,
+    documentId: selectedDoc.id,
+    documentTitle: selectedDoc.title || selectedDoc.originalName || '',
+    modelLabel: mruAiModelLabel(status),
+    available: aiState.available,
+    katexReady,
+    context: {
+      visibleBlockKey: contextBlock ? contextBlock.blockKey : null,
+      visibleText: contextBlock ? (contextBlock.text || contextBlock.quote || '') : '',
+      selection: aiSelectionContext
+        ? { blockKey: aiSelectionContext.blockKey, quote: aiSelectionContext.quote }
+        : null,
+    },
+    selection: aiSelectionContext
+      ? { blockKey: aiSelectionContext.blockKey, quote: aiSelectionContext.quote }
+      : null,
+    onJump: (blockKey) => jumpToBlock(blockKey),
+    onAnnotationsChanged: () => { void reloadAnnotations(selectedDoc.id); },
+    onGraphDelta: () => handleGraphDelta(),
+    onOpenGraph: () => {
+      if (latestRef.current.libraryView === 'graph') {
+        setLibraryView('library');
+        void updatePrefs({ libraryView: 'library' });
+      }
+      changeDocView('graph');
+    },
+    post: mruPost,
+    streamChat: (request, handlers) => mruStreamNdjson('chat', request, {
+      onFrame: handlers && handlers.onFrame,
+      signal: handlers && handlers.signal,
+    }),
+    onNotify: (text, kind) => toast(text, kind),
+    onClearContext: (kind) => clearAiContext(kind),
+    focusSeq: aiFocusSeq,
+    onOpenSettings: openSettings,
+  } : null;
+  const docGraphViewProps = {
+    graph: docGraph.graph,
+    loading: docGraph.phase === 'loading',
+    building: Boolean(docGraph.building),
+    progress: docGraph.progress,
+    error: docGraph.error || '',
+    available: aiState.graph && docGraph.available !== false,
+    onJump: graphJump,
+    onAsk: askGraphNode,
+    onBuild: () => {
+      const id = latestRef.current.selectedId;
+      if (id) void buildDocGraph(id);
+    },
+    onRefresh: () => {
+      const id = latestRef.current.selectedId;
+      if (id) void loadDocGraph(id);
+    },
+    onUpdateGraph: (nodes, edges) => {
+      const id = latestRef.current.selectedId;
+      if (!id) return;
+      void mruPost('graph.update', { documentId: id, nodes: nodes || [], edges: edges || [] })
+        .then((value) => {
+          if (value && value.graph) {
+            setDocGraph((previous) => ({ ...previous, graph: value.graph, phase: 'ready', available: true, error: '' }));
+          }
+        })
+        .catch((error) => toast(mruErrorText(t, error), 'error'));
+    },
+  };
+  const libraryGraphViewProps = {
+    graph: libraryGraph.graph,
+    loading: libraryGraph.phase === 'loading',
+    building: Boolean(libraryGraph.building),
+    progress: libraryGraph.progress,
+    error: libraryGraph.error || '',
+    available: aiState.graph && libraryGraph.available !== false,
+    onJump: graphJump,
+    onAsk: askGraphNode,
+    onBuild: () => { void rebuildLibraryGraph(); },
+    onRefresh: () => { void loadLibraryGraph(); },
+  };
+
   const paperProps = {
     t,
     mode: prefs.readingMode,
@@ -4396,6 +5596,11 @@ function MineruApp(props) {
     onRetryTranslation: (block) => { void translateBlock(block, { force: true, reveal: true }); },
     onMarkClick: openAnnotationEditor,
     onCancelTranslateAll: cancelTranslateAll,
+    docView,
+    onDocViewChange: changeDocView,
+    graphView: docGraphViewProps,
+    flashBlock,
+    onAskBlock: askBlockAi,
   };
 
   const rootClassName = 'mru-root'
@@ -4423,6 +5628,8 @@ function MineruApp(props) {
       onOpenSettings: openSettings,
       railOpen,
       marginOpen,
+      libraryView,
+      onLibraryView: changeLibraryView,
     }),
     boot === 'error'
       ? h('div', { className: 'mru-banner mru-banner--warn', role: 'status' }, t('err.hostUnavailable'))
@@ -4437,7 +5644,13 @@ function MineruApp(props) {
         onSearch: setSearch,
         onClearSearch: () => setSearch(''),
         selectedId,
-        onSelectDoc: (id) => { void selectDoc(id); },
+        onSelectDoc: (id) => {
+          if (latestRef.current.libraryView === 'graph') {
+            setLibraryView('library');
+            void updatePrefs({ libraryView: 'library' });
+          }
+          void selectDoc(id);
+        },
         onDocMenu: openDocMenu,
         uploads,
         counts,
@@ -4457,6 +5670,8 @@ function MineruApp(props) {
         tokenConfigured: Boolean(status && status.tokenConfigured),
         scrollRef,
         paperProps,
+        libraryView,
+        libraryGraphProps: libraryGraphViewProps,
         onChooseFile: chooseFile,
         onImportUrl: () => {
           setImportUrlError('');
@@ -4481,10 +5696,11 @@ function MineruApp(props) {
           setReparseDoc(doc);
         },
       }),
-      selectedDoc ? h(MruMargin, {
+      selectedDoc && libraryView !== 'graph' ? h(MruMargin, {
         t,
         tab: marginTab,
-        onTabChange: setMarginTab,
+        onTabChange: changeMarginTab,
+        aiPanelProps,
         model: reader.model || null,
         docTitle: selectedDoc.title || selectedDoc.originalName || '',
         annotations,
@@ -4537,6 +5753,7 @@ function MineruApp(props) {
       onNote: selectionNote,
       onCopy: () => { void selectionCopy(); },
       onRemoveHighlight: removeHighlights,
+      onAskAi: askSelectionAi,
     }) : null,
     selCard ? h(MruSelcard, {
       t,

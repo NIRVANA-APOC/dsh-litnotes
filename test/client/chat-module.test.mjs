@@ -37,9 +37,14 @@ test('chat.js exports exactly the documented names, all mruAi/MruAi-prefixed', (
     .map((match) => match[1])
   assert.deepEqual(names.sort(), [
     'MruAiPanel',
+    'mruAiAspectLegendItems',
     'mruAiCitationMarkers',
+    'mruAiNavAwayFromLatest',
+    'mruAiNavCurrentMark',
+    'mruAiNavTargetScrollTop',
     'mruAiNormalizeMessages',
     'mruAiParseAnswer',
+    'mruAiQuestionMarks',
   ].sort())
   for (const name of names) assert.match(name, /^(mruAi|MruAi)/)
 })

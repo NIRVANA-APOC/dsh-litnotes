@@ -166,7 +166,11 @@ class FakeElement {
   focus() { activeElement = this }
   blur() { activeElement = null }
   select() {}
-  scrollTo() {}
+  scrollTo(options) {
+    if (options && typeof options === 'object' && Number.isFinite(Number(options.top))) {
+      this.scrollTop = Number(options.top)
+    }
+  }
   scrollIntoView() {}
   setSelectionRange() {}
   addEventListener(name, fn) {
@@ -391,6 +395,18 @@ function textOf(node) {
   visit(node)
   return text
 }
+function findAllInTree(root, className) {
+  const out = []
+  const visit = (node) => {
+    if (!node || typeof node === 'string') return
+    if (Array.isArray(node)) { node.forEach(visit); return }
+    if (node.nodeType === 1 && String(node.props.className || '').split(/\s+/).includes(className)) out.push(node)
+    visit(node.children)
+  }
+  visit(root)
+  return out
+}
+
 function findButtonByText(fragment) {
   let found = null
   walk(tree, (element) => {
@@ -439,6 +455,12 @@ const LIBRARY_GRAPH = {
     { id: 't-1', type: 'topic', label: 'Attention' },
   ], edges: [{ id: 'e-1', from: 'p-1', to: 't-1', type: 'mentions' }],
 }
+const HISTORY_MESSAGES = [
+  { id: 'h-u1', role: 'user', question: 'What is the method?', createdAt: '2026-11-06T09:00:00.000Z' },
+  { id: 'h-a1', role: 'assistant', question: 'What is the method?', answer: 'It uses block-separator decomposition.', citations: [], unverified: [], followups: [], annotationIds: [], createdAt: '2026-11-06T09:00:01.000Z' },
+  { id: 'h-u2', role: 'user', question: 'What are the limitations?', createdAt: '2026-11-06T09:01:00.000Z' },
+  { id: 'h-a2', role: 'assistant', question: 'What are the limitations?', answer: 'Subgraph matching remains expensive.', citations: [], unverified: [], followups: [], annotationIds: [], createdAt: '2026-11-06T09:01:01.000Z' },
+]
 const calls = []
 const settingsUpdates = []
 function envelope(value) {
@@ -504,7 +526,7 @@ async function mockFetch(url, options) {
       { type: 'graph', graph: LIBRARY_GRAPH },
       { type: 'done' },
     ])
-    case 'chat.history': return envelope({ messages: [] })
+    case 'chat.history': return envelope({ messages: HISTORY_MESSAGES })
     case 'chat.clear': return envelope({ cleared: true })
     case 'chat': {
       if (payload && payload.question === 'FAIL') return errorEnvelope('ai-unavailable', 'No model route', 503)
@@ -677,6 +699,109 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     assert.ok(settingsUpdates.length > before, 'Cmd/Ctrl+J must persist AI panel state')
     assert.equal(settingsUpdates[settingsUpdates.length - 1].aiPanelOpen, true, 'Cmd/Ctrl+J must open the AI panel')
     assert.ok(first('mru-ai'), 'AI panel surface must be visible after Cmd/Ctrl+J')
+  })
+
+  await t.test('resizable rail: drag, keyboard and remembered layout', async () => {
+    const resizer = first('mru-resizer--rail')
+    assert.ok(resizer, 'rail resizer must render')
+    assert.equal(resizer.attrs.role, 'separator', 'resizer must be an ARIA separator')
+    assert.equal(resizer.attrs['aria-orientation'], 'vertical')
+    resizer.props.onPointerDown({ button: 0, clientX: 500, pointerId: 1, currentTarget: resizer, preventDefault() {} })
+    for (const listener of windowStub.listeners.get('pointermove') || []) listener({ clientX: 560 })
+    await settle(4)
+    const workspace = first('mru-workspace')
+    assert.equal(workspace.props.style['--mru-rail-width'], '348px', 'drag must grow the rail width')
+    for (const listener of windowStub.listeners.get('pointerup') || []) listener({})
+    await settle(3)
+    const stored = JSON.parse(windowStub.localStorage.getItem('dsh-litnotes:layout'))
+    assert.equal(stored.railWidth, 348, 'pointerup must persist the rail width')
+    assert.equal(first('mru-resizer--rail').props.onKeyDown !== undefined, true)
+    first('mru-resizer--rail').props.onKeyDown({ key: 'ArrowRight', preventDefault() {} })
+    await settle(3)
+    assert.equal(first('mru-workspace').props.style['--mru-rail-width'], '356px', 'ArrowRight must widen by 8px')
+    assert.equal(JSON.parse(windowStub.localStorage.getItem('dsh-litnotes:layout')).railWidth, 356)
+    first('mru-resizer--rail').props.onDoubleClick()
+    await settle(3)
+    assert.equal(first('mru-workspace').props.style['--mru-rail-width'], '288px', 'double-click must reset the rail width')
+    assert.equal(JSON.parse(windowStub.localStorage.getItem('dsh-litnotes:layout')).railWidth, 288)
+  })
+
+  await t.test('reading width presets share one --mru-doc-width', async () => {
+    const buttons = findAll('mru-runhead__width')
+    assert.equal(buttons.length, 4, 'runhead must expose four width presets')
+    assert.ok(buttons.some((button) => String(button.attrs['aria-pressed']) === 'true'), 'one preset is active')
+    const wide = buttons.find((button) => textOf(button).includes('layout.widthWide'))
+    assert.ok(wide, 'wide preset button must exist')
+    click(wide)
+    await settle(4)
+    assert.equal(rootElement ? rootElement.props.style['--mru-doc-width'] : tree[0].props.style['--mru-doc-width'], '1040px', 'preset must set --mru-doc-width on the root')
+    assert.equal(JSON.parse(windowStub.localStorage.getItem('dsh-litnotes:layout')).docWidth, 1040)
+    const active = findAll('mru-runhead__width').filter((button) => String(button.attrs['aria-pressed']) === 'true')
+    assert.equal(active.length, 1, 'exactly one preset is pressed')
+    // Reading and graph views keep the same width variable (graph view switch does not reset it).
+    click(findButtonByText('reader.viewGraph'))
+    await settle(10)
+    assert.equal(tree[0].props.style['--mru-doc-width'], '1040px', 'graph view must keep the reading width')
+    click(findButtonByText('reader.viewRead'))
+    await settle(6)
+  })
+
+  await t.test('aspect legends: margin header + runhead popover', async () => {
+    const notesTab = findButtonByText('margin.notes')
+    assert.ok(notesTab, 'notes tab must exist')
+    click(notesTab)
+    await settle(4)
+    const marginLegend = first('mru-margin__legend')
+    assert.ok(marginLegend, 'margin header must show the aspect legend')
+    assert.equal(findAllInTree(marginLegend, 'mru-aspect-legend__item').length, 5)
+    for (const aspect of ['definition', 'context', 'method', 'result', 'limitation']) {
+      assert.ok(findAllInTree(marginLegend, 'mru-aspect-legend__dot--' + aspect).length >= 1, `legend dot --${aspect}`)
+    }
+    const legendButton = first('mru-runhead__legend')
+    assert.ok(legendButton, 'runhead must have a legend trigger')
+    click(legendButton)
+    await settle(4)
+    const popover = first('mru-aspect-popover')
+    assert.ok(popover, 'legend popover must open')
+    assert.equal(findAllInTree(popover, 'mru-aspect-legend__item').length, 5)
+    assert.ok(textOf(popover).includes('aspect.legendHint'), 'popover must carry the one-line hint')
+    for (const listener of windowStub.listeners.get('keydown') || []) {
+      listener({ key: 'Escape', preventDefault() {}, stopPropagation() {}, target: rootElement || tree[0] })
+    }
+    await settle(4)
+    assert.equal(first('mru-aspect-popover'), null, 'Escape must close the legend popover')
+  })
+
+  await t.test('AI panel: question navigator, preview, jump flash, to-latest, legend', async () => {
+    const aiTab = findButtonByText('margin.ai')
+    if (aiTab) click(aiTab)
+    await settle(8)
+    const nav = first('mru-ai__nav')
+    assert.ok(nav, 'AI panel must show the question navigator with a two-question history')
+    const marks = findAll('mru-ai__nav-mark')
+    assert.equal(marks.length, 2, 'one mark per user question')
+    assert.ok(marks.some((mark) => String(mark.props.className || '').includes('is-current')), 'one mark is current')
+    marks[1].props.onFocus({})
+    await settle(3)
+    const preview = first('mru-ai__nav-preview')
+    assert.ok(preview, 'focusing a mark shows the preview card')
+    assert.ok(textOf(preview).includes('ai.navQuestion'), 'preview shows the ordinal copy')
+    click(marks[1])
+    await settle(4)
+    assert.ok(first('mru-ai__msg--flash'), 'jumping flashes the question message')
+    const messagesNode = first('mru-ai__messages')
+    messagesNode.scrollHeight = 1200
+    messagesNode.clientHeight = 300
+    messagesNode.scrollTop = 200
+    messagesNode.props.onScroll()
+    await settle(3)
+    assert.ok(first('mru-ai__toLatest'), 'scrolled-away panel shows the to-latest pill')
+    click(first('mru-ai__toLatest'))
+    await settle(4)
+    assert.equal(first('mru-ai__toLatest'), null, 'to-latest scrolls down and hides the pill')
+    const legend = first('mru-ai__legend')
+    assert.ok(legend, 'AI panel must show the aspect legend')
+    assert.equal(findAllInTree(legend, 'mru-aspect-legend__item').length, 5)
   })
 
   await t.test('chat module contract: history, streaming frames and error mapping', async () => {

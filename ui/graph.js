@@ -72,6 +72,12 @@ const MRU_GRAPH_TEXT = {
     'graph.ask': '问 AI 关于此概念',
     'graph.search': '搜索节点',
     'graph.legend': '节点类型',
+    'graph.aspectLegend': '批注颜色',
+    'graph.aspect.definition': '定义/背景',
+    'graph.aspect.method': '方法',
+    'graph.aspect.result': '结果',
+    'graph.aspect.limitation': '局限',
+    'graph.aspectHint': '黄色=定义/背景 · 绿色=方法 · 蓝色=结果 · 红色=局限',
     'graph.filters': '筛选',
     'graph.nodes': '{count} 个节点',
     'graph.edges': '{count} 条关系',
@@ -149,6 +155,12 @@ const MRU_GRAPH_TEXT = {
     'graph.ask': 'Ask AI about this concept',
     'graph.search': 'Search nodes',
     'graph.legend': 'Node types',
+    'graph.aspectLegend': 'Annotation colours',
+    'graph.aspect.definition': 'definition/context',
+    'graph.aspect.method': 'method',
+    'graph.aspect.result': 'result',
+    'graph.aspect.limitation': 'limitation',
+    'graph.aspectHint': 'yellow=definition/context · green=method · blue=result · red=limitation',
     'graph.filters': 'Filters',
     'graph.nodes': '{count} nodes',
     'graph.edges': '{count} edges',
@@ -229,6 +241,59 @@ function mruGraphNumber(value, fallback) {
 /** Clamp a finite number. */
 function mruGraphClamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Position the anchored node card next to a node inside the graph viewport.
+ *
+ * Pure and deterministic: every input is a number, so placement can be unit
+ * tested without a DOM. `node` is the node box's centre plus size in container
+ * coordinates; the result is clamped inside `container` with `padding` and
+ * prefers the right side, flipping left when the right side cannot fit.
+ *
+ * @param {{node: {x: number, y: number, width?: number, height?: number},
+ *   container: {width: number, height: number},
+ *   card: {width: number, height?: number},
+ *   gap?: number, padding?: number}} input
+ * @returns {{left: number, top: number, placement: 'right' | 'left'}}
+ */
+export function mruGraphAnchoredCardPosition(input) {
+  const data = input && typeof input === 'object' ? input : {};
+  const node = data.node && typeof data.node === 'object' ? data.node : {};
+  const container = data.container && typeof data.container === 'object' ? data.container : {};
+  const card = data.card && typeof data.card === 'object' ? data.card : {};
+  const containerWidth = Math.max(1, mruGraphNumber(container.width, 0));
+  const containerHeight = Math.max(1, mruGraphNumber(container.height, 0));
+  const cardWidth = mruGraphClamp(mruGraphNumber(card.width, 300), 120,
+    Math.max(120, containerWidth - 16));
+  const cardHeight = mruGraphClamp(mruGraphNumber(card.height, 240), 80,
+    Math.max(80, containerHeight - 16));
+  const gap = Math.max(0, mruGraphNumber(data.gap, 10));
+  const padding = Math.max(0, mruGraphNumber(data.padding, 12));
+  const nodeX = mruGraphNumber(node.x, containerWidth / 2);
+  const nodeY = mruGraphNumber(node.y, containerHeight / 2);
+  const nodeWidth = Math.max(0, mruGraphNumber(node.width, 0));
+  const nodeHeight = Math.max(0, mruGraphNumber(node.height, 0));
+  const nodeRight = nodeX + nodeWidth / 2;
+  const nodeLeft = nodeX - nodeWidth / 2;
+  const roomRight = containerWidth - padding - (nodeRight + gap);
+  const roomLeft = (nodeLeft - gap) - padding;
+  let placement = 'right';
+  let left;
+  if (roomRight >= cardWidth || roomRight >= roomLeft) {
+    placement = 'right';
+    left = nodeRight + gap;
+  } else {
+    placement = 'left';
+    left = nodeLeft - gap - cardWidth;
+  }
+  left = mruGraphClamp(left, padding, Math.max(padding, containerWidth - cardWidth - padding));
+  const top = mruGraphClamp(
+    nodeY - cardHeight / 2,
+    padding,
+    Math.max(padding, containerHeight - cardHeight - padding),
+  );
+  return { left: Math.round(left), top: Math.round(top), placement };
 }
 
 /** Lowercase, CSS-safe-ish token used for node/edge types. */
@@ -1381,8 +1446,11 @@ export function MruGraphView(props) {
   const [view, setView] = React.useState({ x: 0, y: 0, k: 1 });
   const [pins, setPins] = React.useState({});
   const [hoverEdgeId, setHoverEdgeId] = React.useState(null);
+  const [cardPos, setCardPos] = React.useState(null);
 
   const svgRef = React.useRef(null);
+  const rootRef = React.useRef(null);
+  const cardRef = React.useRef(null);
   const nodeRefs = React.useRef({});
   const pinsRef = React.useRef({});
   const layoutCacheRef = React.useRef(null);
@@ -1451,6 +1519,50 @@ export function MruGraphView(props) {
   }, [visible, layout, pins]);
 
   const selected = selectedId ? visible.nodes.find((node) => node.id === selectedId) || null : null;
+
+  /**
+   * Measure the selected node on screen and place its card next to it.
+   * The card flips side near edges and is clamped to the graph viewport.
+   */
+  const placeCard = React.useCallback(() => {
+    if (!selectedId) {
+      setCardPos((previous) => (previous === null ? previous : null));
+      return;
+    }
+    const root = rootRef.current;
+    const nodeElement = nodeRefs.current[selectedId];
+    if (!root || !nodeElement
+      || typeof root.getBoundingClientRect !== 'function'
+      || typeof nodeElement.getBoundingClientRect !== 'function') return;
+    const rootRect = root.getBoundingClientRect();
+    if (!(rootRect.width > 0) || !(rootRect.height > 0)) return;
+    const nodeRect = nodeElement.getBoundingClientRect();
+    const cardElement = cardRef.current;
+    const cardWidth = cardElement && cardElement.offsetWidth > 0
+      ? cardElement.offsetWidth
+      : Math.min(300, rootRect.width - 24);
+    const cardHeight = cardElement && cardElement.offsetHeight > 0 ? cardElement.offsetHeight : 240;
+    const next = mruGraphAnchoredCardPosition({
+      node: {
+        x: nodeRect.left - rootRect.left + nodeRect.width / 2,
+        y: nodeRect.top - rootRect.top + nodeRect.height / 2,
+        width: nodeRect.width,
+        height: nodeRect.height,
+      },
+      container: { width: rootRect.width, height: rootRect.height },
+      card: { width: cardWidth, height: cardHeight },
+      gap: 10,
+      padding: 12,
+    });
+    setCardPos((previous) => (
+      previous !== null
+      && previous.left === next.left
+      && previous.top === next.top
+      && previous.placement === next.placement
+        ? previous
+        : next
+    ));
+  }, [selectedId]);
 
   const highlight = React.useMemo(() => {
     if (!selected) {
@@ -1529,6 +1641,36 @@ export function MruGraphView(props) {
   React.useEffect(() => {
     setCollapseMode(mode === 'library' ? 'auto' : 'none');
   }, [mode]);
+
+  // Keep the anchored card glued to its node while panning, zooming, resizing
+  // or re-laying out; cardPos in the deps re-measures once the card has size.
+  React.useLayoutEffect(() => {
+    placeCard();
+  }, [placeCard, view.x, view.y, view.k, layout, visible.nodes.length, cardPos]);
+
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver !== 'function') return undefined;
+    const observer = new ResizeObserver(() => placeCard());
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [placeCard]);
+
+  // Clicking outside the graph closes the popover (Esc and the close button
+  // still work; clicks on other nodes/edges are handled by the canvas).
+  React.useEffect(() => {
+    if (!selectedId || typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
+      return undefined;
+    }
+    const onPointerDown = (event) => {
+      const target = event && event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('.mru-graph__card')) return;
+      if (!target.closest('.mru-graph')) setSelectedId(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [selectedId]);
 
   React.useEffect(() => {
     if (!canvasShown) return undefined;
@@ -1885,6 +2027,31 @@ export function MruGraphView(props) {
     ? mruGraphH('div', { className: 'mru-graph__toolbar' },
       searchInput,
       mruGraphH('div', { className: 'mru-graph__filters' }, legend))
+    : null;
+
+  // Colour meanings must never rely on colour alone: every dot carries a text
+  // label (WCAG 1.4.1) and the exact mapping is repeated in the AI panel and
+  // the margin notes header.
+  const aspectLegendItems = ['definition', 'method', 'result', 'limitation'].map((aspect) => mruGraphH('span', {
+    key: aspect,
+    className: 'mru-aspect-legend__item',
+    'data-aspect': aspect,
+  },
+  mruGraphH('span', {
+    className: `mru-aspect-legend__dot mru-aspect-legend__dot--${aspect}`,
+    'aria-hidden': 'true',
+  }),
+  mruGraphH('span', { className: 'mru-aspect-legend__label' }, tr(`graph.aspect.${aspect}`))));
+
+  const aspectLegend = canvasShown && hasNodes
+    ? mruGraphH('div', {
+      className: 'mru-graph__aspect-legend',
+      role: 'group',
+      'aria-label': tr('graph.aspectLegend'),
+      title: tr('graph.aspectHint'),
+    },
+    mruGraphH('span', { className: 'mru-graph__aspect-legend-label' }, tr('graph.aspectLegend')),
+    aspectLegendItems)
     : null;
 
   // --- canvas -------------------------------------------------------------
@@ -2331,7 +2498,12 @@ export function MruGraphView(props) {
       }
     }
     card = mruGraphH('div', {
-      className: 'mru-graph__card',
+      ref: cardRef,
+      className: 'mru-graph__card' + (cardPos !== null ? ' mru-graph__card--anchored' : ''),
+      style: cardPos !== null
+        ? { left: `${cardPos.left}px`, top: `${cardPos.top}px`, right: 'auto', bottom: 'auto' }
+        : undefined,
+      'data-placement': cardPos !== null ? cardPos.placement : undefined,
       role: 'region',
       'aria-label': title,
       'data-node-id': selected.id,
@@ -2340,6 +2512,7 @@ export function MruGraphView(props) {
   }
 
   const root = mruGraphH('div', {
+    ref: rootRef,
     className: 'mru-graph',
     'data-mode': mode,
     'data-building': building ? 'true' : undefined,
@@ -2352,6 +2525,7 @@ export function MruGraphView(props) {
   header,
   progressElement,
   toolbar,
+  aspectLegend,
   emptyElement || canvas,
   status,
   card,

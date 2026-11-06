@@ -11,6 +11,7 @@ import {
   visibleGraph,
   layoutGraph,
   mruGraphActivePath,
+  mruGraphAnchoredCardPosition,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -359,4 +360,65 @@ test('mruGraphActivePath highlights a root-to-selection path and neighbourhood',
     relatedNodeIds: [],
     relatedEdgeIds: [],
   })
+})
+
+
+// ---------------------------------------------------------------------------
+// Anchored node popover placement (polish round: popover next to the node)
+// ---------------------------------------------------------------------------
+
+test('mruGraphAnchoredCardPosition places the card next to the node', () => {
+  const right = mruGraphAnchoredCardPosition({
+    node: { x: 200, y: 300, width: 20, height: 20 },
+    container: { width: 900, height: 600 },
+    card: { width: 300, height: 240 },
+  })
+  assert.equal(right.placement, 'right')
+  assert.equal(right.left, 220)
+  assert.equal(right.top, 180)
+  assert.ok(right.left + 300 <= 900)
+  assert.ok(right.top + 240 <= 600)
+
+  // Near the right edge the card flips to the left side.
+  const left = mruGraphAnchoredCardPosition({
+    node: { x: 800, y: 300, width: 20, height: 20 },
+    container: { width: 900, height: 600 },
+    card: { width: 300, height: 240 },
+  })
+  assert.equal(left.placement, 'left')
+  assert.ok(left.left >= 0)
+  assert.ok(left.left + 300 <= 800)
+  assert.equal(left.top, 180)
+})
+
+test('mruGraphAnchoredCardPosition clamps and never emits NaN', () => {
+  const top = mruGraphAnchoredCardPosition({
+    node: { x: 400, y: 2, width: 10, height: 10 },
+    container: { width: 700, height: 500 },
+    card: { width: 300, height: 240 },
+    padding: 12,
+  })
+  assert.equal(top.top, 12)
+  assert.ok(Number.isFinite(top.left))
+
+  const bottom = mruGraphAnchoredCardPosition({
+    node: { x: 400, y: 498, width: 10, height: 10 },
+    container: { width: 700, height: 500 },
+    card: { width: 300, height: 240 },
+    padding: 12,
+  })
+  assert.equal(bottom.top, 500 - 240 - 12)
+  assert.ok(['right', 'left'].includes(bottom.placement))
+
+  const tiny = mruGraphAnchoredCardPosition({
+    node: { x: 0, y: 0 },
+    container: { width: 200, height: 160 },
+    card: { width: 1000, height: 1000 },
+  })
+  assert.ok(Number.isFinite(tiny.left) && Number.isFinite(tiny.top))
+  assert.ok(tiny.left >= 0 && tiny.top >= 0)
+  assert.ok(['right', 'left'].includes(tiny.placement))
+
+  const malformed = mruGraphAnchoredCardPosition({})
+  assert.ok(Number.isFinite(malformed.left) && Number.isFinite(malformed.top))
 })

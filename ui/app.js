@@ -92,6 +92,24 @@ const MRU_LIBRARY_VIEWS = ['library', 'graph'];
 /** Paper runhead views: the reading paper or the per-document knowledge graph. */
 const MRU_DOC_VIEWS = ['read', 'graph'];
 
+/** Browser-stored reading-desk layout (UI-only state, like navigation memory). */
+const MRU_LAYOUT_KEY = 'dsh-litnotes:layout';
+const MRU_LAYOUT_DEFAULTS = Object.freeze({ railWidth: 288, marginWidth: 296, docWidth: 880 });
+const MRU_LAYOUT_LIMITS = Object.freeze({
+  rail: Object.freeze({ min: 220, max: 460 }),
+  margin: Object.freeze({ min: 240, max: 520 }),
+});
+/** Reading-width presets (px): 窄 / 标准 / 宽 / 全宽. */
+const MRU_DOC_WIDTH_PRESETS = Object.freeze([720, 880, 1040, 1200]);
+/** Aspect colour legend, single source of truth for the client legend rows. */
+const MRU_ASPECT_LEGEND = Object.freeze([
+  Object.freeze({ aspect: 'definition', color: 'yellow', labelKey: 'aspect.definition' }),
+  Object.freeze({ aspect: 'context', color: 'yellow', labelKey: 'aspect.context' }),
+  Object.freeze({ aspect: 'method', color: 'sage', labelKey: 'aspect.method' }),
+  Object.freeze({ aspect: 'result', color: 'sky', labelKey: 'aspect.result' }),
+  Object.freeze({ aspect: 'limitation', color: 'rose', labelKey: 'aspect.limitation' }),
+]);
+
 /** zh dictionary — primary copy deck (docs/UI-SPEC.md §5). */
 const ZH = {
   'panel.label': '文献库',
@@ -220,6 +238,21 @@ const ZH = {
   'settings.provider': '翻译服务',
   'settings.providerAuto': '自动',
   'settings.pageMarks': '显示页面标记',
+  'layout.resizeRail': '调整文献栏宽度',
+  'layout.resizeMargin': '调整页边宽度',
+  'layout.resizeHint': '拖动调整宽度，双击恢复默认',
+  'layout.widthGroup': '阅读宽度',
+  'layout.widthNarrow': '窄',
+  'layout.widthStandard': '标准',
+  'layout.widthWide': '宽',
+  'layout.widthFull': '全宽',
+  'aspect.legendTitle': '颜色图例',
+  'aspect.definition': '定义',
+  'aspect.context': '背景',
+  'aspect.method': '方法',
+  'aspect.result': '结果',
+  'aspect.limitation': '局限',
+  'aspect.legendHint': '高亮颜色表示批注的侧重：黄色为定义与背景，绿色为方法，蓝色为结果，玫红为局限。',
   'settings.graphAutoBuild': '解析完成后自动生成知识图谱',
   'settings.scale': '正文字号',
   'settings.sectionStorage': '存储',
@@ -510,6 +543,21 @@ const EN = {
   'settings.provider': 'Translation service',
   'settings.providerAuto': 'Auto',
   'settings.pageMarks': 'Show page marks',
+  'layout.resizeRail': 'Resize the library rail',
+  'layout.resizeMargin': 'Resize the margin',
+  'layout.resizeHint': 'Drag to resize, double-click to reset',
+  'layout.widthGroup': 'Reading width',
+  'layout.widthNarrow': 'Narrow',
+  'layout.widthStandard': 'Standard',
+  'layout.widthWide': 'Wide',
+  'layout.widthFull': 'Full',
+  'aspect.legendTitle': 'Colour legend',
+  'aspect.definition': 'Definition',
+  'aspect.context': 'Context',
+  'aspect.method': 'Method',
+  'aspect.result': 'Result',
+  'aspect.limitation': 'Limitation',
+  'aspect.legendHint': 'Highlight colours mark the annotation aspect: yellow for definitions and context, sage for methods, sky for results, rose for limitations.',
   'settings.graphAutoBuild': 'Build the knowledge graph after parsing',
   'settings.scale': 'Reading size',
   'settings.sectionStorage': 'Storage',
@@ -733,6 +781,70 @@ function mruWriteNavState(patch) {
   } catch {
     /* storage may be unavailable (private mode): navigation memory is best-effort */
   }
+}
+
+/**
+ * Read the remembered layout (rail/margin widths + reading width). Unknown or
+ * out-of-range values fall back to the defaults, so corrupted storage is safe.
+ */
+function mruLayoutRead() {
+  const defaults = { ...MRU_LAYOUT_DEFAULTS };
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return defaults;
+    const raw = window.localStorage.getItem(MRU_LAYOUT_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+    return {
+      railWidth: mruLayoutClamp(parsed.railWidth, MRU_LAYOUT_LIMITS.rail) ?? defaults.railWidth,
+      marginWidth: mruLayoutClamp(parsed.marginWidth, MRU_LAYOUT_LIMITS.margin) ?? defaults.marginWidth,
+      docWidth: mruLayoutDocWidth(parsed.docWidth),
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+/** Clamp one panel width to its limits; null when the input is not a number. */
+function mruLayoutClamp(value, limits) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return mruClamp(Math.round(number), limits.min, limits.max);
+}
+
+/** Normalize a reading-width value to one of the presets. */
+function mruLayoutDocWidth(value) {
+  const number = Number(value);
+  return MRU_DOC_WIDTH_PRESETS.includes(number) ? number : MRU_LAYOUT_DEFAULTS.docWidth;
+}
+
+/** Dictionary key for one reading-width preset. */
+function mruLayoutWidthLabelKey(width) {
+  if (width === 720) return 'layout.widthNarrow';
+  if (width === 1040) return 'layout.widthWide';
+  if (width === 1200) return 'layout.widthFull';
+  return 'layout.widthStandard';
+}
+
+/** Merge + persist a layout patch; returns the normalized layout it wrote. */
+function mruLayoutWrite(patch) {
+  const current = mruLayoutRead();
+  const next = { ...current };
+  if (patch && typeof patch === 'object') {
+    const rail = mruLayoutClamp(patch.railWidth, MRU_LAYOUT_LIMITS.rail);
+    if (rail !== null) next.railWidth = rail;
+    const margin = mruLayoutClamp(patch.marginWidth, MRU_LAYOUT_LIMITS.margin);
+    if (margin !== null) next.marginWidth = margin;
+    if (patch.docWidth !== undefined) next.docWidth = mruLayoutDocWidth(patch.docWidth);
+  }
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(MRU_LAYOUT_KEY, JSON.stringify(next));
+    }
+  } catch {
+    /* storage may be unavailable (private mode): memory is best-effort */
+  }
+  return next;
 }
 
 /** Clear the browser text selection (after a highlight/note action). */
@@ -2006,10 +2118,45 @@ function MruPaper(props) {
     onModeChange, onScaleDown, onScaleUp, onMoreMenu, onTranslateBlock, onAnnotateBlock,
     onRetryTranslation, onMarkClick, onCancelTranslateAll, onReparse,
     docView, onDocViewChange, graphView, flashBlock, onAskBlock,
+    docWidth, onDocWidthChange,
   } = props;
   const view = MRU_DOC_VIEWS.includes(docView) ? docView : 'read';
   const graph = graphView || {};
   const [unknownNoticeDismissed, setUnknownNoticeDismissed] = React.useState(false);
+  const [legendPopover, setLegendPopover] = React.useState(null);
+  const effectiveDocWidth = mruLayoutDocWidth(docWidth);
+  React.useEffect(() => {
+    if (!legendPopover) return undefined;
+    const onPointerDown = (event) => {
+      const target = event ? event.target : null;
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('.mru-aspect-popover') || target.closest('.mru-runhead__legend')) return;
+      setLegendPopover(null);
+    };
+    const onKeyDown = (event) => {
+      if (!event || event.key !== 'Escape') return;
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      setLegendPopover(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [legendPopover]);
+  const openLegend = (event) => {
+    let rect = null;
+    try {
+      const target = event && event.currentTarget;
+      rect = target && typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
+    } catch {
+      rect = null;
+    }
+    setLegendPopover({ rect });
+  };
+  const legendPos = legendPopover ? mruOverlayPos(legendPopover.rect, 332, 214) : null;
   const model = reader.model || { blocks: [], outline: [], stats: { blocks: 0, headings: 0, chars: 0, words: 0 } };
   const blocks = Array.isArray(model.blocks) ? model.blocks : [];
   const title = String(doc.title || doc.originalName || '');
@@ -2085,6 +2232,26 @@ function MruPaper(props) {
     h('header', { className: 'mru-paper__runhead' },
       h('div', { className: 'mru-paper__runhead-title' }, title),
       h('div', { className: 'mru-paper__runhead-actions' },
+        h('div', { className: 'mru-runhead__width-group', role: 'group', 'aria-label': t('layout.widthGroup') },
+          MRU_DOC_WIDTH_PRESETS.map((width) => h('button', {
+            key: width,
+            type: 'button',
+            className: 'mru-runhead__width' + (effectiveDocWidth === width ? ' mru-runhead__width--active' : ''),
+            'aria-pressed': effectiveDocWidth === width ? 'true' : 'false',
+            'aria-label': `${t(mruLayoutWidthLabelKey(width))} ${width}px`,
+            title: `${t(mruLayoutWidthLabelKey(width))} · ${width}px`,
+            onClick: () => {
+              if (typeof onDocWidthChange === 'function') onDocWidthChange(width);
+            },
+          }, t(mruLayoutWidthLabelKey(width))))),
+        h('button', {
+          type: 'button',
+          className: 'mru-btn mru-btn--ghost mru-btn--sm mru-runhead__legend',
+          'aria-haspopup': 'dialog',
+          'aria-expanded': legendPopover ? 'true' : 'false',
+          title: t('aspect.legendTitle'),
+          onClick: openLegend,
+        }, h(MruGlyph, { name: 'spark', size: 13 }), t('aspect.legendTitle')),
         h('div', { className: 'mru-segmented mru-segmented--view', role: 'group', 'aria-label': t('reader.viewGroup') },
           h('button', {
             type: 'button',
@@ -2161,7 +2328,26 @@ function MruPaper(props) {
           onMouseUp: onReaderMouseUp,
           onKeyUp: onReaderKeyUp,
         }, body)
-        : body));
+        : body),
+    legendPopover && legendPos
+      ? h('div', {
+        className: 'mru-aspect-popover',
+        role: 'dialog',
+        'aria-label': t('aspect.legendTitle'),
+        style: { left: `${legendPos.left}px`, top: `${legendPos.top}px` },
+      },
+        h('div', { className: 'mru-aspect-popover__head' },
+          h('span', { className: 'mru-aspect-popover__title' }, t('aspect.legendTitle')),
+          h('button', {
+            type: 'button',
+            className: 'mru-icon-btn',
+            'aria-label': t('settings.close'),
+            title: t('settings.close'),
+            onClick: () => setLegendPopover(null),
+          }, '×')),
+        h('p', { className: 'mru-aspect-popover__hint' }, t('aspect.legendHint')),
+        h(MruAspectLegend, { t }))
+      : null);
 }
 
 /** Centered "loading the parsed draft…" state (shown after a 400ms delay). */
@@ -2633,6 +2819,93 @@ function MruRail(props) {
       t('rail.foot', { count: counts.total || 0, parsed: counts.parsed || 0 })));
 }
 
+/** Aspect colour legend row: dot + always-visible text label (docs/UI-POLISH-SPEC.md §5). */
+function MruAspectLegend(props) {
+  const { t } = props;
+  const className = 'mru-aspect-legend' + (props.className ? ` ${props.className}` : '');
+  return h('div', { className, role: 'list' },
+    MRU_ASPECT_LEGEND.map((entry) => h('span', {
+      key: entry.aspect,
+      className: 'mru-aspect-legend__item',
+      role: 'listitem',
+      title: t(entry.labelKey),
+    },
+      h('span', {
+        className: 'mru-aspect-legend__dot mru-aspect-legend__dot--' + entry.aspect,
+        'aria-hidden': 'true',
+      }),
+      h('span', { className: 'mru-aspect-legend__label' }, t(entry.labelKey)))));
+}
+
+/**
+ * Draggable panel divider between rail/main and main/margin.
+ * Pointer drag updates live; pointerup persists through the parent. Arrow keys
+ * move the divider by 8px, double-click restores the default width.
+ */
+function MruResizer(props) {
+  const { t, kind, value, active, onChange, onReset, onDragStart, onDragEnd } = props;
+  const limits = kind === 'rail' ? MRU_LAYOUT_LIMITS.rail : MRU_LAYOUT_LIMITS.margin;
+  const fallback = kind === 'rail' ? MRU_LAYOUT_DEFAULTS.railWidth : MRU_LAYOUT_DEFAULTS.marginWidth;
+  const label = t(kind === 'rail' ? 'layout.resizeRail' : 'layout.resizeMargin');
+  const current = Math.round(Number(value) || fallback);
+  const apply = (width, persist) => {
+    if (typeof onChange === 'function') onChange(mruClamp(Math.round(width), limits.min, limits.max), Boolean(persist));
+  };
+  const onPointerDown = (event) => {
+    if (!event || (event.button !== undefined && event.button !== 0)) return;
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    const startX = Number(event.clientX) || 0;
+    const startWidth = current;
+    if (typeof onDragStart === 'function') onDragStart();
+    const element = event.currentTarget;
+    try {
+      if (element && typeof element.setPointerCapture === 'function' && event.pointerId !== undefined) {
+        element.setPointerCapture(event.pointerId);
+      }
+    } catch {
+      /* pointer capture is an enhancement only */
+    }
+    const onMove = (moveEvent) => {
+      const delta = (Number(moveEvent.clientX) || startX) - startX;
+      apply(kind === 'rail' ? startWidth + delta : startWidth - delta, false);
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', finish, true);
+      window.removeEventListener('pointercancel', finish, true);
+      if (typeof onDragEnd === 'function') onDragEnd();
+    };
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', finish, true);
+    window.addEventListener('pointercancel', finish, true);
+  };
+  const onKeyDown = (event) => {
+    const key = event && event.key;
+    if (key !== 'ArrowLeft' && key !== 'ArrowRight') return;
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    const step = key === 'ArrowRight' ? 8 : -8;
+    apply(kind === 'rail' ? current + step : current - step, true);
+  };
+  return h('div', {
+    className: 'mru-resizer mru-resizer--' + kind + (active ? ' mru-resizer--active' : ''),
+    role: 'separator',
+    'aria-orientation': 'vertical',
+    'aria-label': label,
+    'aria-valuenow': current,
+    'aria-valuemin': limits.min,
+    'aria-valuemax': limits.max,
+    'aria-valuetext': `${label} ${current}px`,
+    title: t('layout.resizeHint'),
+    tabIndex: 0,
+    'data-resizer': kind,
+    onPointerDown,
+    onKeyDown,
+    onDoubleClick: () => {
+      if (typeof onReset === 'function') onReset();
+    },
+  });
+}
+
 /** Right margin: outline ticks and annotation cards. */
 function MruMargin(props) {
   const {
@@ -2726,6 +2999,9 @@ function MruMargin(props) {
         'aria-selected': activeTab === 'ai' ? 'true' : 'false',
         onClick: () => onTabChange('ai'),
       }, h(MruGlyph, { name: 'spark', size: 13 }), h('span', { className: 'mru-tab__label' }, t('margin.ai')))),
+    activeTab === 'notes'
+      ? h('div', { className: 'mru-margin__legend' }, h(MruAspectLegend, { t }))
+      : null,
     h('div', { className: 'mru-margin__body' }, body));
 }
 
@@ -3433,6 +3709,9 @@ function MineruApp(props) {
   const [docGraph, setDocGraph] = React.useState({ phase: 'idle', docId: null, graph: null, building: false, progress: null, error: '', available: true });
   const [libraryGraph, setLibraryGraph] = React.useState({ phase: 'idle', graph: null, building: false, progress: null, error: '', available: true });
   const [flashBlock, setFlashBlock] = React.useState(null);
+  // Layout polish (docs/UI-POLISH-SPEC.md §2/§4): resizable panels + reading width.
+  const [layout, setLayout] = React.useState(() => mruLayoutRead());
+  const [resizing, setResizing] = React.useState(false);
 
   // --- refs --------------------------------------------------------------
   const rootRef = React.useRef(null);
@@ -3480,6 +3759,7 @@ function MineruApp(props) {
   const autoBuiltGraphsRef = React.useRef(new Set());
   const aiContextMutedRef = React.useRef(false);
   const aiVisibleAtRef = React.useRef(0);
+  const layoutRef = React.useRef(layout);
 
   // --- toasts ------------------------------------------------------------
   const toast = (text, kind) => {
@@ -4747,6 +5027,51 @@ function MineruApp(props) {
     }
   };
 
+  // --- layout: resizable panels + reading width --------------------------
+  layoutRef.current = layout;
+
+  const mruLayoutTarget = (kind) => (kind === 'rail'
+    ? { key: 'railWidth', limits: MRU_LAYOUT_LIMITS.rail }
+    : { key: 'marginWidth', limits: MRU_LAYOUT_LIMITS.margin });
+
+  const applyLayoutWidth = (kind, width, persist) => {
+    const target = mruLayoutTarget(kind);
+    const clamped = mruLayoutClamp(width, target.limits);
+    if (clamped === null) return;
+    setLayout((previous) => (previous[target.key] === clamped ? previous : { ...previous, [target.key]: clamped }));
+    if (persist === true) {
+      layoutRef.current = { ...(layoutRef.current || MRU_LAYOUT_DEFAULTS), [target.key]: clamped };
+      mruLayoutWrite({ [target.key]: clamped });
+    }
+  };
+
+  /** Persist the current widths (pointerup / keyboard / double-click reset). */
+  const persistLayout = () => {
+    const current = layoutRef.current || MRU_LAYOUT_DEFAULTS;
+    mruLayoutWrite({ railWidth: current.railWidth, marginWidth: current.marginWidth });
+  };
+
+  const resetLayoutWidth = (kind) => {
+    const target = mruLayoutTarget(kind);
+    const fallback = MRU_LAYOUT_DEFAULTS[target.key];
+    setLayout((previous) => (previous[target.key] === fallback ? previous : { ...previous, [target.key]: fallback }));
+    layoutRef.current = { ...(layoutRef.current || MRU_LAYOUT_DEFAULTS), [target.key]: fallback };
+    mruLayoutWrite({ [target.key]: fallback });
+  };
+
+  const setDocWidth = (width) => {
+    const next = mruLayoutDocWidth(width);
+    setLayout((previous) => (previous.docWidth === next ? previous : { ...previous, docWidth: next }));
+    layoutRef.current = { ...(layoutRef.current || MRU_LAYOUT_DEFAULTS), docWidth: next };
+    mruLayoutWrite({ docWidth: next });
+  };
+
+  const beginResize = () => setResizing(true);
+  const endResize = () => {
+    setResizing(false);
+    persistLayout();
+  };
+
   // --- preferences / settings -------------------------------------------
   const updatePrefs = async (patch) => {
     const previous = latestRef.current.prefs;
@@ -4998,6 +5323,8 @@ function MineruApp(props) {
     docGraph,
     libraryGraph,
     flashBlock,
+    layout,
+    resizing,
   };
 
   apiRef.current = {
@@ -5601,14 +5928,25 @@ function MineruApp(props) {
     graphView: docGraphViewProps,
     flashBlock,
     onAskBlock: askBlockAi,
+    docWidth: layout.docWidth,
+    onDocWidthChange: setDocWidth,
   };
 
   const rootClassName = 'mru-root'
     + (railOpen ? ' mru-root--rail-open' : '')
     + (marginOpen ? ' mru-root--margin-open' : '')
-    + (dropActive ? ' mru-root--dragging' : '');
+    + (dropActive ? ' mru-root--dragging' : '')
+    + (resizing ? ' mru-root--resizing' : '');
   const dataStatus = boot === 'loading' ? 'idle' : boot === 'error' ? 'error' : 'ready';
-  const rootStyle = { '--mru-read-scale': String(prefs.readingScale || 1) };
+  const rootStyle = {
+    '--mru-read-scale': String(prefs.readingScale || 1),
+    '--mru-doc-width': `${mruLayoutDocWidth(layout.docWidth)}px`,
+  };
+  const showMargin = Boolean(selectedDoc) && libraryView !== 'graph';
+  const workspaceStyle = {
+    '--mru-rail-width': `${layout.railWidth}px`,
+    '--mru-margin-width': `${layout.marginWidth}px`,
+  };
 
   // --- render ------------------------------------------------------------
   return h('div', {
@@ -5634,7 +5972,7 @@ function MineruApp(props) {
     boot === 'error'
       ? h('div', { className: 'mru-banner mru-banner--warn', role: 'status' }, t('err.hostUnavailable'))
       : null,
-    h('div', { className: 'mru-workspace' },
+    h('div', { className: 'mru-workspace', style: workspaceStyle },
       h(MruRail, {
         t,
         docs: filteredDocs,
@@ -5655,6 +5993,16 @@ function MineruApp(props) {
         uploads,
         counts,
         searchRef,
+      }),
+      h(MruResizer, {
+        t,
+        kind: 'rail',
+        value: layout.railWidth,
+        active: resizing,
+        onChange: (width, persist) => applyLayoutWidth('rail', width, persist),
+        onReset: () => resetLayoutWidth('rail'),
+        onDragStart: beginResize,
+        onDragEnd: endResize,
       }),
       h(MruMain, {
         t,
@@ -5696,7 +6044,17 @@ function MineruApp(props) {
           setReparseDoc(doc);
         },
       }),
-      selectedDoc && libraryView !== 'graph' ? h(MruMargin, {
+      showMargin ? h(MruResizer, {
+        t,
+        kind: 'margin',
+        value: layout.marginWidth,
+        active: resizing,
+        onChange: (width, persist) => applyLayoutWidth('margin', width, persist),
+        onReset: () => resetLayoutWidth('margin'),
+        onDragStart: beginResize,
+        onDragEnd: endResize,
+      }) : null,
+      showMargin ? h(MruMargin, {
         t,
         tab: marginTab,
         onTabChange: changeMarginTab,

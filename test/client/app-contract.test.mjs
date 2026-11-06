@@ -37,6 +37,8 @@ test('app.js exposes the helper contract consumed by ui/chat.js and ui/graph.js'
     'mruScrollToElement', 'mruFormatCount', 'mruDisplayText', 'mruErrorText',
     'MruRichText', 'MruFormula', 'MruGlyph', 'MruSpinner', 'mruOverlayPos',
     'mruStreamNdjson', 'mruAiState', 'mruAiModelLabel',
+    'mruLayoutRead', 'mruLayoutWrite', 'mruLayoutClamp', 'mruLayoutDocWidth',
+    'mruLayoutWidthLabelKey', 'MruResizer', 'MruAspectLegend',
   ]
   for (const name of functions) {
     assert.match(app, new RegExp(`(?:^|\\n)(?:async\\s+)?function\\s+${name}\\s*\\(`), `${name} must be a top-level function declaration`)

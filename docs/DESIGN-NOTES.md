@@ -71,12 +71,15 @@ Other host tokens used directly (not re-exported): `--dsw-alias-interactive-bg-h
 
 ### Space, radius, motion
 
-- 4px base grid; rail 288px; margin 296px; topbar 52px; statusbar 30px.
-- Paper padding 56px 60px; body measure 56ch; body margin `0 0 1.05em`. The sheet is sized
-  from the measure: `max-width: 680px` (56ch of English + 120px of paper padding + rules),
-  safely under the UI-SPEC 760px cap. On the rendered desk this keeps the English text filling
-  the page instead of floating in a wide empty column; figures, tables, code and formulas use
-  the full 560px content width inside the same sheet.
+- 4px base grid; rail 288px (220–460 draggable); margin 296px (240–520 draggable); topbar 52px;
+  statusbar 30px. The rail/margin widths live in `--mru-rail-width` / `--mru-margin-width` on the
+  workspace; the reading sheet and both graph views share `--mru-doc-width` (default **880px**,
+  adjustable 720 / 880 / 1040 / 1200 from the reader runhead).
+- Paper padding 56px 60px; body measure 56ch; body margin `0 0 1.05em`. The **sheet** follows
+  `--mru-doc-width` (so 阅读 ↔ 图谱 never change the column width), while the **type area** inside
+  it stays centered at 680px (56ch + paper padding + rules). Widening the sheet therefore grows
+  the page margins and the room for figures/tables, not the prose measure; figures, tables, code
+  and formulas use the full 560px type-area content width inside the sheet.
 - Radii: 6px controls (buttons, inputs, segments, tabs, tools), 10px cards/menus/modals/slips,
   14px paper, 999px chips.
 - Motion: only the paper entry (fade + 6px rise, 180ms `cubic-bezier(.2,.7,.2,1)`), popovers
@@ -109,8 +112,11 @@ Two voices, never mixed:
   tracked eyebrows anywhere.
 - Page marks: 10.5px serif numerals in the left gutter with a 13px leader hairline — the only
   place numbers are used as typography rather than data.
-- The measure decides the page: the paper sheet is 680px wide (not a 760px banner), so the
-  56ch English column, the title block and the figures share the same page edge.
+- The measure still decides the type area: inside the variable-width sheet, the 56ch English
+  column, the title block and the figures share the same 680px centered page area ("page margins
+  grow, measure does not"). The running head aligns its title to that type area and lets its
+  action row use the page margin on the right, so the width/legend/reading controls breathe
+  without pushing the title out of view.
 
 ---
 
@@ -453,3 +459,93 @@ margin note head once app.js renders it).
   tokens.
 - No new motion vocabulary: the caret, the popovers and the jump flash are the entire AI-layer
   motion budget.
+
+## 12b. UI polish round — resizers, shared width, navigator, legions, anchored cards
+
+Added for docs/UI-POLISH-SPEC.md (styles only; §19 of `ui/styles.css`). The polish round keeps the
+same desk language: dividers are hairlines with a quiet grip, the legend is text-first, and the
+new floating pieces are paper slips rather than dashboard widgets.
+
+### 12b.1 Resizable rail and margin
+
+- `.mru-resizer` is a 6px handle between rail/main and main/margin, pulled back over the
+  neighbouring hairlines with `margin: 0 -3px` so it does not change the desk geometry. The grip
+  is a 2×28px rounded hairline (`::after`) that appears on hover, keyboard focus and while
+  dragging (`--active` becomes a 2×52px accent line); an invisible `::before` extends the hit
+  target to 16px. `cursor: col-resize`, `role=separator` and the existing 2px accent focus ring
+  are carried by the handle.
+- `.mru-root--resizing` disables text selection and forces the resize cursor across the
+  workspace while a drag is live.
+- Widths are applied from `--mru-rail-width` / `--mru-margin-width` (fallbacks 288 / 296) set
+  inline on the workspace by `ui/app.js`; the margin sheet and mobile drawers clamp the same
+  variables (`min(var(--mru-margin-width), 88vw)`), so a remembered width survives every
+  responsive mode. Resizers hide entirely in the drawer modes (margin below 1280, both below
+  900) because those zones are overlays, not columns.
+
+### 12b.2 One document width for reading and graph
+
+- `--mru-doc-width` (default 880px) is set on `.mru-root` by the app from the persisted layout
+  preset. `.mru-paper`, `.mru-main--graph > .mru-graph` and the doc-graph sheet all use
+  `min(100%, var(--mru-doc-width, 880px))`; the old independent 1040/1120px widths are gone, so
+  switching 阅读 ↔ 图谱 keeps the column identical.
+- Inside the sheet the type area remains 680px centered (56ch measure + page padding); the wide
+  presets deliberately grow the page margins and the space available to figures/tables, not the
+  line length. Wide-sheet reading therefore looks like a folio page with generous margins rather
+  than a long banner.
+- The runhead title aligns with the type area's left edge and the action row uses the page
+  margin on the right; the 窄/标准/宽/全宽 control (`.mru-runhead__width-group`,
+  `--active`/`aria-pressed`) is a compact 4-item group (20px rows, 10.5px labels) styled like the
+  reading-mode segmented control. It is hidden below 1024px of panel width; the runhead 图例
+  trigger collapses to its spark icon below 560px, and at 360px the runhead still fits on one row.
+
+### 12b.3 AI question navigator and “back to latest”
+
+- `.mru-ai__nav` floats on the AI panel's right edge (absolute inside the panel, 56% max height):
+  one 9×3px tick per user question, current = 16px accent tick, hover/focus = 13px secondary ink
+  tick. The panel reserves 22px on the right of the message list only while a navigator exists
+  (`:has`), so the conversation does not shift for a single question.
+- Hover/focus shows `.mru-ai__nav-preview`, a small paper slip with the question ordinal and a
+  two-line question; it is anchored to the left of the rail and is pointer-transparent. The nav
+  itself never clips it (`overflow: visible`).
+- `.mru-ai__toLatest` is a centered 24px pill placed after the message list in the panel column
+  and pulled up 30px over the conversation's bottom edge, so it floats correctly regardless of
+  composer/legend/context height. It uses secondary ink with a hairline border and only appears
+  when the reader is away from the newest message.
+- Jumping via a mark flashes the target message (`.mru-ai__msg--flash`): a soft accent wash on
+  the bubble (`::after`, 1.2s fade) matching the block flash; with reduced motion the wash is
+  static while the class is present instead of animating.
+
+### 12b.4 Aspect-colour legend in four places
+
+`.mru-aspect-legend` is one small row of dot + always-visible text labels (never colour alone;
+WCAG 1.4.1). Dots reuse the four annotation inks: yellow = definition/context, sage = method,
+sky = result, rose = limitation. The same component is placed:
+
+1. under the margin tabs on the 批注 tab (`.mru-margin__legend`), including the empty state;
+2. above the AI composer (`.mru-ai__legend`, with a small `批注颜色` title + hint head row);
+3. under the graph canvas (`.mru-graph__aspect-legend`, with a 批注颜色 label);
+4. in the runhead 图例 popover (`.mru-aspect-popover`, a fixed paper slip with title, one-line
+   hint and the legend), opened from the `.mru-runhead__legend` ghost button.
+
+All new text uses secondary ink on the host surface: aspect labels **5.80:1 light / 10.42:1 dark**,
+runhead width labels **5.56:1 / 10.81:1**, popover title **18.9:1 / 15.0:1**, popover hint and
+navigator preview index **5.80:1 / 10.42:1**, preview question and “回到最新” labels
+**18.9:1 / 15.0:1 and 5.80:1 / 10.42:1** respectively.
+
+### 12b.5 Node-anchored graph card
+
+`.mru-graph__card--anchored` keeps the translator-slip surface/typography of the corner card but
+is positioned with inline `left`/`top` by `ui/graph.js` next to the selected node:
+`width: min(300px, 100% - 16px)`, `max-width: 320px`, `max-height: min(58%, 340px)`, stronger
+lift shadow and a 140ms fade + 0.98 scale entrance from the node side (`data-placement="left"`
+flips the transform origin). It never overflows at 360px (max-width is relative to the graph
+container and the module clamps the position); no caret is drawn because the card scrolls its
+own content and a protruding caret would be clipped.
+
+### 12b.6 Checks
+
+- Light/dark, 1440/1000/390/360 and 720/880/1040/1200 doc-width presets verified in the same
+  headless-Chromium harness (removed afterwards): resizer grip/active states, runhead fit at
+  360px (width group hidden, legend icon-only), width consistency, margin/AI/graph legends,
+  navigator + preview + to-latest, anchored card at 1440 and 360, popover.
+- Braces balanced, no `@import`/external `url()`; only `ui/styles.css` + this file changed.

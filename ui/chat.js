@@ -107,6 +107,12 @@ const mruAiCopy = {
     'ai.errNetwork': '网络请求失败，请重试。',
     'ai.errGeneric': '这次提问没有完成。',
     'ai.followups': '继续追问',
+    'ai.legendTitle': '颜色图例',
+    'ai.legendHint': '高亮颜色表示批注的侧重：黄色为定义与背景，绿色为方法，蓝色为结果，玫红为局限。',
+    'ai.navLabel': '问题导航',
+    'ai.navJump': '跳到第 {index} 个问题',
+    'ai.navQuestion': '问题 {index}',
+    'ai.toLatest': '回到最新',
   },
   en: {
     'ai.title': 'AI reading',
@@ -163,6 +169,12 @@ const mruAiCopy = {
     'ai.errNetwork': 'The request failed. Try again.',
     'ai.errGeneric': 'This question did not finish.',
     'ai.followups': 'Follow up',
+    'ai.legendTitle': 'Colour legend',
+    'ai.legendHint': 'Highlight colours mark the annotation aspect: yellow for definitions and context, sage for methods, sky for results, rose for limitations.',
+    'ai.navLabel': 'Question navigator',
+    'ai.navJump': 'Jump to question {index}',
+    'ai.navQuestion': 'Question {index}',
+    'ai.toLatest': 'Back to latest',
   },
 }
 
@@ -1182,12 +1194,13 @@ function MruAiEvidenceFooter(props) {
 
 /** One chat message row (user question or assistant answer). */
 function MruAiMessage(props) {
-  const { t, message, katexReady, busy } = props
+  const { t, message, katexReady, busy, flash } = props
   if (message === null || typeof message !== 'object') return null
+  const flashClass = flash ? ' mru-ai__msg--flash' : ''
   const question = mruAiDisplayText(message.question)
   if (message.role === 'user') {
     return h('article', {
-      className: 'mru-ai__msg mru-ai__msg--user',
+      className: 'mru-ai__msg mru-ai__msg--user' + flashClass,
       'data-message-id': message.id,
     },
       h('div', { className: 'mru-ai__bubble' },
@@ -1201,6 +1214,7 @@ function MruAiMessage(props) {
   const lookup = mruAiCitationLookup(message.citations, message.unverified)
   const className = 'mru-ai__msg mru-ai__msg--assistant'
     + (streaming ? ' mru-ai__msg--streaming' : '')
+    + flashClass
   const answerChildren = []
   if (answer !== '') {
     answerChildren.push(h(MruAiAnswer, {
@@ -1393,6 +1407,97 @@ function MruAiCitationCard(props) {
  * Right-margin grounded AI chat for one document.
  * @param {object} props see the file header for the exact contract
  */
+/* -------------------------------------------------------------------------- */
+/* Question navigator helpers (docs/UI-POLISH-SPEC.md §3)                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One navigator mark per user question of the conversation, in order.
+ * @param {object[]} messages normalized chat messages
+ * @returns {{id:string,messageId:string,ordinal:number,question:string}[]}
+ */
+export function mruAiQuestionMarks(messages) {
+  const list = Array.isArray(messages) ? messages : []
+  const marks = []
+  for (const message of list) {
+    if (message === null || typeof message !== 'object') continue
+    if (message.role !== 'user') continue
+    const id = mruAiString(message.id)
+    if (id === '') continue
+    marks.push({
+      id,
+      messageId: id,
+      ordinal: marks.length + 1,
+      question: mruAiDisplayText(message.question),
+    })
+  }
+  return marks
+}
+
+/**
+ * Index of the current navigator mark: the last question whose measured top is
+ * at or above the anchor line. `offsets` entries are `{ messageId, top }` in
+ * container-relative px. Returns -1 when nothing can be resolved.
+ */
+export function mruAiNavCurrentMark(marks, offsets, anchorY) {
+  const list = Array.isArray(marks) ? marks : []
+  if (list.length === 0) return -1
+  const anchor = Number(anchorY)
+  if (!Number.isFinite(anchor)) return -1
+  const tops = new Map()
+  for (const offset of Array.isArray(offsets) ? offsets : []) {
+    if (offset === null || typeof offset !== 'object') continue
+    const messageId = mruAiString(offset.messageId)
+    const top = Number(offset.top)
+    if (messageId !== '' && Number.isFinite(top)) tops.set(messageId, top)
+  }
+  let current = -1
+  for (let index = 0; index < list.length; index += 1) {
+    const top = tops.get(list[index].messageId)
+    if (Number.isFinite(top) && top <= anchor) current = index
+  }
+  return current
+}
+
+/** Whether the conversation list is scrolled away from its newest message. */
+export function mruAiNavAwayFromLatest(scrollTop, scrollHeight, clientHeight, threshold = 120) {
+  const top = Number(scrollTop)
+  const height = Number(scrollHeight)
+  const view = Number(clientHeight)
+  const gap = Number(threshold)
+  if (!Number.isFinite(top) || !Number.isFinite(height) || !Number.isFinite(view)) return false
+  const limit = Number.isFinite(gap) ? gap : 120
+  return height - top - view > limit
+}
+
+/** Target scrollTop that brings `messageTop` to `padding` below the container top. */
+export function mruAiNavTargetScrollTop(scrollTop, messageTop, containerTop, padding = 12) {
+  const base = Number(scrollTop) || 0
+  const message = Number(messageTop)
+  const container = Number(containerTop)
+  const pad = Number(padding)
+  if (!Number.isFinite(message) || !Number.isFinite(container)) return Math.max(0, Math.round(base))
+  return Math.max(0, Math.round(base + (message - container) - (Number.isFinite(pad) ? pad : 12)))
+}
+
+/** Aspect colour legend entries (labels resolved through the chat copy deck). */
+const mruAiAspectLegendRows = [
+  ['definition', 'ai.aspect.definition'],
+  ['context', 'ai.aspect.context'],
+  ['method', 'ai.aspect.method'],
+  ['result', 'ai.aspect.result'],
+  ['limitation', 'ai.aspect.limitation'],
+]
+
+/**
+ * Legend rows for the AI panel: dot + always-visible text label.
+ * @param {((key: string, params?: object) => string) | null} t
+ * @returns {{aspect:string,label:string}[]}
+ */
+export function mruAiAspectLegendItems(t) {
+  return mruAiAspectLegendRows.map(([aspect, key]) => ({ aspect, label: mruAiT(t, key) }))
+}
+
 export function MruAiPanel(props) {
   const source = props !== null && typeof props === 'object' ? props : {}
   const t = typeof source.t === 'function' ? source.t : null
@@ -1416,6 +1521,10 @@ export function MruAiPanel(props) {
   const [streamError, setStreamError] = React.useState(null)
   const [card, setCard] = React.useState(null)
   const [clearedChips, setClearedChips] = React.useState({ selection: false, visible: false })
+  const [navActiveId, setNavActiveId] = React.useState(null)
+  const [navCurrentId, setNavCurrentId] = React.useState(null)
+  const [flashMessageId, setFlashMessageId] = React.useState(null)
+  const [awayFromLatest, setAwayFromLatest] = React.useState(false)
 
   const messagesRef = React.useRef(null)
   const inputRef = React.useRef(null)
@@ -1424,9 +1533,11 @@ export function MruAiPanel(props) {
   const seqRef = React.useRef(0)
   const stickRef = React.useRef(true)
   const hideTimerRef = React.useRef(null)
+  const navFlashTimerRef = React.useRef(null)
 
   const tr = (key, params) => mruAiT(t, key, params)
   const busy = streaming !== null
+  const questionMarks = mruAiQuestionMarks(messages)
 
   /* -- history ------------------------------------------------------------ */
 
@@ -1504,6 +1615,10 @@ export function MruAiPanel(props) {
       clearTimeout(hideTimerRef.current)
       hideTimerRef.current = null
     }
+    if (navFlashTimerRef.current !== null) {
+      clearTimeout(navFlashTimerRef.current)
+      navFlashTimerRef.current = null
+    }
   }, [])
 
   /* -- reset cleared context when the reader moves ------------------------ */
@@ -1529,6 +1644,18 @@ export function MruAiPanel(props) {
     if (element === null || typeof element.scrollTop !== 'number') return
     if (stickRef.current) element.scrollTop = element.scrollHeight
   }, [messages, streaming, historyState])
+
+  // Question navigator: seed the current mark after history/answers render.
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      const element = messagesRef.current
+      if (element !== null) {
+        setAwayFromLatest(mruAiNavAwayFromLatest(element.scrollTop, element.scrollHeight, element.clientHeight))
+      }
+      refreshNavPosition()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [messages, historyState])
 
   /* -- citation card ------------------------------------------------------ */
 
@@ -1586,10 +1713,111 @@ export function MruAiPanel(props) {
     if (citation !== null) showCitationCard(event, payload)
   }
 
+  const mruAiReducedMotion = () => {
+    try {
+      return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    } catch {
+      return false
+    }
+  }
+
+  /** Measure question positions and refresh the navigator's current mark. */
+  const refreshNavPosition = () => {
+    const element = messagesRef.current
+    if (element === null || typeof element !== 'object') return
+    const marks = mruAiQuestionMarks(messages)
+    if (marks.length < 2) return
+    let containerRect = { top: 0 }
+    try {
+      containerRect = element.getBoundingClientRect ? element.getBoundingClientRect() : containerRect
+    } catch {
+      containerRect = { top: 0 }
+    }
+    const offsets = []
+    const nodes = typeof element.querySelectorAll === 'function' ? element.querySelectorAll('[data-message-id]') : []
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index]
+      const messageId = mruAiString(node.getAttribute('data-message-id'))
+      if (messageId === '') continue
+      let top = 0
+      try {
+        const rect = node.getBoundingClientRect ? node.getBoundingClientRect() : null
+        top = rect ? Number(rect.top) - Number(containerRect.top) : 0
+      } catch {
+        top = 0
+      }
+      offsets.push({ messageId, top })
+    }
+    const currentIndex = mruAiNavCurrentMark(marks, offsets, 72)
+    const currentId = currentIndex >= 0 ? marks[currentIndex].id : null
+    setNavCurrentId((previous) => (previous === currentId ? previous : currentId))
+  }
+
+  const scrollToLatest = () => {
+    const element = messagesRef.current
+    if (element === null) return
+    stickRef.current = true
+    const top = Number(element.scrollHeight) || 0
+    try {
+      if (typeof element.scrollTo === 'function') {
+        element.scrollTo({ top, behavior: mruAiReducedMotion() ? 'auto' : 'smooth' })
+      } else {
+        element.scrollTop = top
+      }
+    } catch {
+      element.scrollTop = top
+    }
+    setAwayFromLatest(false)
+  }
+
+  /** Jump to one user question, flash it and sync the navigator. */
+  const jumpToQuestion = (mark) => {
+    const element = messagesRef.current
+    if (element === null || !mark || mruAiString(mark.messageId) === '') return
+    let target = null
+    const nodes = typeof element.querySelectorAll === 'function' ? element.querySelectorAll('[data-message-id]') : []
+    for (let index = 0; index < nodes.length; index += 1) {
+      if (mruAiString(nodes[index].getAttribute('data-message-id')) === mruAiString(mark.messageId)) {
+        target = nodes[index]
+        break
+      }
+    }
+    if (target === null) return
+    let containerRect = { top: 0 }
+    let targetRect = { top: 0 }
+    try {
+      containerRect = element.getBoundingClientRect ? element.getBoundingClientRect() : containerRect
+      targetRect = target.getBoundingClientRect ? target.getBoundingClientRect() : targetRect
+    } catch {
+      /* fall back to offset math below */
+    }
+    const nextTop = mruAiNavTargetScrollTop(element.scrollTop, targetRect.top, containerRect.top, 12)
+    stickRef.current = false
+    try {
+      if (typeof element.scrollTo === 'function') {
+        element.scrollTo({ top: nextTop, behavior: mruAiReducedMotion() ? 'auto' : 'smooth' })
+      } else {
+        element.scrollTop = nextTop
+      }
+    } catch {
+      element.scrollTop = nextTop
+    }
+    setNavCurrentId(mruAiString(mark.id))
+    setFlashMessageId(mruAiString(mark.messageId))
+    if (navFlashTimerRef.current !== null) clearTimeout(navFlashTimerRef.current)
+    navFlashTimerRef.current = setTimeout(() => {
+      navFlashTimerRef.current = null
+      setFlashMessageId(null)
+    }, 1200)
+  }
+
   const handleMessagesScroll = () => {
     const element = messagesRef.current
     if (element !== null) {
       stickRef.current = (element.scrollHeight - element.scrollTop - element.clientHeight) < 56
+      setAwayFromLatest(mruAiNavAwayFromLatest(element.scrollTop, element.scrollHeight, element.clientHeight))
+      if (questionMarks.length >= 2) refreshNavPosition()
     }
     if (card !== null) setCard(null)
   }
@@ -2046,6 +2274,7 @@ export function MruAiPanel(props) {
         message,
         katexReady,
         busy,
+        flash: flashMessageId !== null && mruAiString(message && message.id) === mruAiString(flashMessageId),
         isLatestAssistant: Boolean(message) && message.id === lastAssistantId,
         onCitationHover: showCitationCard,
         onCitationLeave: scheduleCardHide,
@@ -2109,6 +2338,68 @@ export function MruAiPanel(props) {
     ? h('div', { className: 'mru-ai__notice' },
         h('span', { className: 'mru-ai__spark', 'aria-hidden': 'true' }, '✦'),
         h('span', null, setupNotice))
+    : null
+
+  const legendNode = historyState === 'ready' && messages.length > 0
+    ? h('div', { className: 'mru-ai__legend', 'aria-label': tr('ai.legendTitle') },
+        h('div', { className: 'mru-ai__legend-head' },
+          h('span', { className: 'mru-ai__legend-title' }, tr('ai.legendTitle')),
+          h('span', { className: 'mru-ai__legend-hint' }, tr('ai.legendHint'))),
+        h('div', { className: 'mru-aspect-legend' },
+          mruAiAspectLegendItems(t).map((item) => h('span', {
+            key: item.aspect,
+            className: 'mru-aspect-legend__item',
+            title: item.label,
+          },
+            h('span', {
+              className: 'mru-aspect-legend__dot mru-aspect-legend__dot--' + item.aspect,
+              'aria-hidden': 'true',
+            }),
+            h('span', { className: 'mru-aspect-legend__label' }, item.label)))))
+    : null
+
+  const previewMark = navActiveId === null
+    ? null
+    : questionMarks.find((mark) => mark.id === navActiveId) || null
+
+  const navNode = questionMarks.length >= 2
+    ? h('div', {
+        className: 'mru-ai__nav',
+        role: 'navigation',
+        'aria-label': tr('ai.navLabel'),
+        'data-count': String(questionMarks.length),
+      },
+        questionMarks.map((mark) => h('button', {
+          key: mark.id,
+          type: 'button',
+          className: 'mru-ai__nav-mark'
+            + (navCurrentId !== null && navCurrentId === mark.id ? ' is-current' : '')
+            + (navActiveId !== null && navActiveId === mark.id ? ' is-active' : ''),
+          'aria-label': tr('ai.navJump', { index: mark.ordinal }),
+          'aria-current': navCurrentId !== null && navCurrentId === mark.id ? 'true' : undefined,
+          onMouseEnter: () => setNavActiveId(mark.id),
+          onMouseLeave: () => setNavActiveId((current) => (current === mark.id ? null : current)),
+          onFocus: () => setNavActiveId(mark.id),
+          onBlur: () => setNavActiveId((current) => (current === mark.id ? null : current)),
+          onClick: () => jumpToQuestion(mark),
+        })),
+        previewMark !== null
+          ? h('div', { className: 'mru-ai__nav-preview', role: 'tooltip' },
+              h('span', { className: 'mru-ai__nav-preview-index' },
+                tr('ai.navQuestion', { index: previewMark.ordinal })),
+              h('span', { className: 'mru-ai__nav-preview-text' },
+                previewMark.question !== '' ? previewMark.question : tr('ai.navQuestion', { index: previewMark.ordinal })))
+          : null)
+    : null
+
+  const toLatestNode = awayFromLatest && messages.length > 0
+    ? h('button', {
+        type: 'button',
+        className: 'mru-ai__toLatest',
+        onClick: scrollToLatest,
+      },
+        h(MruGlyph, { name: 'chevronDown', size: 13 }),
+        h('span', null, tr('ai.toLatest')))
     : null
 
   const composerNode = (hasDocument && available) || busy
@@ -2200,9 +2491,12 @@ export function MruAiPanel(props) {
       'aria-relevant': 'additions text',
       onScroll: handleMessagesScroll,
     }, messageNodes),
+    navNode,
+    toLatestNode,
     errorNode,
     contextNode,
     setupNode,
+    legendNode,
     composerNode,
     cardNode)
 }

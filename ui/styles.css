@@ -46,6 +46,12 @@
   --mru-font-read: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", "Noto Serif", "Songti SC", "SimSun", serif;
   --mru-font-trans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --mru-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* layout widths — overridden inline on the workspace by client-ui from the
+     persisted layout memory; every consumer keeps these fallbacks. */
+  --mru-rail-width: 288px;
+  --mru-margin-width: 296px;
+  --mru-doc-width: 880px;
 }
 
 /* Dark theme: only the paper tint and the annotation inks change.
@@ -630,7 +636,7 @@ html[data-ds-dark-theme] .mru-root {
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 288px;
+  width: var(--mru-rail-width, 288px);
   min-height: 0;
   border-right: 1px solid var(--mru-rule);
   background: var(--mru-surface);
@@ -1064,11 +1070,10 @@ html[data-ds-dark-theme] .mru-root {
    -------------------------------------------------------------------------- */
 
 .mru-paper {
-  /* The sheet is sized to the 56ch reading measure plus its generous margins
-     (56ch + 120px of paper padding + 2px of rules ≈ 680px), staying well under
-     the 760px cap so the English text fills the page instead of floating in it. */
+  /* The sheet follows the shared document width (default 880) so 阅读/图谱 keep
+     the same column; the type area inside stays centered at the 56ch measure. */
   width: 100%;
-  max-width: 680px;
+  max-width: min(100%, var(--mru-doc-width, 880px));
   margin: 0 auto;
   border: 1px solid var(--mru-rule-strong);
   border-radius: 14px;
@@ -1086,7 +1091,10 @@ html[data-ds-dark-theme] .mru-root {
   align-items: center;
   gap: 10px;
   height: 46px;
-  padding: 0 60px;
+  /* the title aligns with the centered type area; the action row uses the page
+     margin on the right so the runhead controls keep breathing room */
+  padding-right: 60px;
+  padding-left: max(60px, calc((100% - 680px) / 2 + 60px));
   border-bottom: 1px solid var(--mru-rule);
   border-radius: 14px 14px 0 0;
   background: color-mix(in srgb, var(--mru-paper-bg) 88%, transparent);
@@ -1171,6 +1179,10 @@ html[data-ds-dark-theme] .mru-root {
 }
 
 .mru-paper__col {
+  width: 100%;
+  max-width: 680px;
+  margin-right: auto;
+  margin-left: auto;
   padding: 56px 60px 72px;
 }
 
@@ -2170,7 +2182,7 @@ html[data-ds-dark-theme] .mru-root {
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 296px;
+  width: var(--mru-margin-width, 296px);
   min-height: 0;
   border-left: 1px solid var(--mru-rule);
   background: var(--mru-surface);
@@ -3306,7 +3318,7 @@ html[data-ds-dark-theme] .mru-root {
     bottom: 0;
     z-index: 46;
     display: flex;
-    width: 296px;
+    width: var(--mru-margin-width, 296px);
     border-left: 1px solid var(--mru-rule);
     box-shadow: -20px 0 44px -26px rgba(0, 0, 0, 0.3);
     animation: mru-sheet-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -3342,7 +3354,7 @@ html[data-ds-dark-theme] .mru-root {
     bottom: 0;
     left: 0;
     z-index: 46;
-    width: min(312px, 86vw);
+    width: min(var(--mru-rail-width, 288px), 86vw);
     border-right: 1px solid var(--mru-rule);
     box-shadow: 20px 0 44px -26px rgba(0, 0, 0, 0.32);
     transform: translateX(-102%);
@@ -3357,7 +3369,7 @@ html[data-ds-dark-theme] .mru-root {
   }
 
   .mru-root--margin-open .mru-margin {
-    width: min(296px, 88vw);
+    width: min(var(--mru-margin-width, 296px), 88vw);
   }
 
   /* the paper becomes a full-bleed sheet */
@@ -3492,7 +3504,7 @@ html[data-ds-dark-theme] .mru-root {
   }
 
   .mru-rail {
-    width: min(304px, 88vw);
+    width: min(var(--mru-rail-width, 288px), 88vw);
   }
 }
 
@@ -3514,7 +3526,7 @@ html[data-ds-dark-theme] .mru-root {
       bottom: 0;
       z-index: 46;
       display: flex;
-      width: 296px;
+      width: var(--mru-margin-width, 296px);
       border-left: 1px solid var(--mru-rule);
       box-shadow: -20px 0 44px -26px rgba(0, 0, 0, 0.3);
       animation: mru-sheet-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -3546,7 +3558,7 @@ html[data-ds-dark-theme] .mru-root {
       bottom: 0;
       left: 0;
       z-index: 46;
-      width: min(312px, 86vw);
+      width: min(var(--mru-rail-width, 288px), 86vw);
       border-right: 1px solid var(--mru-rule);
       box-shadow: 20px 0 44px -26px rgba(0, 0, 0, 0.32);
       transform: translateX(-102%);
@@ -3561,7 +3573,7 @@ html[data-ds-dark-theme] .mru-root {
     }
 
     .mru-root--margin-open .mru-margin {
-      width: min(296px, 88vw);
+      width: min(var(--mru-margin-width, 296px), 88vw);
     }
 
     .mru-paper-scroll {
@@ -3691,7 +3703,7 @@ html[data-ds-dark-theme] .mru-root {
     }
 
     .mru-rail {
-      width: min(304px, 88vw);
+      width: min(var(--mru-rail-width, 288px), 88vw);
     }
   }
 }
@@ -4915,7 +4927,7 @@ div.mru-ai__streaming .mru-spinner {
   flex: 1 1 auto;
   flex-direction: column;
   width: 100%;
-  max-width: 1120px;
+  max-width: min(100%, var(--mru-doc-width, 880px));
   min-height: 480px;
   height: 100%;
   margin: 0 auto;
@@ -5918,7 +5930,7 @@ circle.mru-graph__node[data-related="true"] {
 .mru-main--graph > .mru-graph {
   flex: 1 1 auto;
   width: 100%;
-  max-width: 1120px;
+  max-width: min(100%, var(--mru-doc-width, 880px));
   height: auto;
   min-height: 0;
   margin: 0 auto;
@@ -5926,10 +5938,13 @@ circle.mru-graph__node[data-related="true"] {
 
 /* doc graph: printed on the reading sheet, under the running head */
 .mru-paper:has(.mru-paper__body--graph) {
-  max-width: 1040px;
+  max-width: min(100%, var(--mru-doc-width, 880px));
 }
 
 .mru-paper:has(.mru-paper__body--graph) .mru-paper__col {
+  max-width: 100%;
+  margin-right: 0;
+  margin-left: 0;
   padding: 40px 28px 44px;
 }
 
@@ -6052,5 +6067,686 @@ circle.mru-graph__node[data-related="true"] {
   .mru-paper__runhead .mru-segmented--view .mru-segmented__item {
     padding: 0 5px;
     font-size: 10px;
+  }
+}
+
+/* ==========================================================================
+   19. UI polish round (docs/UI-POLISH-SPEC.md)
+
+   Resizable side panels, a shared adjustable document width, the AI panel's
+   floating question navigator, the four-place aspect-colour legend, and the
+   node-anchored graph details card. All chrome stays on host tokens; the four
+   annotation inks remain the only chroma (aspect dots + graph node rings).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   19.1 Resizable rail / margin dividers
+   -------------------------------------------------------------------------- */
+
+/* Handles sit between rail/main and main/margin. They are 6px wide for a
+   comfortable target but pull themselves back over the neighbours' hairlines
+   with negative margins, so the workspace geometry does not change. */
+.mru-resizer {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 6px;
+  align-self: stretch;
+  width: 6px;
+  margin: 0 -3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+/* generous invisible hit area around the quiet grip */
+.mru-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.mru-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 28px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mru-ink) 24%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 140ms ease, height 140ms ease, background-color 140ms ease;
+}
+
+.mru-resizer:hover::after,
+.mru-resizer:focus-visible::after,
+.mru-resizer--active::after {
+  opacity: 1;
+}
+
+.mru-resizer--active::after {
+  height: 52px;
+  background: var(--mru-accent);
+}
+
+.mru-root .mru-resizer:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--mru-accent);
+  outline-offset: 0;
+}
+
+/* while dragging: no text selection, resize cursor everywhere in the desk */
+.mru-root--resizing,
+.mru-root--resizing * {
+  user-select: none;
+}
+
+.mru-root--resizing .mru-workspace,
+.mru-root--resizing .mru-workspace * {
+  cursor: col-resize !important;
+}
+
+/* --------------------------------------------------------------------------
+   19.2 Runhead document-width control (窄 / 标准 / 宽 / 全宽)
+   -------------------------------------------------------------------------- */
+
+.mru-runhead__width-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  height: 24px;
+  margin-right: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mru-runhead__width {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.mru-runhead__width:hover {
+  color: var(--mru-ink);
+}
+
+.mru-runhead__width--active,
+.mru-runhead__width[aria-pressed="true"] {
+  background: var(--mru-surface-2);
+  color: var(--mru-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* the 图例 trigger is a normal ghost sm button; keep it from growing wide */
+.mru-runhead__legend {
+  flex: none;
+}
+
+/* aspect legend popover (fixed overlay positioned by app.js) */
+.mru-aspect-popover {
+  position: fixed;
+  z-index: 70;
+  width: min(332px, calc(100vw - 24px));
+  max-height: min(70vh, 360px);
+  padding: 12px 14px 13px;
+  overflow-y: auto;
+  border: 1px solid var(--mru-rule-strong);
+  border-top: 2px solid var(--mru-ink);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-aspect-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mru-aspect-popover__title {
+  color: var(--mru-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.mru-aspect-popover__hint {
+  max-width: 48ch;
+  margin: 6px 0 10px;
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------------------------
+   19.3 Aspect-colour legend (margin header, AI panel, graph footer, popover)
+   -------------------------------------------------------------------------- */
+
+.mru-aspect-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.mru-aspect-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.mru-aspect-legend__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mru-ink-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mru-ink) 12%, transparent);
+}
+
+/* dot colours derive from the four annotation inks, exactly like the notes */
+.mru-aspect-legend__dot--definition {
+  background: color-mix(in srgb, var(--mru-hl-yellow) 62%, var(--mru-ink));
+}
+
+.mru-aspect-legend__dot--context {
+  background: color-mix(in srgb, var(--mru-hl-yellow) 62%, var(--mru-ink));
+}
+
+.mru-aspect-legend__dot--method {
+  background: color-mix(in srgb, var(--mru-hl-sage) 58%, var(--mru-ink));
+}
+
+.mru-aspect-legend__dot--result {
+  background: color-mix(in srgb, var(--mru-hl-sky) 58%, var(--mru-ink));
+}
+
+.mru-aspect-legend__dot--limitation {
+  background: color-mix(in srgb, var(--mru-hl-rose) 62%, var(--mru-ink));
+}
+
+.mru-aspect-legend__label {
+  display: inline;
+  color: inherit;
+}
+
+/* placement 1: margin notes tab (under the tabs, above the notes) */
+.mru-margin__legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px 8px;
+  border-bottom: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-margin__legend .mru-aspect-legend {
+  gap: 4px 9px;
+}
+
+/* placement 2: AI panel (above the composer) */
+.mru-ai__legend {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px 7px;
+  border-top: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-ai__legend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mru-ai__legend-title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.mru-ai__legend-hint {
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+/* placement 3: graph footer band under the canvas */
+.mru-graph__aspect-legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-graph__aspect-legend-label {
+  margin-right: 2px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.mru-graph__aspect-legend .mru-aspect-legend__item {
+  font-size: 10px;
+}
+
+/* placement 4 is the runhead popover styled in 19.2 */
+
+/* --------------------------------------------------------------------------
+   19.4 AI floating question navigator
+   -------------------------------------------------------------------------- */
+
+.mru-ai {
+  position: relative;
+}
+
+/* the floating rail needs a little breathing room on the right */
+.mru-ai:has(.mru-ai__nav) .mru-ai__messages {
+  padding-right: 22px;
+}
+
+.mru-ai__nav {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-height: 56%;
+  padding: 8px 5px;
+  overflow: visible;
+  border: 1px solid var(--mru-rule);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mru-surface) 82%, transparent);
+  box-shadow: var(--mru-shadow);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transform: translateY(-50%);
+  scrollbar-width: none;
+  animation: mru-fade 160ms ease;
+}
+
+.mru-ai__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mru-ai__nav-mark {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mru-ink) 30%, transparent);
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.mru-ai__nav-mark:hover,
+.mru-ai__nav-mark:focus-visible,
+.mru-ai__nav-mark.is-active {
+  width: 13px;
+  background: var(--mru-ink-soft);
+}
+
+.mru-ai__nav-mark.is-current,
+.mru-ai__nav-mark[aria-current="true"],
+.mru-ai__nav-mark[aria-current="step"] {
+  width: 16px;
+  background: var(--mru-accent);
+}
+
+.mru-ai__nav-preview {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  z-index: 9;
+  width: 200px;
+  max-width: calc(100vw - 120px);
+  padding: 8px 10px;
+  border: 1px solid var(--mru-rule-strong);
+  border-top: 2px solid var(--mru-ink);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mru-surface) 94%, var(--mru-paper-bg));
+  box-shadow: var(--mru-shadow);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: mru-pop 100ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-ai__nav-preview-index {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--mru-ink-soft);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.mru-ai__nav-preview-text {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--mru-ink);
+  font-size: 11.5px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* questions navigator jump: one soft accent wash on the target message */
+.mru-ai__msg--flash .mru-ai__bubble {
+  position: relative;
+}
+
+.mru-ai__msg--flash .mru-ai__bubble::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--mru-accent) 14%, transparent);
+  pointer-events: none;
+  animation: mru-ai-msg-flash 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes mru-ai-msg-flash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* floating "back to latest" pill: it sits after the message list in the panel
+   flex column and is pulled up over the conversation's bottom edge, so it stays
+   correct whatever the composer/legend/context rows are doing. */
+.mru-ai__toLatest {
+  position: relative;
+  z-index: 8;
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin: -30px auto 4px;
+  padding: 0 10px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 999px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: mru-fade 140ms ease;
+}
+
+.mru-ai__toLatest:hover {
+  border-color: var(--mru-ink-soft);
+  background: var(--mru-surface-2);
+  color: var(--mru-ink);
+}
+
+/* --------------------------------------------------------------------------
+   19.5 Graph node-anchored details card
+   -------------------------------------------------------------------------- */
+
+/* The anchored variant is positioned with inline left/top by ui/graph.js and
+   uses the same slip surface as the corner card. Entrance is a short fade +
+   scale from the node side; there is no caret because the card scrolls its
+   own content and a protruding caret would be clipped. */
+.mru-graph__card--anchored {
+  right: auto;
+  bottom: auto;
+  width: 300px;
+  max-width: min(320px, calc(100% - 16px));
+  max-height: min(58%, 340px);
+  box-shadow: 0 20px 48px -22px rgba(0, 0, 0, 0.38), var(--mru-shadow);
+  transform-origin: left center;
+  animation: mru-graph-card-anchored 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-graph__card--anchored[data-placement="left"] {
+  transform-origin: right center;
+}
+
+@keyframes mru-graph-card-anchored {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   19.6 Reduced motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-ai__nav,
+  .mru-ai__nav-preview,
+  .mru-ai__toLatest,
+  .mru-aspect-popover,
+  .mru-graph__card--anchored {
+    animation: none;
+  }
+
+  .mru-ai__msg--flash .mru-ai__bubble::after {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .mru-resizer::after,
+  .mru-runhead__width,
+  .mru-ai__nav-mark {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   19.7 Responsive: resizers and the width control fold away where the zones
+        are drawers / the runhead has no room
+   -------------------------------------------------------------------------- */
+
+@container mru-desk (max-width: 1280px) {
+  /* margin is a sheet here, not a resizable column */
+  .mru-resizer--margin {
+    display: none;
+  }
+}
+
+@container mru-desk (max-width: 1024px) {
+  /* the runhead is dense; keep the width presets for wide desks only */
+  .mru-runhead__width-group {
+    display: none;
+  }
+}
+
+@container mru-desk (max-width: 900px) {
+  /* both side zones are drawers here */
+  .mru-resizer {
+    display: none;
+  }
+}
+
+@container mru-desk (max-width: 560px) {
+  /* icon-only runhead legend trigger so the runhead still fits at 360px */
+  .mru-runhead__legend {
+    width: 26px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .mru-runhead__legend svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .mru-graph__aspect-legend {
+    gap: 4px 8px;
+    padding: 5px 10px;
+  }
+
+  .mru-margin__legend {
+    padding: 6px 10px;
+  }
+
+  .mru-ai__legend {
+    padding: 5px 8px;
+  }
+
+  .mru-aspect-legend {
+    gap: 3px 8px;
+  }
+
+  .mru-aspect-legend__item {
+    font-size: 10px;
+  }
+
+  .mru-ai__nav {
+    right: 2px;
+    padding: 6px 4px;
+  }
+
+  .mru-ai__nav-preview {
+    width: 176px;
+    max-width: calc(100vw - 80px);
+  }
+
+  .mru-graph__card--anchored {
+    width: min(300px, calc(100% - 16px));
+    max-height: min(54%, 300px);
+  }
+}
+
+/* viewport fallback for engines without container queries */
+@supports not (container-type: inline-size) {
+  @media (max-width: 1280px) {
+    .mru-resizer--margin {
+      display: none;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    .mru-runhead__width-group {
+      display: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .mru-resizer {
+      display: none;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .mru-runhead__legend {
+      width: 26px;
+      padding: 0;
+      gap: 0;
+      font-size: 0;
+    }
+
+    .mru-runhead__legend svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .mru-aspect-legend__item {
+      font-size: 10px;
+    }
+
+    .mru-graph__card--anchored {
+      width: min(300px, calc(100% - 16px));
+      max-height: min(54%, 300px);
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   19.8 Print: interactive polish chrome never prints
+   -------------------------------------------------------------------------- */
+
+@media print {
+  .mru-resizer,
+  .mru-runhead__width-group,
+  .mru-runhead__legend,
+  .mru-aspect-popover,
+  .mru-ai__nav,
+  .mru-ai__toLatest {
+    display: none !important;
   }
 }

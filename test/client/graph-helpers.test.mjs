@@ -12,6 +12,7 @@ import {
   layoutGraph,
   mruGraphActivePath,
   mruGraphAnchoredCardPosition,
+  mruGraphNodeSeparation,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -421,4 +422,113 @@ test('mruGraphAnchoredCardPosition clamps and never emits NaN', () => {
 
   const malformed = mruGraphAnchoredCardPosition({})
   assert.ok(Number.isFinite(malformed.left) && Number.isFinite(malformed.top))
+})
+
+
+// ---------------------------------------------------------------------------
+// Even node distribution (user feedback: nodes clumped into one blob)
+// ---------------------------------------------------------------------------
+
+/** @returns {{positions: object, nodes: object[]}} laid-out graph + points. */
+function distributedLayout(graph, seed = 11) {
+  const layout = layoutGraph(graph, { width: 1000, height: 680, seed })
+  const points = graph.nodes.map((node) => layout.positions[node.id])
+  return { layout, points }
+}
+
+/** Min pairwise distance, mean nearest-neighbour distance and its CV. */
+function spreadMetrics(points) {
+  let minPair = Infinity
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = i + 1; j < points.length; j += 1) {
+      minPair = Math.min(minPair, Math.hypot(points[j].x - points[i].x, points[j].y - points[i].y))
+    }
+  }
+  const nearest = points.map((point, i) => {
+    let best = Infinity
+    for (let j = 0; j < points.length; j += 1) {
+      if (i === j) continue
+      best = Math.min(best, Math.hypot(points[j].x - point.x, points[j].y - point.y))
+    }
+    return best
+  })
+  const mean = nearest.reduce((sum, value) => sum + value, 0) / nearest.length
+  const variance = nearest.reduce((sum, value) => sum + (value - mean) ** 2, 0) / nearest.length
+  return { minPair, mean, cv: Math.sqrt(variance) / mean }
+}
+
+/** Hub + branches + isolates, the shape that used to collapse into a blob. */
+function hubFixture() {
+  const nodes = [{ id: 'hub', type: 'method', label: 'Hub', weight: 3 }]
+  const edges = []
+  for (let branch = 0; branch < 3; branch += 1) {
+    let previous = 'hub'
+    for (let i = 0; i < 4; i += 1) {
+      const id = `b${branch}n${i}`
+      nodes.push({ id, type: 'concept', label: `Node ${id}`, weight: 1 })
+      edges.push({ id: `e${branch}-${i}`, from: previous, to: id, type: 'uses', weight: 1 })
+      previous = id
+    }
+  }
+  for (let i = 0; i < 7; i += 1) nodes.push({ id: `iso${i}`, type: 'finding', label: `Iso ${i}`, weight: 1 })
+  return { nodes, edges }
+}
+
+test('mruGraphNodeSeparation scales with canvas area and clamps', () => {
+  const small = mruGraphNodeSeparation(1000, 680, 400, 56)
+  const normal = mruGraphNodeSeparation(1000, 680, 26, 56)
+  const dense = mruGraphNodeSeparation(1000, 680, 20, 56)
+  assert.ok(small >= 24 && small <= 66)
+  assert.ok(normal >= 24 && normal <= 66)
+  assert.ok(small <= normal, 'more nodes → smaller separation')
+  assert.equal(normal, dense, 'separation clamps out at 66')
+  assert.equal(mruGraphNodeSeparation(0, 0, 0, 0), 24)
+})
+
+test('layoutGraph spreads a hub graph instead of collapsing it into a blob', () => {
+  const graph = hubFixture()
+  const { points } = distributedLayout(graph)
+  const { minPair, mean, cv } = spreadMetrics(points)
+  assert.ok(minPair >= 55, `nodes keep apart (min pair ${minPair.toFixed(1)}px)`)
+  assert.ok(mean >= 55, `neighbours are on average spread (${mean.toFixed(1)}px)`)
+  assert.ok(cv <= 0.45, `spacing is even (CV ${cv.toFixed(3)})`)
+  for (const point of points) {
+    assert.ok(point.x >= 0 && point.x <= 1000 && point.y >= 0 && point.y <= 680)
+  }
+})
+
+test('layoutGraph spreads a 60-node multi-hub graph evenly', () => {
+  const nodes = []
+  const edges = []
+  for (let hub = 0; hub < 10; hub += 1) {
+    nodes.push({ id: `h${hub}`, type: 'method', label: `Hub ${hub}`, weight: 2 + (hub % 3) })
+    if (hub > 0) edges.push({ id: `hh${hub}`, from: `h${hub - 1}`, to: `h${hub}`, type: 'uses', weight: 1 })
+    for (let leaf = 0; leaf < 4; leaf += 1) {
+      nodes.push({ id: `h${hub}l${leaf}`, type: 'concept', label: `Leaf ${hub}.${leaf}`, weight: 1 })
+      edges.push({ id: `hl${hub}-${leaf}`, from: `h${hub}`, to: `h${hub}l${leaf}`, type: 'uses', weight: 1 })
+    }
+  }
+  for (let i = 0; i < 10; i += 1) nodes.push({ id: `iso${i}`, type: 'finding', label: `Iso ${i}`, weight: 1 })
+  const { points } = distributedLayout({ nodes, edges })
+  const { minPair, cv } = spreadMetrics(points)
+  assert.ok(minPair >= 30, `60-node graph keeps apart (min pair ${minPair.toFixed(1)}px)`)
+  assert.ok(cv <= 0.45, `60-node spacing is even (CV ${cv.toFixed(3)})`)
+})
+
+test('incremental layout keeps previous nodes and spreads newly added ones', () => {
+  const graph = hubFixture()
+  const first = layoutGraph(graph, { width: 1000, height: 680, seed: 11 })
+  const extra = [...graph.nodes, ...Array.from({ length: 6 }, (_, i) => ({
+    id: `new${i}`, type: 'insight', label: `New ${i}`, weight: 1,
+  }))]
+  const second = layoutGraph({ nodes: extra, edges: graph.edges }, {
+    width: 1000,
+    height: 680,
+    seed: 11,
+    previous: first.positions,
+  })
+  for (const node of extra) assert.ok(second.positions[node.id], `position for ${node.id}`)
+  for (const node of graph.nodes) {
+    assert.deepEqual(second.positions[node.id], first.positions[node.id], 'previous node stays put')
+  }
 })

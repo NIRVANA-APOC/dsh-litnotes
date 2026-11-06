@@ -1,7 +1,7 @@
-# AI-native reading: research & build notes for dsh-scholar
+# AI-native reading: research & build notes for dsh-litnotes
 
 > **Snapshot:** 2026-11-06. Sources are product help pages, papers and 2026 reviews; numbers are vendor/paper claims.
-> **Current product:** workspace still ships as `dsh-mineru` (rename in flight); reading desk + MinerU parse + bilingual/annotations are done.
+> **Current product:** `dsh-litnotes` (renamed from `dsh-litnotes`); reading desk + MinerU parse + bilingual/annotations + grounded AI Q&A/citations/auto-annotations + doc/library knowledge graphs are implemented; this document is the research input for that AI layer.
 > **Read with [AI-SPEC](AI-SPEC.md):** it is the authoritative implementation contract (uses `dsh-litnotes` naming, `/dsh-litnotes/api` routes, `[n]` citation markers, `library_*` tools, its own file layout/graph shape). On any conflict AI-SPEC wins; this doc is landscape evidence and build input. `[E#]` below == AI-SPEC's `[n]`.
 > **Next goal:** right-AI-panel grounded Q&A, per-paper KG auto-built + Q&A enrichment, library-wide KG, multiple DSH agent tools.
 > **Hard constraints** (see [ARCH](ARCH.md), [UI-SPEC](UI-SPEC.md)): host is plain Node ESM, no npm deps; client is React `createElement` only; JSON HTTP routes + same-origin fence; block anchors are `blockKey` + plain-text offsets; annotations live in `annotations.json` and the client owns the merge.
@@ -135,11 +135,11 @@
 - **Stale AI artifacts.** Cache TL;DR/graph per parsed-content hash + `PROMPT_VERSION`; show「基于 2026-11-06 解析稿」; regenerate button. A reparse must invalidate AI artifacts but preserve user annotations.
 - **Bilingual pitfalls.** Machine translation of formulas/terms is lossy; keep original citations, glossary-driven term consistency, skip references in translate-all, and don't translate UI copy via the same pipeline as paper text.
 
-## 4. Recommendations for dsh-scholar (triaged)
+## 4. Recommendations for dsh-litnotes (triaged)
 
 ### P0 — v1, build now
 
-1. **Grounding contract + `ai.ask` pipeline (host).** Host block index built with the *same* `parseMarkdown` the client uses (already imported by `lib/service.js`), so `blockKey` and plain-text offsets are identical; split paragraphs into 1–3-sentence passages with `{docId, blockKey, start, end, quote, section, score}`. Retrieve: cross-lingual query (translator or LLM rewrite) → BM25 over passages + heading boost → LLM rerank of top 24 excerpts → 6–10 evidence spans. Generate with numbered `E1..En`; answer markdown may only cite `[E#]`; post-stream verification call returns `supported/partial/unsupported` per claim; host strips invalid ids. Add an SSE route `POST /dsh-scholar/api/ai/ask` (Node `res.write`, same `requestRejection` fence) with `phase`/`delta`/`done` events. Use the existing LLM call shape from `lib/service.js` (`ctx.get('llm').stream({provider, model, system, messages, temperature, maxTokens, signal})`) and `agentDefaultModel.currentSelection()`; degrade with a clear `llm-unavailable` error if absent. No npm deps.
+1. **Grounding contract + `ai.ask` pipeline (host).** Host block index built with the *same* `parseMarkdown` the client uses (already imported by `lib/service.js`), so `blockKey` and plain-text offsets are identical; split paragraphs into 1–3-sentence passages with `{docId, blockKey, start, end, quote, section, score}`. Retrieve: cross-lingual query (translator or LLM rewrite) → BM25 over passages + heading boost → LLM rerank of top 24 excerpts → 6–10 evidence spans. Generate with numbered `E1..En`; answer markdown may only cite `[E#]`; post-stream verification call returns `supported/partial/unsupported` per claim; host strips invalid ids. Add an SSE route `POST /dsh-litnotes/api/ai/ask` (Node `res.write`, same `requestRejection` fence) with `phase`/`delta`/`done` events. Use the existing LLM call shape from `lib/service.js` (`ctx.get('llm').stream({provider, model, system, messages, temperature, maxTokens, signal})`) and `agentDefaultModel.currentSelection()`; degrade with a clear `llm-unavailable` error if absent. No npm deps.
 2. **AI panel in the margin (client).** Extend the existing margin tabs to `大纲 | 批注 | AI | 图谱` (`.mru-tab`), root modifier `mru-root--margin-wide` (≈380px) when AI/graph is active; `.mru-ai` chat: context chips (选中/当前段落/本节/整篇/整库), quick actions (解释本段, 方法假设, 贡献, 找相关段落), phase line + Stop, streamed answer with citation chips, evidence rail (依据 N 段: quote + 划线/定位), confidence/missing-source badges, follow-ups, footer 保存为批注/复制/重新生成, thread list. SSE via `fetch` reader; no new dependency.
 3. **Citation UX in the reader.** Render `[E#]` as `.mru-cite` buttons; hover card with quote + paper + section; click calls the existing jump machinery (scroll to `blockKey` + flash `start/end` span using `.mru-hl--active`-style pulse without saving); "返回回答" affordance; evidence rail rows do the same. This is the single highest-trust feature — ship it before graph.
 4. **Answer → annotation.** Chip-hover and evidence-row actions create highlights at the exact evidence span; footer 保存为批注 creates one note with `note = answer claim`, `color` by role (yellow finding / sage method / sky context / rose critique), `origin:'ai'`, `threadId`; batch save ≤6 + undo toast; margin filter「AI 批注」. Extend `normalizeAnnotation` + UI-SPEC + `annotations.json` schema for `origin`/`threadId` (coordinated with client-reader; otherwise provenance is stripped).
@@ -237,12 +237,12 @@ Extraction prompt rules: input = section headings + numbered blocks (`b#` + 300-
 **5.5 Routes / methods (all fenced)**
 | surface | shape | notes |
 |---|---|---|
-| `POST /dsh-scholar/api/ai/ask` | SSE (above) | request: `{docId?, scope, question, context?, threadId?, mode, locale}`; abort via `AbortSignal` on disconnect |
-| `POST /dsh-scholar/api/ai/thread` | JSON | rename/delete/list threads; `{docId?, threads}` |
-| `GET /dsh-scholar/api/ai/artifact?id&kind=summary|graph` | JSON | cached, versioned by contentHash |
-| `POST /dsh-scholar/api/ai/enrich` | `{id, force?}` | enqueue/regenerate; status via `library.get` `aiReady` |
-| `POST /dsh-scholar/api/graph` | `{scope:'paper'|'library', docId?, seed?, depth=1, types?}` | returns ≤300 nodes + `truncated` |
-| `POST /dsh-scholar/api/ai/annotation-draft` | `{docId, threadId, eids}` | returns annotation drafts for client merge |
+| `POST /dsh-litnotes/api/ai/ask` | SSE (above) | request: `{docId?, scope, question, context?, threadId?, mode, locale}`; abort via `AbortSignal` on disconnect |
+| `POST /dsh-litnotes/api/ai/thread` | JSON | rename/delete/list threads; `{docId?, threads}` |
+| `GET /dsh-litnotes/api/ai/artifact?id&kind=summary|graph` | JSON | cached, versioned by contentHash |
+| `POST /dsh-litnotes/api/ai/enrich` | `{id, force?}` | enqueue/regenerate; status via `library.get` `aiReady` |
+| `POST /dsh-litnotes/api/graph` | `{scope:'paper'|'library', docId?, seed?, depth=1, types?}` | returns ≤300 nodes + `truncated` |
+| `POST /dsh-litnotes/api/ai/annotation-draft` | `{docId, threadId, eids}` | returns annotation drafts for client merge |
 **5.6 Files & tool surface**
 ```text
 documents/<id>/ai/summary.json · graph.json · threads.json

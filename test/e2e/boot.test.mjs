@@ -76,7 +76,7 @@ test('index.js apply() boots, serves the API route and disposes cleanly', async 
   assert.ok(ctx.effects.length >= 3, 'boot, routes and agent-tool effects registered')
 
   // The boot effect initializes the library asynchronously under $DSH_HOME.
-  const dataDir = join(root, 'scholar')
+  const dataDir = join(root, 'litnotes')
   await waitFor(() => existsSync(join(dataDir, 'documents')), { label: 'library initialization' })
 
   // --- invoke the real HTTP handlers --------------------------------------
@@ -134,7 +134,7 @@ test('index.js boots with no optional services available', async (t) => {
 
   const api = ctx.routes.find((route) => route.path === API)
   assert.ok(api)
-  await waitFor(() => existsSync(join(root, 'scholar', 'documents')), { label: 'library initialization' })
+  await waitFor(() => existsSync(join(root, 'litnotes', 'documents')), { label: 'library initialization' })
 
   const status = await invoke(api.handler, 'status', {})
   assert.equal(status.status, 200)

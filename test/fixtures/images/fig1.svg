@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 260" role="img" aria-labelledby="fig1-title">
+  <title id="fig1-title">Recall@20 against the number of routed experts</title>
+  <rect x="0" y="0" width="420" height="260" fill="#faf7f0"/>
+  <g stroke="#d8d0c0" stroke-width="1">
+    <line x1="52" y1="20" x2="52" y2="212"/>
+    <line x1="52" y1="212" x2="396" y2="212"/>
+    <line x1="52" y1="164" x2="396" y2="164"/>
+    <line x1="52" y1="116" x2="396" y2="116"/>
+    <line x1="52" y1="68" x2="396" y2="68"/>
+    <line x1="52" y1="20" x2="396" y2="20"/>
+  </g>
+  <g font-family="Georgia, serif" font-size="10" fill="#6b6254">
+    <text x="16" y="216">60</text>
+    <text x="16" y="168">64</text>
+    <text x="16" y="120">68</text>
+    <text x="16" y="72">72</text>
+    <text x="16" y="24">76</text>
+    <text x="44" y="232">1</text>
+    <text x="116" y="232">2</text>
+    <text x="188" y="232">4</text>
+    <text x="260" y="232">8</text>
+    <text x="332" y="232">16</text>
+    <text x="186" y="250">routed experts k</text>
+    <text x="6" y="14" transform="rotate(-90 6 14)">Recall@20</text>
+  </g>
+  <line x1="52" y1="92" x2="396" y2="92" stroke="#b4562f" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="300" y="88" font-family="Georgia, serif" font-size="9" fill="#b4562f">dense baseline</text>
+  <polyline fill="none" stroke="#2f2a24" stroke-width="2" points="52,158 124,122 196,110 268,106 340,104"/>
+  <g fill="#2f2a24">
+    <circle cx="52" cy="158" r="3"/>
+    <circle cx="124" cy="122" r="3"/>
+    <circle cx="196" cy="110" r="3"/>
+    <circle cx="268" cy="106" r="3"/>
+    <circle cx="340" cy="104" r="3"/>
+  </g>
+</svg>

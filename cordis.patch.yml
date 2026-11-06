@@ -1,0 +1,6 @@
+# dsh-litnotes bundle patch: one Host row. The Client half ships as the package's
+# `./client` export and is picked up from `dsh.client` in package.json.
+- insert:
+    - id: dsh-litnotes
+      name: dsh-litnotes
+      config: {}

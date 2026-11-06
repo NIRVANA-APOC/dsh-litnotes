@@ -1,0 +1,3920 @@
+/* ==========================================================================
+   dsh-litnotes — 页边 / the reading desk
+   Design system + component styles. Owned by the design task.
+
+   A guest in the Harness UI: chrome is built only from host tokens
+   (--dsw-alias-*); the plugin owns the reading surface (paper tint), the four
+   annotation inks, shadows and the type stacks. All selectors are scoped to
+   .mru-root because the <style> element is rendered inside the app tree and
+   would otherwise leak into the host document.
+
+   Layout logic lives in container queries (the app is a panel whose width is
+   not the viewport width), with a viewport-media fallback for engines without
+   container query support. See @container mru-desk at the end.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens (UI-SPEC §1)
+   -------------------------------------------------------------------------- */
+
+.mru-root {
+  /* chrome — host theme tokens only */
+  --mru-bg: var(--dsw-alias-bg-base);
+  --mru-surface: var(--dsw-alias-bg-layer-1);
+  --mru-surface-2: var(--dsw-alias-bg-layer-2);
+  --mru-ink: var(--dsw-alias-label-primary);
+  --mru-ink-soft: var(--dsw-alias-label-secondary);
+  --mru-rule: var(--dsw-alias-border-l1);
+  --mru-rule-strong: var(--dsw-alias-border-l2);
+  --mru-accent: var(--dsw-alias-brand-primary);
+  --mru-error: var(--dsw-alias-state-error-primary);
+  --mru-warn: var(--dsw-alias-state-warn-primary);
+  --mru-success: var(--dsw-alias-state-success-primary);
+
+  /* the reading surface — the only places the plugin owns color */
+  --mru-paper-bg: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 93%, #c9b489 7%);
+  --mru-paper-bg-dark: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 92%, #000 8%);
+  --mru-hl-yellow: rgba(240, 196, 72, 0.36);
+  --mru-hl-sage: rgba(126, 168, 124, 0.32);
+  --mru-hl-sky: rgba(110, 155, 197, 0.3);
+  --mru-hl-rose: rgba(201, 123, 139, 0.28);
+  --mru-hl-active: color-mix(in srgb, var(--mru-accent) 55%, transparent);
+  --mru-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -16px rgba(0, 0, 0, 0.18);
+
+  /* type stacks */
+  --mru-font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --mru-font-read: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", "Noto Serif", "Songti SC", "SimSun", serif;
+  --mru-font-trans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --mru-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Dark theme: only the paper tint and the annotation inks change.
+   Everything else is a host token and adapts on its own. */
+body[data-ds-dark-theme] .mru-root,
+html[data-ds-dark-theme] .mru-root {
+  --mru-paper-bg: var(--mru-paper-bg-dark);
+  --mru-hl-yellow: rgba(240, 196, 72, 0.2);
+  --mru-hl-sage: rgba(126, 168, 124, 0.2);
+  --mru-hl-sky: rgba(110, 155, 197, 0.2);
+  --mru-hl-rose: rgba(201, 123, 139, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   2. Root, reset, focus, utilities
+   -------------------------------------------------------------------------- */
+
+.mru-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mru-bg);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+
+  /* container queries: the panel decides the layout, not the viewport */
+  container-type: inline-size;
+  container-name: mru-desk;
+}
+
+.mru-root *,
+.mru-root *::before,
+.mru-root *::after {
+  box-sizing: border-box;
+}
+
+/* Zero-specificity element resets: `.mru-root :where(...)` keeps these from
+   out-ranking the single-class component rules that follow. */
+.mru-root :where(h1, h2, h3, h4, p, figure, blockquote, pre, ul, ol) {
+  margin: 0;
+  padding: 0;
+}
+
+.mru-root :where(ul, ol) {
+  list-style: none;
+}
+
+.mru-root :where(button, input, select, textarea) {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.mru-root :where(button) {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.mru-root :where(svg) {
+  display: block;
+}
+
+.mru-root :where(img) {
+  max-width: 100%;
+}
+
+/* focus: a 2px accent ring with 2px offset on every control (UI-SPEC §6) */
+.mru-root :is(button, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], summary):focus-visible {
+  outline: 2px solid var(--mru-accent);
+  outline-offset: 2px;
+}
+
+.mru-root :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--mru-accent);
+  outline-offset: 2px;
+}
+
+.mru-root :is(a, [tabindex]):focus-visible {
+  outline: 2px solid var(--mru-accent);
+  outline-offset: 2px;
+}
+
+.mru-root ::selection {
+  background: var(--dsw-alias-bg-document-selection);
+}
+
+/* utilities */
+.mru-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mru-dot {
+  margin: 0 0.44em;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mru-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--mru-rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--mru-surface-2);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.mru-hr {
+  width: 56px;
+  height: 0;
+  margin: 2.4em auto;
+  border: 0;
+  border-top: 1px solid var(--mru-rule-strong);
+}
+
+.mru-link-btn {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  cursor: pointer;
+}
+
+.mru-link-btn:hover {
+  text-decoration-color: currentColor;
+}
+
+.mru-note-text {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* spinner: 1em, turns on the accent ink */
+.mru-spinner {
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 1.5px solid color-mix(in srgb, var(--mru-ink) 18%, transparent);
+  border-top-color: var(--mru-accent);
+  border-radius: 50%;
+  animation: mru-spin 0.8s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
+   3. Topbar
+   -------------------------------------------------------------------------- */
+
+.mru-topbar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.mru-brand__mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--mru-ink);
+}
+
+.mru-brand__mark svg,
+.mru-host-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mru-brand__name {
+  overflow: hidden;
+  color: var(--mru-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mru-brand__count {
+  padding-left: 10px;
+  border-left: 1px solid var(--mru-rule-strong);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.mru-topbar__spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+.mru-topbar__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   4. Buttons, icon buttons, chips, menus (host control language)
+   -------------------------------------------------------------------------- */
+
+.mru-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.mru-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--mru-ink);
+}
+
+.mru-btn:active {
+  color: var(--mru-ink);
+}
+
+.mru-btn[disabled],
+.mru-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.mru-btn--primary {
+  border-color: transparent;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-inverted);
+  font-weight: 500;
+}
+
+.mru-btn--primary:hover {
+  background: var(--dsw-alias-button-primary-hover);
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+.mru-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--mru-ink-soft);
+}
+
+.mru-btn--ghost:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--mru-ink);
+}
+
+.mru-btn--icon {
+  width: 30px;
+  padding: 0;
+  font-size: 13px;
+}
+
+.mru-btn--sm {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+
+.mru-more {
+  width: 26px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.mru-btn--danger {
+  color: var(--mru-error);
+}
+
+.mru-btn--danger:hover {
+  background: color-mix(in srgb, var(--mru-error) 10%, transparent);
+  color: var(--mru-error);
+}
+
+/* a destructive primary action is filled with the error ink, not dark ink */
+.mru-btn--primary.mru-btn--danger {
+  background: var(--mru-error);
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+.mru-btn--primary.mru-btn--danger:hover {
+  background: color-mix(in srgb, var(--mru-error) 86%, var(--mru-ink));
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+.mru-icon-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.mru-icon-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--mru-ink);
+}
+
+.mru-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* status chips — the tint carries the state, the text stays host ink */
+.mru-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.mru-chip--uploaded {
+  border-color: color-mix(in srgb, var(--mru-ink-soft) 18%, transparent);
+  background: color-mix(in srgb, var(--mru-ink-soft) 9%, transparent);
+}
+
+.mru-chip--parsing {
+  border-color: color-mix(in srgb, var(--mru-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--mru-accent) 8%, transparent);
+  color: var(--mru-ink);
+}
+
+.mru-chip--parsed {
+  border-color: color-mix(in srgb, var(--mru-success) 32%, transparent);
+  background: color-mix(in srgb, var(--mru-success) 11%, transparent);
+}
+
+.mru-chip--failed {
+  border-color: color-mix(in srgb, var(--mru-error) 32%, transparent);
+  background: color-mix(in srgb, var(--mru-error) 10%, transparent);
+  color: color-mix(in srgb, var(--mru-error) 72%, var(--mru-ink));
+}
+
+.mru-chip--plain {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+/* 2px indeterminate strip inside a parsing chip */
+.mru-chip__pulse {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mru-chip__pulse::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  border-radius: 2px;
+  background: var(--mru-accent);
+  animation: mru-chip-pulse 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.mru-chip__progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--mru-accent);
+  transition: width 200ms ease;
+}
+
+/* menus — client-ui positions the wrapper (inline fixed left/top), not the card */
+.mru-menu-wrap {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.mru-menu {
+  display: flex;
+  flex-direction: column;
+  width: 226px;
+  max-width: calc(100vw - 24px);
+  padding: 4px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mru-menu__item:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mru-menu__item--danger {
+  color: var(--mru-error);
+}
+
+.mru-menu__item--danger:hover {
+  background: color-mix(in srgb, var(--mru-error) 10%, transparent);
+}
+
+.mru-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--mru-rule);
+}
+
+/* banner under the topbar (host not ready / token hint) */
+.mru-banner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+  color: var(--mru-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mru-banner::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mru-warn);
+}
+
+.mru-banner--error {
+  background: color-mix(in srgb, var(--mru-error) 7%, var(--mru-surface));
+}
+
+.mru-banner--error::before {
+  background: var(--mru-error);
+}
+
+.mru-banner--info:hover,
+.mru-banner--warn:hover {
+  background: color-mix(in srgb, var(--mru-warn) 6%, var(--mru-surface));
+}
+
+.mru-banner__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   5. Workspace / library rail
+   -------------------------------------------------------------------------- */
+
+.mru-workspace {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mru-rail {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 288px;
+  min-height: 0;
+  border-right: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-rail__head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 16px 9px;
+}
+
+.mru-rail__title {
+  color: var(--mru-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.mru-rail__count {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* search field */
+.mru-search {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 32px;
+  margin: 0 12px 10px;
+  padding: 0 6px 0 30px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: var(--mru-surface-2);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.mru-search:hover {
+  border-color: color-mix(in srgb, var(--mru-ink) 22%, transparent);
+}
+
+.mru-search:focus-within {
+  border-color: var(--mru-accent);
+  outline: 2px solid var(--mru-accent);
+  outline-offset: 1px;
+}
+
+.mru-search__icon {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mru-search__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.mru-search__input {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  line-height: 1;
+}
+
+.mru-search__input:focus,
+.mru-root .mru-search__input:focus-visible {
+  outline: none;
+}
+
+.mru-search__input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mru-root .mru-search__input::-webkit-search-decoration,
+.mru-root .mru-search__input::-webkit-search-cancel-button,
+.mru-root .mru-search__input::-webkit-search-results-button,
+.mru-root .mru-search__input::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.mru-search__clear {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mru-search__clear:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--mru-ink);
+}
+
+.mru-search__input:not(:placeholder-shown) ~ .mru-search__clear {
+  display: inline-flex;
+}
+
+/* list */
+.mru-rail__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 8px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
+}
+
+.mru-doc {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: start;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 9px 10px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.mru-doc::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 1px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--mru-accent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mru-doc:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mru-doc--active,
+.mru-doc[aria-current="page"] {
+  border-color: var(--mru-rule);
+  background: color-mix(in srgb, var(--mru-accent) 5%, transparent);
+}
+
+.mru-doc--active::before,
+.mru-doc[aria-current="page"]::before {
+  opacity: 1;
+}
+
+.mru-doc__title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--mru-ink);
+  font-size: 12.8px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mru-doc__meta {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.8px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mru-doc > .mru-chip {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  margin-top: 1px;
+}
+
+.mru-doc__actions {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mru-doc:hover .mru-doc__actions,
+.mru-doc:focus-within .mru-doc__actions {
+  opacity: 1;
+}
+
+.mru-doc__actions .mru-icon-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.mru-doc__actions .mru-icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mru-doc[data-status="failed"] .mru-doc__meta {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* skeletons */
+.mru-doc-skeleton {
+  height: 54px;
+  margin: 0 2px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-skeleton);
+  animation: mru-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.mru-line-skeleton {
+  height: 8px;
+  margin: 0 2px 8px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-skeleton);
+  animation: mru-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.mru-line-skeleton--w60 {
+  width: 60%;
+}
+
+.mru-line-skeleton--w80 {
+  width: 80%;
+}
+
+.mru-rail__empty {
+  padding: 20px 16px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.mru-rail__foot {
+  flex: none;
+  overflow: hidden;
+  margin-top: auto;
+  padding: 9px 16px;
+  border-top: 1px solid var(--mru-rule);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* idle state: keep the promise of the list, not its emptiness */
+.mru-root[data-status="idle"] .mru-rail__empty {
+  display: none;
+}
+
+.mru-root[data-status="ready"] .mru-doc-skeleton,
+.mru-root[data-status="error"] .mru-doc-skeleton {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   6. Main column + empty states
+   -------------------------------------------------------------------------- */
+
+.mru-main {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  /* the desk is a hair darker than the sheet: the page reads as an object */
+  background: color-mix(in srgb, var(--mru-ink) 3.5%, var(--mru-bg));
+}
+
+.mru-paper-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 30px 28px 72px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
+}
+
+.mru-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 48px 24px 64px;
+  text-align: center;
+}
+
+.mru-empty__art {
+  width: 220px;
+  max-width: 64%;
+  margin-bottom: 22px;
+  color: var(--dsw-alias-label-secondary);
+  opacity: 0.9;
+}
+
+.mru-empty__art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.mru-empty__title {
+  max-width: 24ch;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.24;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.mru-empty__text {
+  max-width: 46ch;
+  margin-top: 10px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12.8px;
+  line-height: 1.7;
+}
+
+.mru-empty > .mru-spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.mru-empty__hint {
+  font-family: var(--mru-font-ui);
+}
+
+.mru-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.mru-empty__hint {
+  margin-top: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mru-empty--quiet {
+  padding: 40px 24px;
+}
+
+.mru-empty--quiet .mru-empty__art {
+  display: none;
+}
+
+.mru-empty--quiet .mru-empty__title {
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.004em;
+}
+
+/* centered loading line for the parsed draft (UI-SPEC §4.11) */
+.mru-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 88px 24px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+}
+
+.mru-loading .mru-spinner {
+  width: 15px;
+  height: 15px;
+}
+
+/* --------------------------------------------------------------------------
+   7. Paper — the reading surface
+   -------------------------------------------------------------------------- */
+
+.mru-paper {
+  /* The sheet is sized to the 56ch reading measure plus its generous margins
+     (56ch + 120px of paper padding + 2px of rules ≈ 680px), staying well under
+     the 760px cap so the English text fills the page instead of floating in it. */
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 14px;
+  background: var(--mru-paper-bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 22px 56px -34px rgba(0, 0, 0, 0.26);
+  animation: mru-paper-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* running head: the desk strip that keeps the paper identity while scrolling */
+.mru-paper__runhead {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 60px;
+  border-bottom: 1px solid var(--mru-rule);
+  border-radius: 14px 14px 0 0;
+  background: color-mix(in srgb, var(--mru-paper-bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.mru-paper__runhead-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 12.5px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mru-paper__runhead-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+/* reading mode segmented control */
+.mru-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  margin-right: 4px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mru-segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.mru-segmented__item:hover {
+  color: var(--mru-ink);
+}
+
+.mru-segmented__item--active {
+  background: var(--mru-surface-2);
+  color: var(--mru-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mru-font-dec,
+.mru-font-inc {
+  width: 26px;
+  height: 26px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mru-paper__col {
+  padding: 56px 60px 72px;
+}
+
+.mru-paper__title {
+  max-width: 100%;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: clamp(27px, 2.6vw, 34px);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+.mru-paper__meta {
+  margin-top: 13px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-ui);
+  font-size: 11.8px;
+  line-height: 1.6;
+}
+
+/* title-block rule: a double hairline, like the head rule of a journal */
+.mru-paper__rule {
+  height: 3px;
+  margin: 18px 0 30px;
+  border-top: 1px solid var(--mru-rule-strong);
+  border-bottom: 1px solid var(--mru-rule);
+}
+
+.mru-paper__body {
+  position: relative;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: calc(17.5px * var(--mru-read-scale, 1));
+  font-weight: 400;
+  line-height: 1.72;
+  overflow-wrap: break-word;
+}
+
+.mru-paper__body ::selection {
+  background: var(--dsw-alias-bg-document-selection);
+}
+
+/* block rhythm */
+.mru-block {
+  position: relative;
+}
+
+.mru-block--p,
+.mru-block--list {
+  margin: 0 0 1.05em;
+}
+
+.mru-block--h2,
+.mru-block--h1 {
+  margin: 2.2em 0 0.85em;
+}
+
+.mru-block--h3 {
+  margin: 1.8em 0 0.7em;
+}
+
+.mru-block--h4 {
+  margin: 1.5em 0 0.6em;
+}
+
+.mru-paper__body > .mru-block:first-child,
+.mru-paper__body > :first-child {
+  margin-top: 0;
+}
+
+.mru-block--quote,
+.mru-block--code,
+.mru-block--formula,
+.mru-block--figure,
+.mru-block--table {
+  margin: 1.8em 0;
+}
+
+/* headings */
+.mru-h {
+  max-width: 56ch;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-weight: 600;
+  line-height: 1.26;
+  letter-spacing: -0.006em;
+  text-wrap: balance;
+}
+
+.mru-h--1 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+}
+
+.mru-h--2 {
+  font-size: 21px;
+}
+
+.mru-h--3 {
+  font-size: 18px;
+}
+
+.mru-h--4 {
+  font-size: 16px;
+  line-height: 1.32;
+}
+
+/* paragraph */
+.mru-para__text {
+  max-width: 56ch;
+  margin: 0;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+.mru-para__text--muted {
+  color: var(--mru-ink-soft);
+  font-size: calc(14px * var(--mru-read-scale, 1));
+  line-height: 1.6;
+}
+
+/* translator's voice: quieter sans, hung from a hairline */
+.mru-para__translation {
+  max-width: 56ch;
+  margin: 0.5em 0 0;
+  padding-left: 13px;
+  border-left: 2px solid var(--mru-rule-strong);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-trans);
+  font-size: calc(15px * var(--mru-read-scale, 1));
+  font-weight: 400;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+.mru-para__translation:empty {
+  display: none;
+}
+
+/* translation mode: the translation becomes the primary reading voice */
+.mru-paper--translated .mru-para__text {
+  display: none;
+}
+
+.mru-paper--translated .mru-para__translation {
+  max-width: 56ch;
+  margin: 0 0 1.05em;
+  padding-left: 0;
+  border-left: 0;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-trans);
+  font-size: calc(17.5px * var(--mru-read-scale, 1));
+  line-height: 1.72;
+}
+
+/* 译文 mode fallback: an untranslated block shows its original English, so it
+   keeps the serif reading voice instead of the translation voice. */
+.mru-paper--translated .mru-para__translation--source {
+  max-width: 56ch;
+  margin: 0 0 1.05em;
+  padding-left: 0;
+  border-left: 0;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: calc(17.5px * var(--mru-read-scale, 1));
+  line-height: 1.72;
+}
+
+.mru-para__retry {
+  display: inline;
+  height: auto;
+  margin: 0 0 0 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mru-error);
+  font: inherit;
+  line-height: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  cursor: pointer;
+}
+
+.mru-para__retry:hover {
+  color: color-mix(in srgb, var(--mru-error) 80%, var(--mru-ink));
+}
+
+.mru-para__error {
+  display: inline-block;
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--mru-error) 76%, var(--mru-ink));
+  font-family: var(--mru-font-ui);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* tiny provider label, only on hover (UI-SPEC §4.5) */
+.mru-para__provider,
+.mru-translation__provider,
+.mru-para__translation-provider {
+  display: block;
+  margin-top: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-ui);
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mru-para__translation:hover .mru-para__provider,
+.mru-para__translation:hover .mru-translation__provider,
+.mru-para__translation:hover .mru-para__translation-provider {
+  opacity: 1;
+}
+
+/* lists */
+.mru-list {
+  max-width: 56ch;
+  padding-left: 1.35em;
+  list-style: disc outside;
+}
+
+.mru-list--ordered {
+  list-style: decimal outside;
+}
+
+.mru-list__item {
+  margin: 0 0 0.38em;
+  padding-left: 0.1em;
+  overflow-wrap: break-word;
+}
+
+.mru-list__item:last-child {
+  margin-bottom: 0;
+}
+
+.mru-list__item::marker {
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 0.92em;
+}
+
+/* quote */
+.mru-block--quote {
+  max-width: 56ch;
+  padding: 0 0 0 18px;
+  border-left: 2px solid var(--mru-rule-strong);
+  color: var(--mru-ink-soft);
+}
+
+.mru-block--quote .mru-para__text {
+  font-style: italic;
+  max-width: 100%;
+}
+
+/* code */
+.mru-code {
+  max-width: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-ink) 4%, var(--mru-paper-bg));
+  color: var(--mru-ink);
+  font-family: var(--mru-font-mono);
+  font-size: calc(13px * var(--mru-read-scale, 1));
+  line-height: 1.62;
+  tab-size: 2;
+}
+
+.mru-code code {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  white-space: pre;
+}
+
+.mru-inline-code {
+  margin: 0 0.04em;
+  padding: 0.12em 0.3em;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mru-ink) 5%, transparent);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-mono);
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
+
+/* formulas / KaTeX */
+.mru-block--formula {
+  max-width: 100%;
+}
+
+.mru-formula {
+  max-width: 100%;
+}
+
+.mru-formula:not(.mru-formula--inline) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+  scrollbar-width: thin;
+}
+
+.mru-formula--inline {
+  display: inline;
+  padding: 0 0.12em;
+  font-size: 1em;
+  white-space: nowrap;
+}
+
+.mru-formula__raw {
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-mono);
+  font-size: calc(12.5px * var(--mru-read-scale, 1));
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mru-formula--inline.mru-formula__raw {
+  padding: 0 0.12em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mru-ink) 5%, transparent);
+  font-size: 0.86em;
+}
+
+.mru-root .katex {
+  font-size: inherit;
+}
+
+.mru-root .katex-display {
+  margin: 0.35em 0;
+}
+
+.mru-root .katex-display > .katex {
+  max-width: 100%;
+}
+
+/* figures */
+.mru-block--figure {
+  max-width: 100%;
+}
+
+.mru-figure__img-wrap {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-ink) 3%, var(--mru-paper-bg));
+}
+
+.mru-figure__img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.mru-figure__caption {
+  max-width: 60ch;
+  margin-top: 9px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mru-figure__caption strong {
+  color: var(--mru-ink);
+  font-weight: 600;
+}
+
+/* tables — three-line academic rule, no vertical lines */
+.mru-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: var(--mru-paper-bg);
+  scrollbar-width: thin;
+}
+
+.mru-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: calc(13.5px * var(--mru-read-scale, 1));
+  line-height: 1.5;
+}
+
+.mru-table th {
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--mru-rule-strong);
+  background: color-mix(in srgb, var(--mru-ink) 4%, transparent);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.mru-table td {
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--mru-rule);
+  vertical-align: top;
+}
+
+.mru-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.mru-table__caption {
+  max-width: 60ch;
+  margin-top: 9px;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* page marks — quiet serif numerals hanging in the left gutter */
+.mru-pagemark {
+  position: relative;
+  height: 18px;
+  margin: 30px 0 10px;
+}
+
+.mru-pagemark__label {
+  position: absolute;
+  top: 0;
+  left: -44px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-read);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 18px;
+  letter-spacing: 0.06em;
+}
+
+.mru-pagemark__label::after {
+  content: "";
+  display: inline-block;
+  width: 13px;
+  height: 1px;
+  margin-left: 8px;
+  vertical-align: middle;
+  background: var(--mru-rule-strong);
+}
+
+/* inline markdown */
+.mru-link {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in srgb, var(--mru-ink) 32%, transparent);
+  cursor: pointer;
+}
+
+.mru-link:hover {
+  text-decoration-color: var(--mru-ink);
+}
+
+/* highlights — text color is never changed (UI-SPEC §6) */
+.mru-hl {
+  padding: 0.04em 0.02em;
+  border-radius: 2px;
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: pointer;
+  transition: box-shadow 140ms ease;
+}
+
+.mru-hl--yellow {
+  background: var(--mru-hl-yellow);
+}
+
+.mru-hl--sage {
+  background: var(--mru-hl-sage);
+}
+
+.mru-hl--sky {
+  background: var(--mru-hl-sky);
+}
+
+.mru-hl--rose {
+  background: var(--mru-hl-rose);
+}
+
+.mru-hl--active {
+  box-shadow: 0 0 0 1.5px var(--mru-hl-active);
+  animation: mru-hl-glow 1.6s ease-out;
+}
+
+/* per-block tools, in the paper's right gutter */
+.mru-block__tools {
+  position: absolute;
+  top: 1px;
+  /* hug the text measure (56ch) rather than the full column width */
+  right: max(0px, calc(100% - 56ch - 34px));
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 0s linear 120ms;
+}
+
+.mru-block:hover > .mru-block__tools,
+.mru-block:focus-within > .mru-block__tools {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 120ms ease;
+}
+
+.mru-block__tools .mru-icon-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--mru-rule-strong);
+  background: var(--mru-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.mru-block__tools .mru-icon-btn:hover {
+  border-color: var(--mru-rule-strong);
+  background: var(--mru-surface-2);
+}
+
+.mru-block__translate,
+.mru-block__annotate {
+  color: var(--mru-ink-soft);
+}
+
+.mru-block__translate:hover,
+.mru-block__annotate:hover {
+  color: var(--mru-ink);
+}
+
+/* once a block is showing its translation there is nothing left to translate */
+.mru-block--has-translation .mru-block__translate {
+  display: none;
+}
+
+/* translation of translated-mode paragraph blocks keeps a little air */
+.mru-paper--translated .mru-block--p {
+  margin-bottom: 1.05em;
+}
+
+/* --------------------------------------------------------------------------
+   8. Parse setup, parsing, failure
+   -------------------------------------------------------------------------- */
+
+.mru-setup {
+  width: 100%;
+  max-width: 660px;
+  margin: 44px auto 56px;
+  padding: 28px 30px 26px;
+  border: 1px solid var(--mru-rule);
+  border-radius: 10px;
+  background: var(--mru-surface);
+}
+
+/* the same form inside the reparse modal is a section, not a card on a card */
+.mru-modal__body > .mru-setup {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mru-setup__intro {
+  max-width: 54ch;
+}
+
+.mru-setup__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.008em;
+}
+
+.mru-setup__text {
+  margin-top: 7px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.mru-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--mru-warn) 30%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-warn) 10%, transparent);
+  color: var(--mru-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mru-callout--warn::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mru-warn);
+}
+
+.mru-callout .mru-link-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.mru-callout--error {
+  border-color: color-mix(in srgb, var(--mru-error) 30%, transparent);
+  background: color-mix(in srgb, var(--mru-error) 8%, transparent);
+}
+
+.mru-callout--error::before {
+  background: var(--mru-error);
+}
+
+.mru-setup__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 18px;
+  margin-top: 22px;
+}
+
+.mru-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mru-field__label {
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.mru-field__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mru-field__row > .mru-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mru-field__hint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mru-field__hint--ok {
+  color: color-mix(in srgb, var(--mru-success) 68%, var(--mru-ink));
+}
+
+.mru-field__value {
+  display: block;
+  padding: 7px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--mru-rule);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-ink) 3%, transparent);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mru-input,
+.mru-select,
+.mru-textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: var(--mru-surface);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  line-height: 1.45;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.mru-input,
+.mru-select {
+  height: 32px;
+  padding: 0 10px;
+}
+
+.mru-select {
+  padding-right: 6px;
+  cursor: pointer;
+}
+
+.mru-input:hover,
+.mru-select:hover,
+.mru-textarea:hover {
+  border-color: var(--mru-ink-soft);
+}
+
+.mru-input::placeholder,
+.mru-textarea::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mru-textarea {
+  min-height: 88px;
+  padding: 8px 10px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.mru-input--url {
+  width: 100%;
+}
+
+.mru-setup__toggles {
+  margin-top: 20px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--mru-rule);
+  cursor: pointer;
+}
+
+.mru-toggle-row:last-child {
+  border-bottom: 0;
+}
+
+.mru-toggle-row--plain {
+  padding: 9px 0 2px;
+  border-bottom: 0;
+  cursor: default;
+}
+
+.mru-toggle-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mru-toggle-row__title {
+  color: var(--mru-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.mru-toggle-row__hint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* switch — host control shape, host tokens */
+.mru-switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mru-ink) 12%, transparent);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.mru-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dsw-alias-switch-thumb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-switch--on,
+.mru-switch[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--mru-accent);
+}
+
+.mru-switch--on::after,
+.mru-switch[aria-checked="true"]::after {
+  transform: translateX(14px);
+}
+
+.mru-setup__foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-setup__foot .mru-note-text {
+  flex: 1 1 auto;
+  max-width: 48ch;
+}
+
+/* parsing progress card */
+.mru-parsing {
+  width: 100%;
+  max-width: 640px;
+  margin: 44px auto 56px;
+  padding: 18px 20px;
+  border: 1px solid var(--mru-rule);
+  border-radius: 10px;
+  background: var(--mru-surface);
+}
+
+.mru-parsing--translate {
+  max-width: 760px;
+  margin: 0 auto 18px;
+  padding: 12px 16px;
+}
+
+.mru-parsing__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mru-parsing__row .mru-spinner {
+  width: 15px;
+  height: 15px;
+}
+
+.mru-parsing__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mru-ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mru-parsing__row .mru-btn {
+  margin-left: auto;
+}
+
+.mru-progress {
+  height: 3px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mru-ink) 10%, transparent);
+}
+
+.mru-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mru-accent);
+  transition: width 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* failure card */
+.mru-fail {
+  width: 100%;
+  max-width: 520px;
+  margin: 52px auto 56px;
+  padding: 26px 28px;
+  border: 1px solid var(--mru-rule);
+  border-radius: 10px;
+  background: var(--mru-surface);
+}
+
+.mru-fail__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.26;
+  letter-spacing: -0.008em;
+}
+
+.mru-fail__text {
+  margin-top: 8px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.mru-fail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   9. Margin column — the reading desk's real margin
+   The numbered annotation slips and the ticked outline are the one place
+   where the design spends its boldness; everything else stays quiet.
+   -------------------------------------------------------------------------- */
+
+.mru-margin {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 296px;
+  min-height: 0;
+  border-left: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+}
+
+.mru-margin__tabs {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--mru-rule);
+}
+
+.mru-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.mru-tab::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: -1px;
+  left: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.mru-tab:hover {
+  color: var(--mru-ink);
+}
+
+.mru-tab--active,
+.mru-tab[aria-selected="true"] {
+  color: var(--mru-ink);
+  font-weight: 600;
+}
+
+.mru-tab--active::after,
+.mru-tab[aria-selected="true"]::after {
+  background: var(--mru-accent);
+}
+
+.mru-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mru-ink) 8%, transparent);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.mru-margin__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 14px 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
+}
+
+/* outline — a table of contents drawn as a spine with leader ticks */
+.mru-outline {
+  position: relative;
+  padding: 4px 0 6px;
+}
+
+.mru-outline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 14px;
+  left: 15px;
+  width: 1px;
+  background: var(--mru-rule);
+}
+
+.mru-outline__item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 5px 8px 5px 26px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.mru-outline__item::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  width: 7px;
+  height: 1px;
+  background: var(--mru-rule-strong);
+  transform: translateY(-50%);
+  transition: background-color 120ms ease, width 120ms ease;
+}
+
+.mru-outline__item:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--mru-ink);
+}
+
+.mru-outline__item--l1 {
+  padding-left: 26px;
+  color: var(--mru-ink);
+  font-weight: 500;
+}
+
+.mru-outline__item--l1::before {
+  width: 7px;
+}
+
+.mru-outline__item--l2 {
+  padding-left: 38px;
+}
+
+.mru-outline__item--l2::before {
+  width: 19px;
+}
+
+.mru-outline__item--l3 {
+  padding-left: 50px;
+}
+
+.mru-outline__item--l3::before {
+  width: 31px;
+}
+
+.mru-outline__item--l4 {
+  padding-left: 62px;
+}
+
+.mru-outline__item--l4::before {
+  width: 43px;
+}
+
+.mru-outline__item--active {
+  background: color-mix(in srgb, var(--mru-accent) 5%, transparent);
+  color: var(--mru-ink);
+  font-weight: 500;
+}
+
+.mru-outline__item--active::before {
+  width: 9px;
+  height: 1.5px;
+  background: var(--mru-accent);
+}
+
+.mru-outline__item--l2.mru-outline__item--active::before {
+  width: 21px;
+}
+
+.mru-outline__item--l3.mru-outline__item--active::before {
+  width: 33px;
+}
+
+.mru-outline__item--l4.mru-outline__item--active::before {
+  width: 45px;
+}
+
+/* notes — numbered slips in the margin, in serif numerals */
+.mru-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 6px 16px;
+  counter-reset: mru-note;
+}
+
+.mru-note {
+  position: relative;
+  padding: 9px 11px 11px;
+  cursor: pointer;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mru-ink) 2.5%, var(--mru-surface));
+  counter-increment: mru-note;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.mru-note::before {
+  content: counter(mru-note);
+  position: absolute;
+  top: 9px;
+  left: -18px;
+  width: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-read);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.mru-note:hover {
+  border-color: color-mix(in srgb, var(--mru-ink) 20%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 4%, var(--mru-surface));
+}
+
+.mru-note--active {
+  border-color: color-mix(in srgb, var(--mru-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--mru-accent) 5%, var(--mru-surface));
+}
+
+.mru-note__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.mru-note__swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--mru-ink) 16%, transparent);
+  border-radius: 2px;
+}
+
+.mru-note__swatch[data-color="yellow"] {
+  background: var(--mru-hl-yellow);
+}
+
+.mru-note__swatch[data-color="sage"] {
+  background: var(--mru-hl-sage);
+}
+
+.mru-note__swatch[data-color="sky"] {
+  background: var(--mru-hl-sky);
+}
+
+.mru-note__swatch[data-color="rose"] {
+  background: var(--mru-hl-rose);
+}
+
+.mru-note__time {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.mru-note__delete {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mru-note:hover .mru-note__delete,
+.mru-note:focus-within .mru-note__delete {
+  opacity: 1;
+}
+
+.mru-note__quote {
+  margin-top: 7px;
+  padding-left: 9px;
+  border-left: 2px solid color-mix(in srgb, var(--mru-ink) 14%, transparent);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mru-note__body {
+  margin-top: 7px;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.mru-margin__empty {
+  padding: 18px 6px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.mru-margin__notice {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--mru-warn) 26%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-warn) 8%, transparent);
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------------------------
+   10. Selection tools — the memorable translation slip
+   Client-ui positions these fixed with inline left/top.
+   -------------------------------------------------------------------------- */
+
+.mru-selbar {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 24px);
+  padding: 4px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-selbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.mru-selbar__btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mru-selbar__btn--primary {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+.mru-selbar__btn--primary:hover {
+  background: var(--dsw-alias-button-primary-hover);
+  color: var(--dsw-alias-label-primary-inverted);
+}
+
+.mru-selbar__sep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--mru-rule-strong);
+}
+
+.mru-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.mru-swatch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--mru-ink) 18%, transparent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 100ms ease;
+}
+
+.mru-swatch:hover {
+  transform: scale(1.12);
+}
+
+.mru-swatch--yellow {
+  background: var(--mru-hl-yellow);
+}
+
+.mru-swatch--sage {
+  background: var(--mru-hl-sage);
+}
+
+.mru-swatch--sky {
+  background: var(--mru-hl-sky);
+}
+
+.mru-swatch--rose {
+  background: var(--mru-hl-rose);
+}
+
+.mru-swatch--active,
+.mru-swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 1.5px var(--mru-ink);
+}
+
+/* the selection translation card: a translator's slip with a double rule */
+.mru-selcard {
+  position: fixed;
+  z-index: 71;
+  overflow: hidden;
+  width: min(392px, calc(100vw - 24px));
+  border: 1px solid var(--mru-rule-strong);
+  border-top: 2px solid var(--mru-ink);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mru-surface) 94%, var(--mru-paper-bg));
+  box-shadow: var(--mru-shadow);
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mru-selcard::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--mru-rule-strong);
+}
+
+.mru-selcard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 10px 0 14px;
+}
+
+.mru-selcard__label {
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.mru-selcard__src {
+  max-height: 5.4em;
+  margin: 9px 14px 10px;
+  padding-left: 10px;
+  overflow-y: auto;
+  border-left: 2px solid var(--mru-rule-strong);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.mru-selcard__body {
+  padding: 0 14px 12px;
+}
+
+.mru-selcard__text {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-trans);
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.mru-selcard__error {
+  color: color-mix(in srgb, var(--mru-error) 78%, var(--mru-ink));
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.mru-selcard__body .mru-spinner {
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 5px;
+}
+
+.mru-selcard__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 9px 14px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-selcard__provider {
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+/* note editor popover */
+.mru-noteeditor {
+  position: fixed;
+  z-index: 72;
+  width: min(360px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  animation: mru-pop 120ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-noteeditor__quote {
+  max-height: 4.4em;
+  margin: 0 0 8px;
+  padding-left: 9px;
+  overflow-y: auto;
+  border-left: 2px solid var(--mru-rule-strong);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-read);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.mru-noteeditor__input {
+  width: 100%;
+  min-height: 84px;
+  font-size: 13px;
+}
+
+.mru-noteeditor__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mru-noteeditor__foot .mru-swatches {
+  margin-right: auto;
+  padding: 0;
+}
+
+/* --------------------------------------------------------------------------
+   11. Modals, sections, toasts
+   -------------------------------------------------------------------------- */
+
+.mru-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.mru-modal__mask {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask-1);
+  animation: mru-fade 140ms ease;
+}
+
+.mru-modal__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: hidden;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  animation: mru-pop 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-modal__panel--settings {
+  width: min(600px, 100%);
+}
+
+.mru-modal__panel--confirm {
+  width: min(420px, 100%);
+  padding: 20px;
+}
+
+.mru-modal__panel--confirm .mru-modal__body {
+  padding: 0;
+  overflow: visible;
+}
+
+.mru-modal__panel--import {
+  width: min(480px, 100%);
+}
+
+.mru-modal__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px 13px 18px;
+  border-bottom: 1px solid var(--mru-rule);
+}
+
+.mru-modal__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.mru-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent;
+}
+
+.mru-modal__foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-section {
+  margin-bottom: 22px;
+}
+
+.mru-section:last-child {
+  margin-bottom: 4px;
+}
+
+.mru-section__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.mru-section__desc {
+  max-width: 56ch;
+  margin: 4px 0 12px;
+  color: var(--mru-ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mru-confirm__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.mru-confirm__text {
+  margin-top: 8px;
+  color: var(--mru-ink-soft);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.mru-confirm__name,
+.mru-confirm__text--name {
+  margin-top: 10px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--mru-rule);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mru-ink) 3%, transparent);
+  color: var(--mru-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.mru-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* toasts */
+.mru-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 42px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.mru-toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 9px 10px 9px 12px;
+  border-radius: 10px;
+  background: var(--dsw-alias-toast-bg);
+  color: var(--dsw-alias-toast-label);
+  box-shadow: var(--mru-shadow);
+  font-family: var(--mru-font-ui);
+  font-size: 12.5px;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: mru-toast-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.mru-toast::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mru-success);
+}
+
+.mru-toast--error::before {
+  background: var(--mru-error);
+}
+
+.mru-toast--warn::before {
+  background: var(--mru-warn);
+}
+
+.mru-toast--info::before {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.mru-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mru-toast__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.62;
+  cursor: pointer;
+}
+
+.mru-toast__close:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  opacity: 1;
+}
+
+/* drag & drop overlay */
+.mru-drop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--mru-bg) 55%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.mru-drop__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  padding: 34px 44px;
+  border: 2px dashed color-mix(in srgb, var(--mru-accent) 42%, transparent);
+  border-radius: 10px;
+  background: var(--mru-surface);
+  box-shadow: var(--mru-shadow);
+  text-align: center;
+}
+
+.mru-drop__title {
+  color: var(--mru-ink);
+  font-family: var(--mru-font-read);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.mru-drop__text {
+  color: var(--mru-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mru-root--dragging .mru-workspace {
+  opacity: 0.45;
+}
+
+.mru-root--dragging .mru-workspace,
+.mru-root--dragging .mru-statusbar {
+  transition: opacity 140ms ease;
+}
+
+/* scrim for the mobile drawer (client-ui renders it only when the rail is open) */
+.mru-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  display: none;
+  background: var(--dsw-alias-bg-mask-1);
+  animation: mru-fade 140ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   12. Status bar
+   -------------------------------------------------------------------------- */
+
+.mru-statusbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 30px;
+  padding: 0 14px;
+  overflow: hidden;
+  border-top: 1px solid var(--mru-rule);
+  background: var(--mru-surface);
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.mru-statusbar > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mru-statusbar > :last-child:not(:first-child) {
+  margin-left: auto;
+  flex: none;
+}
+
+.mru-statusbar__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mru-statusbar > .mru-statusbar__group:last-child {
+  flex: none;
+  margin-left: auto;
+}
+
+.mru-statusbar__group .mru-dot {
+  margin: 0 0.3em;
+}
+
+.mru-statusbar .mru-spinner {
+  width: 10px;
+  height: 10px;
+}
+
+/* --------------------------------------------------------------------------
+   13. Scrollbars — thin, scoped, host-token colored
+   -------------------------------------------------------------------------- */
+
+.mru-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.mru-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mru-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--dsw-alias-scrollbar-bg-l1);
+  background-clip: content-box;
+}
+
+.mru-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--dsw-alias-scrollbar-hover-l1);
+  background-clip: content-box;
+}
+
+.mru-root ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   14. Motion — one entry for the paper, popovers scale/fade, nothing ambient
+   -------------------------------------------------------------------------- */
+
+@keyframes mru-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mru-paper-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mru-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mru-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mru-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mru-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes mru-chip-pulse {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(280%);
+  }
+}
+
+@keyframes mru-hl-glow {
+  0% {
+    box-shadow: 0 0 0 1.5px var(--mru-hl-active);
+  }
+  100% {
+    box-shadow: 0 0 0 1.5px transparent;
+  }
+}
+
+@keyframes mru-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-paper {
+    animation: none;
+  }
+
+  .mru-menu,
+  .mru-selbar,
+  .mru-selcard,
+  .mru-noteeditor,
+  .mru-modal__panel {
+    animation: none;
+  }
+
+  .mru-modal__mask,
+  .mru-scrim,
+  .mru-toast {
+    animation: none;
+  }
+
+  .mru-chip__pulse::after {
+    left: 0;
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .mru-doc-skeleton,
+  .mru-line-skeleton {
+    animation: none;
+    opacity: 0.72;
+  }
+
+  .mru-hl--active {
+    animation: none;
+  }
+
+  .mru-outline__item::before,
+  .mru-doc::before,
+  .mru-switch::after,
+  .mru-swatch {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   15. Responsive layout
+   Container queries first: the app is a panel guest, so its own width decides
+   the layout, not the viewport. A viewport-media fallback follows for engines
+   without container query support.
+
+   Breakpoints (UI-SPEC §2):
+     > 1280px  three zones (rail · paper · margin)
+     900–1280  margin hidden; .mru-root--margin-open shows it as a right sheet
+     < 900px   rail hidden; .mru-root--rail-open shows it as a left drawer
+   -------------------------------------------------------------------------- */
+
+/* base: both toggles are hidden where their zone is static */
+.mru-toggle-rail,
+.mru-toggle-margin {
+  display: none;
+}
+
+@container mru-desk (max-width: 1280px) {
+  .mru-toggle-margin {
+    display: inline-flex;
+  }
+
+  .mru-margin {
+    display: none;
+  }
+
+  .mru-root--margin-open .mru-margin {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 46;
+    display: flex;
+    width: 296px;
+    border-left: 1px solid var(--mru-rule);
+    box-shadow: -20px 0 44px -26px rgba(0, 0, 0, 0.3);
+    animation: mru-sheet-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+}
+
+@container mru-desk (max-width: 900px) {
+  .mru-toggle-rail {
+    display: inline-flex;
+  }
+
+  .mru-scrim {
+    display: block;
+  }
+
+  .mru-topbar {
+    gap: 6px;
+    padding: 0 10px;
+  }
+
+  .mru-brand__count {
+    display: none;
+  }
+
+  .mru-brand__name {
+    display: none;
+  }
+
+  /* rail becomes a left drawer */
+  .mru-rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 46;
+    width: min(312px, 86vw);
+    border-right: 1px solid var(--mru-rule);
+    box-shadow: 20px 0 44px -26px rgba(0, 0, 0, 0.32);
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1), visibility 0s linear 180ms;
+  }
+
+  .mru-root--rail-open .mru-rail {
+    transform: none;
+    visibility: visible;
+    transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .mru-root--margin-open .mru-margin {
+    width: min(296px, 88vw);
+  }
+
+  /* the paper becomes a full-bleed sheet */
+  .mru-paper-scroll {
+    padding: 0 0 48px;
+  }
+
+  .mru-paper {
+    max-width: none;
+    margin: 0;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .mru-paper__runhead {
+    padding: 0 20px;
+    border-radius: 0;
+  }
+
+  .mru-paper__col {
+    padding: 28px 20px 56px;
+  }
+
+  .mru-paper__title {
+    font-size: clamp(24px, 7vw, 30px);
+  }
+
+  .mru-paper__meta {
+    font-size: 11.2px;
+  }
+
+  .mru-pagemark,
+  .mru-block__tools {
+    display: none;
+  }
+
+  .mru-empty {
+    padding: 40px 18px 56px;
+  }
+
+  .mru-empty__art {
+    width: 184px;
+    margin-bottom: 18px;
+  }
+
+  .mru-empty__title {
+    font-size: 23px;
+  }
+
+  .mru-statusbar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .mru-setup,
+  .mru-parsing,
+  .mru-parsing--translate,
+  .mru-fail {
+    margin-right: 16px;
+    margin-left: 16px;
+    max-width: none;
+  }
+
+  .mru-setup {
+    padding: 22px 18px 20px;
+  }
+
+  .mru-selbar {
+    gap: 0;
+  }
+}
+
+@container mru-desk (max-width: 560px) {
+  .mru-topbar__actions {
+    gap: 2px;
+  }
+
+  .mru-btn {
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .mru-btn--icon {
+    width: 28px;
+    padding: 0;
+  }
+
+  .mru-paper__runhead-actions {
+    gap: 0;
+  }
+
+  .mru-segmented {
+    margin-right: 2px;
+  }
+
+  .mru-segmented__item {
+    padding: 0 7px;
+  }
+
+  .mru-setup {
+    margin-right: 12px;
+    margin-left: 12px;
+    padding: 18px 14px;
+  }
+
+  .mru-setup__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mru-setup__title {
+    font-size: 21px;
+  }
+
+  .mru-modal {
+    padding: 12px;
+  }
+
+  .mru-modal__panel--confirm {
+    padding: 16px;
+  }
+
+  .mru-toasts {
+    right: 10px;
+    bottom: 38px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .mru-empty__actions {
+    gap: 6px;
+  }
+
+  .mru-rail {
+    width: min(304px, 88vw);
+  }
+}
+
+/* Fallback for engines without container queries: viewport media queries. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 1280px) {
+    .mru-toggle-margin {
+      display: inline-flex;
+    }
+
+    .mru-margin {
+      display: none;
+    }
+
+    .mru-root--margin-open .mru-margin {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 46;
+      display: flex;
+      width: 296px;
+      border-left: 1px solid var(--mru-rule);
+      box-shadow: -20px 0 44px -26px rgba(0, 0, 0, 0.3);
+      animation: mru-sheet-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .mru-toggle-rail {
+      display: inline-flex;
+    }
+
+    .mru-scrim {
+      display: block;
+    }
+
+    .mru-topbar {
+      gap: 6px;
+      padding: 0 10px;
+    }
+
+    .mru-brand__count,
+    .mru-brand__name {
+      display: none;
+    }
+
+    .mru-rail {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 46;
+      width: min(312px, 86vw);
+      border-right: 1px solid var(--mru-rule);
+      box-shadow: 20px 0 44px -26px rgba(0, 0, 0, 0.32);
+      transform: translateX(-102%);
+      visibility: hidden;
+      transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1), visibility 0s linear 180ms;
+    }
+
+    .mru-root--rail-open .mru-rail {
+      transform: none;
+      visibility: visible;
+      transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    .mru-root--margin-open .mru-margin {
+      width: min(296px, 88vw);
+    }
+
+    .mru-paper-scroll {
+      padding: 0 0 48px;
+    }
+
+    .mru-paper {
+      max-width: none;
+      margin: 0;
+      border-right: 0;
+      border-left: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .mru-paper__runhead {
+      padding: 0 20px;
+      border-radius: 0;
+    }
+
+    .mru-paper__col {
+      padding: 28px 20px 56px;
+    }
+
+    .mru-paper__title {
+      font-size: clamp(24px, 7vw, 30px);
+    }
+
+    .mru-paper__meta {
+      font-size: 11.2px;
+    }
+
+    .mru-pagemark,
+    .mru-block__tools {
+      display: none;
+    }
+
+    .mru-empty {
+      padding: 40px 18px 56px;
+    }
+
+    .mru-empty__art {
+      width: 184px;
+      margin-bottom: 18px;
+    }
+
+    .mru-empty__title {
+      font-size: 23px;
+    }
+
+    .mru-statusbar {
+      gap: 8px;
+      padding: 0 10px;
+    }
+
+    .mru-setup,
+    .mru-parsing,
+    .mru-parsing--translate,
+    .mru-fail {
+      margin-right: 16px;
+      margin-left: 16px;
+      max-width: none;
+    }
+
+    .mru-setup {
+      padding: 22px 18px 20px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .mru-topbar__actions {
+      gap: 2px;
+    }
+
+    .mru-btn {
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .mru-btn--icon {
+      width: 28px;
+      padding: 0;
+    }
+
+    .mru-paper__runhead-actions {
+      gap: 0;
+    }
+
+    .mru-segmented {
+      margin-right: 2px;
+    }
+
+    .mru-segmented__item {
+      padding: 0 7px;
+    }
+
+    .mru-setup {
+      margin-right: 12px;
+      margin-left: 12px;
+      padding: 18px 14px;
+    }
+
+    .mru-setup__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .mru-setup__title {
+      font-size: 21px;
+    }
+
+    .mru-modal {
+      padding: 12px;
+    }
+
+    .mru-modal__panel--confirm {
+      padding: 16px;
+    }
+
+    .mru-toasts {
+      right: 10px;
+      bottom: 38px;
+      max-width: calc(100vw - 20px);
+    }
+
+    .mru-empty__actions {
+      gap: 6px;
+    }
+
+    .mru-rail {
+      width: min(304px, 88vw);
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   16. Print — the desk falls away, only the paper prints
+   -------------------------------------------------------------------------- */
+
+@media print {
+  .mru-root {
+    display: block;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    color: #111;
+  }
+
+  .mru-topbar,
+  .mru-banner,
+  .mru-rail,
+  .mru-margin,
+  .mru-statusbar,
+  .mru-paper__runhead,
+  .mru-selbar,
+  .mru-selcard,
+  .mru-noteeditor,
+  .mru-menu,
+  .mru-modal,
+  .mru-toasts,
+  .mru-scrim,
+  .mru-drop,
+  .mru-block__tools,
+  .mru-pagemark {
+    display: none !important;
+  }
+
+  .mru-workspace,
+  .mru-main,
+  .mru-paper-scroll,
+  .mru-paper__body {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+  }
+
+  .mru-paper {
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+    animation: none;
+  }
+
+  .mru-paper__col {
+    padding: 0;
+  }
+
+  .mru-hl {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .mru-para__text,
+  .mru-paper__title,
+  .mru-h {
+    color: #111;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Rich translated content: markdown inline styling + KaTeX inside the
+   translation block and the selection card. The translation keeps its own
+   quieter sans voice; formulas render through the same vendored KaTeX as the
+   source, at the translated text's size.
+   -------------------------------------------------------------------------- */
+
+.mru-para__translation .mru-rich,
+.mru-selcard__text .mru-rich {
+  display: block;
+}
+
+.mru-para__translation p,
+.mru-selcard__text p {
+  margin: 0 0 0.4em;
+}
+
+.mru-para__translation p:last-child,
+.mru-selcard__text p:last-child {
+  margin-bottom: 0;
+}
+
+.mru-para__translation .mru-rich__item {
+  position: relative;
+  padding-left: 0.9em;
+}
+
+.mru-para__translation .mru-rich__bullet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--mru-ink-soft);
+}
+
+.mru-para__translation strong,
+.mru-selcard__text strong {
+  font-weight: 650;
+}
+
+.mru-para__translation em,
+.mru-selcard__text em {
+  font-style: italic;
+}
+
+.mru-para__translation .mru-inline-code,
+.mru-selcard__text .mru-inline-code {
+  font-size: 0.94em;
+}
+
+.mru-para__translation .mru-formula,
+.mru-selcard__text .mru-formula {
+  font-size: 1em;
+}
+
+.mru-para__translation .mru-formula--inline,
+.mru-selcard__text .mru-formula--inline {
+  display: inline;
+  margin: 0;
+}
+
+.mru-para__translation .mru-formula:not(.mru-formula--inline) {
+  margin: 0.35em 0;
+}
+
+.mru-para__translation .katex,
+.mru-selcard__text .katex {
+  font-size: 1em;
+}
+
+.mru-para__translation pre.mru-code {
+  margin: 0.4em 0;
+  padding: 8px 10px;
+  font-size: 0.9em;
+}
+
+.mru-paper--translated .mru-para__translation p {
+  margin-bottom: 0.6em;
+}
+
+/* translated-block affordance: the hover tool shows it can be retranslated */
+.mru-block__tools .mru-block__translate--done {
+  color: var(--mru-accent);
+}
+
+.mru-block__tools .mru-icon-btn[disabled] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mru-block__tools .mru-icon-btn .mru-spinner {
+  width: 12px;
+  height: 12px;
+}
+
+/* retranslating an already-translated block: keep the old text visible but quiet */
+.mru-para__translation--pending {
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+/* 「翻译本段」 result flash: still feedback when the translation already exists */
+@keyframes mru-translation-flash {
+  from {
+    background: color-mix(in srgb, var(--mru-accent) 14%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--mru-accent) 9%, transparent);
+  }
+  to {
+    background: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.mru-para__translation--flash {
+  animation: mru-translation-flash 1.4s ease-out;
+  border-radius: 4px;
+}
+
+.mru-paper--translated .mru-para__translation--flash {
+  animation: mru-translation-flash 1.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-para__translation--flash,
+  .mru-paper--translated .mru-para__translation--flash {
+    animation: none;
+    outline: 2px solid color-mix(in srgb, var(--mru-accent) 45%, transparent);
+    outline-offset: 3px;
+  }
+}
+
+/* floating per-block translation card ("翻译本段") — a translator's slip */
+.mru-selcard--block {
+  max-width: min(448px, calc(100vw - 24px));
+}
+
+.mru-selcard--block .mru-selcard__src {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mru-selcard--block .mru-selcard__text {
+  max-height: min(240px, 42vh);
+  overflow: auto;
+}
+
+.mru-selcard__loading {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+}
+
+.mru-selcard__text--pending {
+  opacity: 0.6;
+}
+
+/* "取消高亮" affordance in the selection toolbar */
+.mru-selbar__btn--remove {
+  color: var(--mru-error);
+}
+
+.mru-selbar__btn--remove:hover {
+  background: color-mix(in srgb, var(--mru-error) 10%, transparent);
+}
+
+/* Unrecognized symbols from MinerU: a controlled placeholder, not a broken glyph */
+.mru-unknown-symbol {
+  color: var(--mru-warn);
+  border-bottom: 1px dotted var(--mru-warn);
+  cursor: help;
+  padding: 0 1px;
+}
+
+/* Inline notice inside the paper (unknown symbols / parse-quality hints) */
+.mru-banner--inline {
+  margin: 14px 0 4px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--mru-warn) 38%, var(--mru-rule));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mru-warn) 7%, var(--mru-surface));
+  color: var(--mru-ink);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.mru-banner--inline .mru-banner__text {
+  flex: 1;
+}
+
+.mru-banner--inline .mru-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+/* Reparse modal: page-scoped repair switch above the parse form */
+.mru-repair-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--mru-rule);
+  border-radius: 8px;
+  background: var(--mru-surface-2);
+  color: var(--mru-ink);
+}
+
+.mru-repair-option:hover {
+  border-color: var(--mru-rule-strong);
+}
+
+.mru-repair-option .mru-toggle-row__text {
+  flex: 1;
+}

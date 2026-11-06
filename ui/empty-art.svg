@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- the desk before the first paper: a sheet, its margin marks, a note slip -->
+  <g stroke-width="1.4" opacity=".24">
+    <rect x="46" y="12" width="112" height="132" rx="5"/>
+  </g>
+
+  <!-- the sheet -->
+  <g stroke-width="1.6" opacity=".68">
+    <rect x="52" y="16" width="112" height="132" rx="5"/>
+    <path d="M148 16v16h16"/>
+  </g>
+
+  <!-- title block -->
+  <g stroke-width="1.8" opacity=".6">
+    <path d="M68 35h38"/>
+    <path d="M68 45h70"/>
+  </g>
+
+  <!-- body lines -->
+  <g stroke-width="1.4" opacity=".32">
+    <path d="M68 61h80"/>
+    <path d="M68 71h72"/>
+    <path d="M68 91h80"/>
+    <path d="M68 101h58"/>
+    <path d="M68 111h80"/>
+    <path d="M68 121h66"/>
+  </g>
+
+  <!-- one highlighted claim -->
+  <rect x="66" y="77" width="46" height="7" rx="2" fill="currentColor" stroke="none" opacity=".16"/>
+
+  <!-- margin rail with marks -->
+  <g stroke-width="1.3" opacity=".42">
+    <path d="M150 52v74"/>
+  </g>
+  <g stroke-width="1.6" opacity=".5">
+    <path d="M156 64h9"/>
+    <path d="M156 84h9"/>
+    <path d="M156 104h9"/>
+  </g>
+  <g fill="currentColor" stroke="none" opacity=".38">
+    <circle cx="160" cy="64" r="2"/>
+    <circle cx="160" cy="84" r="2"/>
+    <circle cx="160" cy="104" r="2"/>
+  </g>
+
+  <!-- annotation slip -->
+  <g stroke-width="1.5" opacity=".82">
+    <path d="M165 64h3"/>
+    <rect x="168" y="54" width="56" height="42" rx="4"/>
+  </g>
+  <g stroke-width="1.5" opacity=".42">
+    <path d="M176 68h34"/>
+    <path d="M176 78h26"/>
+  </g>
+  <rect x="176" y="85" width="8" height="4" rx="1" fill="currentColor" stroke="none" opacity=".35"/>
+
+  <!-- translation slip -->
+  <g stroke-width="1.4" opacity=".5">
+    <rect x="176" y="106" width="48" height="30" rx="4"/>
+  </g>
+  <g stroke-width="1.4" opacity=".3">
+    <path d="M184 118h26"/>
+    <path d="M184 126h18"/>
+  </g>
+</svg>

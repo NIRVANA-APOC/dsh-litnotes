@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="MinerU 文献库">
+  <!-- ink tile: warm paper, one highlighted claim, notes in the margin -->
+  <rect width="64" height="64" rx="14" fill="#15171c"/>
+  <rect x="14" y="9" width="36" height="46" rx="3" fill="#f5efe0"/>
+  <path d="M40.5 15v34" stroke="#b9ac91" stroke-width="1" stroke-linecap="round" opacity=".8"/>
+  <rect x="18.6" y="24.6" width="19" height="5.6" rx="1.6" fill="#e9c46a"/>
+  <g stroke="#23262d" stroke-width="2.2" stroke-linecap="round">
+    <path d="M20.5 19.5h15"/>
+    <path d="M20.5 26.8h15"/>
+    <path d="M20.5 34.2h10.5"/>
+  </g>
+  <g stroke="#7ea87c" stroke-width="2" stroke-linecap="round">
+    <path d="M44.5 20.5h5.5"/>
+    <path d="M44.5 27h3.5"/>
+  </g>
+  <circle cx="47" cy="35" r="2" fill="#c97b89"/>
+</svg>

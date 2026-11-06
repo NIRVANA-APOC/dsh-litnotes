@@ -1,0 +1,10 @@
+# dependencies and build output that should not be committed
+node_modules/
+coverage/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# local scratch
+/tmp/

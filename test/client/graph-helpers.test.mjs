@@ -765,12 +765,17 @@ test('mruGraphCurationPatch validates and rounds pin positions (C1)', () => {
   )
   assert.deepEqual(
     mruGraphCurationPatch('pin', { id: 'b', position: { x: -8, y: 2000 } }),
-    { nodes: [{ id: 'b', pinned: true, position: { x: 0, y: 2000 } }] },
-    'positions clamp to [0, 2000]',
+    { nodes: [{ id: 'b', pinned: true, position: { x: -8, y: 2000 } }] },
+    'negative world coordinates stay valid on the infinite canvas',
   )
   assert.deepEqual(
     mruGraphCurationPatch('pin', { node: { id: 'c' }, position: { x: 0.06, y: 9999 } }),
-    { nodes: [{ id: 'c', pinned: true, position: { x: 0.1, y: 2000 } }] },
+    { nodes: [{ id: 'c', pinned: true, position: { x: 0.1, y: 9999 } }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('pin', { node: { id: 'd' }, position: { x: -200000, y: 200000 } }),
+    { nodes: [{ id: 'd', pinned: true, position: { x: -100000, y: 100000 } }] },
+    'positions clamp to the ±100000 persistence ceiling',
   )
   for (const position of [undefined, null, {}, { x: NaN, y: 1 }, { x: Infinity, y: 1 }, { x: '1', y: 2 }]) {
     assert.equal(mruGraphCurationPatch('pin', { node: 'a', position }), null, `invalid position ${JSON.stringify(position)}`)
@@ -822,8 +827,9 @@ test('mruGraphCurationPatch returns null for unknown actions and keeps patches J
 test('mruGraphCurationPosition validates, clamps and rounds to 0.1', () => {
   assert.deepEqual(mruGraphCurationPosition({ x: 12.34, y: 56.78 }), { x: 12.3, y: 56.8 })
   assert.deepEqual(mruGraphCurationPosition({ x: 0, y: 0 }), { x: 0, y: 0 })
-  assert.deepEqual(mruGraphCurationPosition({ x: -3.2, y: 2001.44 }), { x: 0, y: 2000 })
+  assert.deepEqual(mruGraphCurationPosition({ x: -3.2, y: 2001.44 }), { x: -3.2, y: 2001.4 })
   assert.deepEqual(mruGraphCurationPosition({ x: 999.96, y: 1000.04 }), { x: 1000, y: 1000 })
+  assert.deepEqual(mruGraphCurationPosition({ x: -200000, y: 200000.04 }), { x: -100000, y: 100000 })
   for (const value of [null, undefined, {}, [], 'nope', { x: NaN, y: 2 }, { x: 1, y: Infinity }, { x: '', y: 2 }]) {
     assert.equal(mruGraphCurationPosition(value), null, `invalid position ${String(value)}`)
   }
@@ -855,7 +861,7 @@ test('mruGraphStoredPins seeds only pinned nodes with a valid position', () => {
   ])
   assert.deepEqual(pins, {
     a: { x: 10, y: 20.1 },
-    g: { x: 2000, y: 0 },
+    g: { x: 5000, y: -1 },
   })
   assert.deepEqual(mruGraphStoredPins(null), {})
   assert.deepEqual(mruGraphStoredPins(undefined), {})

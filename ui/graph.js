@@ -38,7 +38,12 @@ const MRU_GRAPH_SOURCES = ['ai-summary', 'qa', 'user', 'aggregate'];
 
 /** Curation contract (PLAN C1): rename label cap and position precision/range. */
 const MRU_GRAPH_RENAME_MAX = 80;
-const MRU_GRAPH_POSITION_MAX = 2000;
+/**
+ * Pinned positions are world pixels on the infinite canvas, so they may be
+ * negative and far outside the old 1000×680 sheet. ±100000 (0.1 precision) is
+ * a finite ceiling that comfortably covers any reachable drag.
+ */
+const MRU_GRAPH_POSITION_MAX = 100000;
 
 /**
  * Initial layout sheet. A seeded force layout still arranges a fresh graph
@@ -303,9 +308,9 @@ export function mruGraphCurationLabel(value) {
 }
 
 /**
- * Validate and round a canvas/user-space position for the C1 node upsert:
- * finite `x`/`y` clamped to `[0, 2000]` and rounded to 0.1, matching the host
- * sanitizer. Returns `null` when the value cannot be a position.
+ * Validate and round a canvas/world position for the C1 node upsert:
+ * finite `x`/`y` clamped to `[−100000, 100000]` and rounded to 0.1, matching
+ * the host sanitizer. Returns `null` when the value cannot be a position.
  *
  * @param {{x?: number, y?: number}} value
  * @returns {{x: number, y: number} | null}
@@ -318,8 +323,8 @@ export function mruGraphCurationPosition(value) {
   const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : NaN;
   if (Number.isNaN(x) || Number.isNaN(y)) return null;
   return {
-    x: mruGraphRound10(mruGraphClamp(x, 0, MRU_GRAPH_POSITION_MAX)),
-    y: mruGraphRound10(mruGraphClamp(y, 0, MRU_GRAPH_POSITION_MAX)),
+    x: mruGraphRound10(mruGraphClamp(x, -MRU_GRAPH_POSITION_MAX, MRU_GRAPH_POSITION_MAX)),
+    y: mruGraphRound10(mruGraphClamp(y, -MRU_GRAPH_POSITION_MAX, MRU_GRAPH_POSITION_MAX)),
   };
 }
 

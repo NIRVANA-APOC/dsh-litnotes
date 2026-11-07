@@ -161,7 +161,7 @@ Used for both per-doc (`graph.json`) and library (`library-graph.json`) graphs:
     "weight": 1,                       // importance, used for layout/filtering
     "curated": true,                   // user edited this node (survives forced rebuilds)
     "pinned": true,                    // optional: fixed canvas position
-    "position": { "x": 420, "y": 260 },// optional, layout user space; host clamps [0,2000]
+    "position": { "x": 420, "y": 260 },// optional, infinite-canvas world pixels; host clamps ±100000
     "createdAt": "ISO", "updatedAt": "ISO"
   }],
   "edges": [{

@@ -703,15 +703,16 @@ test('updateDocGraph validates pinned/position and persists them across writes',
   const { env, service } = curationService(documentId)
   seedGraph(env, documentId, [seedNode({ id: 'n-pin', label: 'Pinnable' })])
 
-  // Out-of-range/negative coordinates clamp into [0, 2000].
+  // Negative and far-out coordinates are valid world pixels on the infinite
+  // canvas; only the ±100000 persistence ceiling clamps.
   const pinned = await service.updateDocGraph(documentId, {
     nodes: [{ id: 'n-pin', pinned: true, position: { x: -20, y: 2500.55 } }],
   })
   let node = pinned.nodes.find((item) => item.id === 'n-pin')
   assert.equal(node.pinned, true)
-  assert.deepEqual(node.position, { x: 0, y: 2000 })
+  assert.deepEqual(node.position, { x: -20, y: 2500.6 })
   assert.equal(node.curated, true)
-  assert.deepEqual(persistedGraph(env, documentId).nodes[0].position, { x: 0, y: 2000 })
+  assert.deepEqual(persistedGraph(env, documentId).nodes[0].position, { x: -20, y: 2500.6 })
 
   // Invalid values never overwrite valid state: non-boolean pin, non-finite axes.
   const invalid = await service.updateDocGraph(documentId, {
@@ -719,7 +720,7 @@ test('updateDocGraph validates pinned/position and persists them across writes',
   })
   node = invalid.nodes.find((item) => item.id === 'n-pin')
   assert.equal(node.pinned, true, 'a non-boolean pinned value is ignored')
-  assert.deepEqual(node.position, { x: 0, y: 2000 }, 'an invalid position is ignored')
+  assert.deepEqual(node.position, { x: -20, y: 2500.6 }, 'an invalid position is ignored')
 
   // Positions round to 0.1 (the layout precision).
   const rounded = await service.updateDocGraph(documentId, {
@@ -728,19 +729,26 @@ test('updateDocGraph validates pinned/position and persists them across writes',
   node = rounded.nodes.find((item) => item.id === 'n-pin')
   assert.deepEqual(node.position, { x: 123.5, y: 790 })
 
+  // The ±100000 ceiling keeps hostile/huge payloads finite.
+  const clamped = await service.updateDocGraph(documentId, {
+    nodes: [{ id: 'n-pin', position: { x: -500000, y: 500000 } }],
+  })
+  node = clamped.nodes.find((item) => item.id === 'n-pin')
+  assert.deepEqual(node.position, { x: -100000, y: 100000 })
+
   // `pinned: false` clears the marker but keeps the stored position.
   const unpinned = await service.updateDocGraph(documentId, {
     nodes: [{ id: 'n-pin', pinned: false }],
   })
   node = unpinned.nodes.find((item) => item.id === 'n-pin')
   assert.equal('pinned' in node, false)
-  assert.deepEqual(node.position, { x: 123.5, y: 790 })
+  assert.deepEqual(node.position, { x: -100000, y: 100000 })
 
   // NaN/Infinity positions are rejected too.
   const bad = await service.updateDocGraph(documentId, {
     nodes: [{ id: 'n-pin', position: { x: NaN, y: Infinity } }],
   })
-  assert.deepEqual(bad.nodes.find((item) => item.id === 'n-pin').position, { x: 123.5, y: 790 })
+  assert.deepEqual(bad.nodes.find((item) => item.id === 'n-pin').position, { x: -100000, y: 100000 })
 
   // A new node may be created already pinned.
   const created = await service.updateDocGraph(documentId, {

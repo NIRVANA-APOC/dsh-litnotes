@@ -16461,9 +16461,9 @@ function registerLibraryTools({ tools, service, config: config2, logger }) {
         const payload = {
           blockKey: typeof annotationInput.blockKey === "string" ? annotationInput.blockKey : "",
           quote: typeof annotationInput.quote === "string" ? annotationInput.quote : void 0,
-          note: typeof annotationInput.note === "string" ? annotationInput.note : void 0,
-          color: typeof annotationInput.color === "string" ? annotationInput.color : void 0,
-          aspect: typeof annotationInput.aspect === "string" ? annotationInput.aspect : void 0,
+          note: typeof annotationInput.note === "string" ? annotationInput.note : optionalString(args, "note", 2e4),
+          color: typeof annotationInput.color === "string" ? annotationInput.color : optionalString(args, "color", 32),
+          aspect: typeof annotationInput.aspect === "string" ? annotationInput.aspect : optionalString(args, "aspect", 32),
           origin: optionalString(args, "origin") === "ai" ? "ai" : "user"
         };
         if (typeof annotationInput.start === "number") payload.start = annotationInput.start;
@@ -16471,7 +16471,6 @@ function registerLibraryTools({ tools, service, config: config2, logger }) {
         if (action === "update") {
           const annotationId = optionalString(args, "annotationId");
           if (annotationId !== void 0) payload.id = annotationId;
-          if (payload.aspect === void 0) payload.aspect = optionalString(args, "aspect");
         }
         return await service.toolAnnotate(documentId, payload);
       } catch (error) {

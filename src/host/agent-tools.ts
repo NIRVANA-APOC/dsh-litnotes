@@ -430,13 +430,25 @@ export function registerLibraryTools({ tools, service, config, logger }: AgentTo
           args.annotation !== null && typeof args.annotation === 'object'
             ? (args.annotation as Record<string, unknown>)
             : {}
+        // Nested annotation fields win; the documented top-level `aspect` (and
+        // the note/color convenience fields) are accepted as fallbacks so an
+        // agent passing the top-level shape is not silently ignored.
         const payload: ToolAnnotationInput = {
           blockKey:
             typeof annotationInput.blockKey === 'string' ? annotationInput.blockKey : '',
           quote: typeof annotationInput.quote === 'string' ? annotationInput.quote : undefined,
-          note: typeof annotationInput.note === 'string' ? annotationInput.note : undefined,
-          color: typeof annotationInput.color === 'string' ? annotationInput.color : undefined,
-          aspect: typeof annotationInput.aspect === 'string' ? annotationInput.aspect : undefined,
+          note:
+            typeof annotationInput.note === 'string'
+              ? annotationInput.note
+              : optionalString(args, 'note', 20000),
+          color:
+            typeof annotationInput.color === 'string'
+              ? annotationInput.color
+              : optionalString(args, 'color', 32),
+          aspect:
+            typeof annotationInput.aspect === 'string'
+              ? annotationInput.aspect
+              : optionalString(args, 'aspect', 32),
           origin: optionalString(args, 'origin') === 'ai' ? 'ai' : 'user',
         }
         if (typeof annotationInput.start === 'number') payload.start = annotationInput.start
@@ -444,7 +456,6 @@ export function registerLibraryTools({ tools, service, config, logger }: AgentTo
         if (action === 'update') {
           const annotationId = optionalString(args, 'annotationId')
           if (annotationId !== undefined) payload.id = annotationId
-          if (payload.aspect === undefined) payload.aspect = optionalString(args, 'aspect')
         }
         return await service.toolAnnotate(documentId, payload)
       } catch (error) {

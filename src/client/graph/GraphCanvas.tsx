@@ -166,6 +166,15 @@ export function GraphCanvas(props: GraphCanvasProps): ReactElement {
     setLivePositions(null)
   }, [props.layoutPositions])
 
+  // Never leave a simulation frame scheduled after the scene unmounts.
+  useEffect(() => () => {
+    const drag = dragRef.current
+    if (drag === null) return
+    if (drag.frame !== null) cancelAnimationFrame(drag.frame)
+    drag.simulation.stop()
+    dragRef.current = null
+  }, [])
+
   // Wheel zoom at the cursor. Native listener: React's wheel is passive.
   useEffect(() => {
     const element = wrapRef.current

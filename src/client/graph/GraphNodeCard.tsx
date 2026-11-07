@@ -114,7 +114,7 @@ export function GraphNodeCard(props: GraphNodeCardProps): ReactElement {
         <span className="ln-gnode__type">
           {ink === 'ink' ? null : <AspectDot aspect={ink} />}
           {t(`graph.node.${node.type}` as 'graph.node.concept')}
-          {node.curated === true ? <Badge tone="neutral">{t('graph.card.source')}</Badge> : null}
+          {node.curated === true ? <Badge tone="neutral">{t('graph.card.curated')}</Badge> : null}
         </span>
         <IconButton icon="close" label={t('graph.card.close')} size={15} onClick={onClose} />
       </header>

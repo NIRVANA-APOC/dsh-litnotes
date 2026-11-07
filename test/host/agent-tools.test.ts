@@ -579,3 +579,34 @@ test('rendered results are valid JSON unless truncated', async () => {
   expect(parsed.total).toBe(0)
   expect(parsed.documents).toEqual([])
 })
+
+test('library_annotate create accepts the documented top-level aspect as fallback', async () => {
+  const tools = makeTools()
+  const service = makeService()
+  registerLibraryTools({ tools: tools.tools, service, config: CONFIG })
+
+  // Top-level aspect (schema-documented for create/update) is honoured when the
+  // nested annotation payload does not override it.
+  await run(tools, 'library_annotate', {
+    action: 'create',
+    documentId: 'doc-1',
+    aspect: 'method',
+    annotation: { quote: 'Paper' },
+  })
+  const firstCall = service.calls.filter((call) => call.name === 'toolAnnotate').at(-1)
+  expect(firstCall?.args[1]).toMatchObject({ aspect: 'method', quote: 'Paper', origin: 'user' })
+
+  // The nested value wins over the top-level fallback.
+  await run(tools, 'library_annotate', {
+    action: 'create',
+    documentId: 'doc-1',
+    aspect: 'method',
+    annotation: { quote: 'Paper', aspect: 'result', note: 'nested note' },
+  })
+  const secondCall = service.calls.filter((call) => call.name === 'toolAnnotate').at(-1)
+  expect(secondCall?.args[1]).toMatchObject({
+    aspect: 'result',
+    note: 'nested note',
+    origin: 'user',
+  })
+})

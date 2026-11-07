@@ -20,7 +20,8 @@
     "icon.svg",
     "README.md",
     "CHANGELOG.md",
-    "docs/**/*.md"
+    "docs/**/*.md",
+    "docs/screens/**"
   ],
   "engines": {
     "node": ">=20.16"

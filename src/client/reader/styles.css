@@ -1388,3 +1388,13 @@
   background: color-mix(in srgb, var(--ln-error) 10%, transparent);
   color: var(--ln-error);
 }
+
+/* Filtered margin: when the AI stream has no visible turns (notes-only
+ * filters), it must not keep the flex page height — otherwise the note slips
+ * are pushed below the viewport and the margin looks empty. */
+.ln-margin__ai:has(.ln-ai__stream:empty) {
+  flex: 0 0 auto;
+}
+.ln-margin__ai:has(.ln-ai__stream:empty) .ln-ai__stream {
+  display: none;
+}

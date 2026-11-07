@@ -32,7 +32,7 @@ test('markdown golden: title heading, headings and paragraphs', () => {
   const synth = synthLocalDocument({ pages: PAGES })
   assert.equal(
     synth.markdown,
-    '# Simple Title\n\nHello world\\.\n\n## Details\n\nLast page\\.\n',
+    '# Simple Title\n\nHello world.\n\n## Details\n\nLast page.\n',
   )
   assert.equal(synth.title, 'Simple Title')
   assert.equal(synth.pageCount, 4)
@@ -77,7 +77,7 @@ test('caller-provided title is materialized as the level-1 heading', () => {
     title: 'Metadata Title',
   })
   assert.equal(synth.title, 'Metadata Title')
-  assert.equal(synth.markdown, '# Metadata Title\n\nBody text is here\\.\n')
+  assert.equal(synth.markdown, '# Metadata Title\n\nBody text is here.\n')
   assert.deepEqual(synth.contentList[0], { type: 'text', text: 'Metadata Title', page_idx: 0, text_level: 1 })
 })
 
@@ -101,7 +101,7 @@ test('a title duplicate paragraph is not emitted twice', () => {
     ],
     title: 'Metadata Title',
   })
-  assert.equal(synth.markdown, '# Metadata Title\n\nBody text\\.\n')
+  assert.equal(synth.markdown, '# Metadata Title\n\nBody text.\n')
   assert.equal(synth.contentList.length, 2)
 })
 

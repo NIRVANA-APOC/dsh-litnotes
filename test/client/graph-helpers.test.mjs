@@ -21,6 +21,12 @@ import {
   mruGraphStoredPins,
   mruGraphNodeIsPinned,
   mruGraphMergeCandidates,
+  mruGraphFitView,
+  mruGraphCameraPan,
+  mruGraphCameraZoom,
+  mruGraphWorldToScreen,
+  mruGraphScreenToWorld,
+  mruGraphViewShowsAny,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -879,4 +885,146 @@ test('mruGraphMergeCandidates excludes the source, clusters and duplicate ids', 
   assert.deepEqual(mruGraphMergeCandidates(nodes, 'missing').map((node) => node.id), ['a', 'b', 'c'])
   assert.deepEqual(mruGraphMergeCandidates([], 'a'), [])
   assert.deepEqual(mruGraphMergeCandidates(null, 'a'), [])
+})
+
+// ---------------------------------------------------------------------------
+// Infinite canvas: screen-space camera, unbounded pan/zoom and fit-to-content
+// ---------------------------------------------------------------------------
+
+test('mruGraphFitView centres and fits an unbounded node cloud', () => {
+  const positions = { a: { x: -400, y: 100 }, b: { x: 1600, y: 900 } }
+  const fitted = mruGraphFitView(positions, { width: 800, height: 600 }, { padding: 40, margin: 0 })
+  // span 2000 x 800 -> k = min((800 - 80) / 2000, (600 - 80) / 800) = 0.36
+  assert.ok(Math.abs(fitted.k - 0.36) < 0.015, `fit zoom ${fitted.k}`)
+  const left = mruGraphWorldToScreen(positions.a, fitted)
+  const right = mruGraphWorldToScreen(positions.b, fitted)
+  assert.ok(left.x >= 40 - 1 && right.x <= 800 - 40 + 1, 'content stays inside horizontal padding')
+  assert.ok(Math.min(left.y, right.y) >= 40 - 1 && Math.max(left.y, right.y) <= 600 - 40 + 1,
+    'content stays inside vertical padding')
+  const center = mruGraphScreenToWorld({ x: 400, y: 300 }, fitted)
+  assert.ok(Math.abs(center.x - 600) < 1 && Math.abs(center.y - 500) < 1, 'cloud is centred')
+})
+
+test('mruGraphFitView handles empty/single nodes, zero spans and zoom caps', () => {
+  const empty = mruGraphFitView({}, { width: 800, height: 600 })
+  assert.deepEqual(empty, { x: 400, y: 300, k: 1 })
+
+  const single = mruGraphFitView({ a: { x: 9999, y: -500 } }, { width: 800, height: 600 })
+  assert.equal(single.k, 1, 'a single node is centred at 100%, never blown up')
+  const screen = mruGraphWorldToScreen({ x: 9999, y: -500 }, single)
+  assert.ok(Math.abs(screen.x - 400) < 1 && Math.abs(screen.y - 300) < 1)
+
+  const zoomedIn = mruGraphFitView(
+    [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 20, y: 10 }],
+    { width: 800, height: 600 },
+    { maxZoom: 2 },
+  )
+  assert.equal(zoomedIn.k, 2, 'maxZoom caps magnification for tiny graphs')
+
+  const huge = mruGraphFitView(
+    { a: { x: -20000, y: 0 }, b: { x: 20000, y: 0 } },
+    { width: 800, height: 600 },
+  )
+  assert.ok(huge.k >= 0.02 && huge.k <= 1, `wide graph still fits (k=${huge.k})`)
+  assert.ok(Number.isFinite(huge.x) && Number.isFinite(huge.y))
+
+  const malformed = mruGraphFitView(null, null, { padding: -20, margin: 'x' })
+  assert.ok(Number.isFinite(malformed.x) && Number.isFinite(malformed.y) && malformed.k > 0)
+})
+
+test('camera pan is unbounded and zoom keeps the anchor point fixed', () => {
+  const camera = { x: 120, y: -40, k: 0.85 }
+  assert.deepEqual(mruGraphCameraPan(camera, 5400, -3200), { x: 5520, y: -3240, k: 0.85 },
+    'panning has no walls to hit')
+
+  const anchor = { x: 300, y: 220 }
+  const worldUnderAnchor = mruGraphScreenToWorld(anchor, camera)
+  const zoomed = mruGraphCameraZoom(camera, 0.85 * 1.7, anchor.x, anchor.y)
+  assert.ok(Math.abs(zoomed.k - 1.445) < 1e-9)
+  const worldAfter = mruGraphScreenToWorld(anchor, zoomed)
+  assert.ok(Math.abs(worldAfter.x - worldUnderAnchor.x) < 1e-9, 'anchor world x stays fixed')
+  assert.ok(Math.abs(worldAfter.y - worldUnderAnchor.y) < 1e-9, 'anchor world y stays fixed')
+
+  assert.equal(mruGraphCameraZoom(camera, 1000, 0, 0).k, 4, 'zoom clamps at the top')
+  assert.equal(mruGraphCameraZoom(camera, 0.0001, 0, 0).k, 0.02, 'zoom clamps at the bottom')
+})
+
+test('mruGraphViewShowsAny tells whether the camera still shows a node', () => {
+  const positions = { a: { x: 100, y: 100 } }
+  const viewport = { width: 400, height: 300 }
+  assert.equal(mruGraphViewShowsAny(positions, { x: 0, y: 0, k: 1 }, viewport, 0), true)
+  assert.equal(mruGraphViewShowsAny(positions, { x: -500, y: 0, k: 1 }, viewport, 0), false)
+  assert.equal(mruGraphViewShowsAny(positions, { x: -160, y: 0, k: 1 }, viewport, 60), true,
+    'margin keeps nearby nodes "visible"')
+  assert.equal(mruGraphViewShowsAny({}, { x: 0, y: 0, k: 1 }, viewport), false)
+})
+
+test('layoutGraph keeps user-dragged nodes outside the layout sheet', () => {
+  const graph = fixture()
+  const pinned = { a: { x: 4200, y: -1800 } }
+  const layout = layoutGraph(graph, { width: 1000, height: 680, seed: 21, pinned })
+  assert.deepEqual(layout.positions.a, { x: 4200, y: -1800 }, 'pinned off-sheet position is kept verbatim')
+
+  const replayed = layoutGraph(graph, {
+    width: 1000,
+    height: 680,
+    seed: 21,
+    previous: layout.positions,
+  })
+  assert.deepEqual(replayed.positions.a, { x: 4200, y: -1800 },
+    'a relayout/filter change must not snap a dragged node back onto the sheet')
+  for (const point of Object.values(replayed.positions)) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+  }
+})
+
+test('unbounded simulation lets a dragged node leave the layout sheet', () => {
+  const nodes = simNodes(2, 500, 300, 60)
+  const positions = simPositions(nodes)
+  const dragged = { id: 's0', x: 3600, y: -1200 }
+  const bounded = mruGraphSimulationStep({
+    nodes, positions, dragged, width: 1000, height: 680, padding: 56,
+  })
+  assert.ok(bounded.positions.s0.x <= 1000 - 56, 'default simulation stays on the sheet')
+
+  const unbounded = mruGraphSimulationStep({
+    nodes, positions, dragged, width: 1000, height: 680, padding: 56, bounds: false,
+  })
+  assert.equal(unbounded.positions.s0.x, 3600, 'infinite canvas lets the node follow the pointer')
+  assert.equal(unbounded.positions.s0.y, -1200)
+  for (const point of Object.values(unbounded.positions)) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+  }
+})
+
+test('unbounded simulation has no centre pull back to the layout sheet', () => {
+  const nodes = [
+    { id: 'p', type: 'concept', label: 'Pinned', weight: 1 },
+    { id: 'f', type: 'concept', label: 'Free', weight: 1 },
+  ]
+  const positions = { p: { x: 5000, y: 4000 }, f: { x: 5000, y: 4060 } }
+  const centreDistance = (point) => Math.hypot(point.x - 500, point.y - 340)
+  let state = { positions, velocities: {} }
+  for (let step = 0; step < 240; step += 1) {
+    state = mruGraphSimulationStep({
+      nodes,
+      links: [],
+      positions: state.positions,
+      velocities: state.velocities,
+      dragged: null,
+      pinned: ['p'],
+      width: 1000,
+      height: 680,
+      padding: 56,
+      bounds: false,
+      dt: 1 / 120,
+    })
+  }
+  assert.ok(Number.isFinite(state.positions.f.x) && Number.isFinite(state.positions.f.y))
+  assert.ok(
+    centreDistance(state.positions.f) >= centreDistance(positions.f) - 2,
+    `far node must not be pulled back to the sheet centre (${centreDistance(positions.f).toFixed(0)} -> ${centreDistance(state.positions.f).toFixed(0)})`,
+  )
+  assert.equal(state.positions.p.x, 5000, 'pinned node stays put')
+  assert.equal(state.positions.p.y, 4000)
 })

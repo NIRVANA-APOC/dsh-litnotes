@@ -560,6 +560,15 @@ Local parsing: `.mru-banner--local` (info banner variant, see §3.5), `.mru-loca
     navigation in the rail list works because rows are buttons.
 11. **Loading**: first load shows rail skeletons; document body shows a centered `.mru-spinner`
     with 「正在载入解析稿…」 only after 400ms delay to avoid flashing.
+12. **Knowledge graph canvas**: the graph view is an infinite canvas. Drag empty space to pan
+    (unbounded), scroll to zoom anchored at the cursor (the `+`/`−` buttons zoom about the
+    canvas centre), drag a node anywhere — nodes may leave the seeded layout sheet and linked
+    neighbours follow — and press 「适应视图」/Fit view (or `0`) to fit the whole map again.
+    The SVG viewBox mirrors the measured canvas, so no fixed drawing window clips the map; the
+    dot-grid graph paper pans/zooms with the camera. Opening a graph and switching
+    document/library starts fitted; filters and cluster collapse keep the camera unless the
+    relayout leaves the visible map out of view (then it re-fits); resizing the panel re-fits an
+    untouched camera, while an already navigated camera keeps its centre point anchored.
 
 ## 5. Copy deck (zh primary / en fallback)
 

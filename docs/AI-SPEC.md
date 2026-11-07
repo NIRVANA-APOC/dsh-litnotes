@@ -484,8 +484,10 @@ inline rename in the details card, 2-step merge (choose target → confirm), pin
 `{pinned, position}` (drag-release also persists a pin), stored pinned positions seed the seeded
 layout on load, and pending/error states stay inside the card. Without the prop the graph is
 read-only (library mode always is).
-Responsibilities: layout computation (deterministic seeded force simulation, SVG), pan/zoom,
-drag node pinning (persisted when curation is available), node type filter chips + legend, search
+Responsibilities: layout computation (deterministic seeded force simulation, SVG), **unbounded
+pan/zoom on an infinite canvas** (measured screen-space viewBox, cursor-anchored wheel zoom,
+fit-to-content view, no clipping window), drag node pinning — persisted when curation is
+available and allowed to leave the seeded layout sheet —, node type filter chips + legend, search
 box, cluster collapse at library scale, details card on click (label/summary/sources/edges,
 重命名 / 合并到… / 固定位置, 跳转到原文, 问 AI 关于此概念), build/refresh buttons with progress,
 empty state (AI 精读全文生成图谱). Pure SVG + React, no canvas, no deps.

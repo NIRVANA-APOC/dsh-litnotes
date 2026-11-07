@@ -424,6 +424,27 @@ function click(node) {
   node.props.onClick(node.event())
 }
 
+/**
+ * The infinite-canvas graph view must always render finite geometry even when
+ * the fake DOM cannot measure the SVG (viewBox/transform are the camera
+ * contract; NaN there would blank the real canvas).
+ */
+function assertFiniteGraphCanvas(label) {
+  const canvas = first('mru-graph__canvas')
+  assert.ok(canvas, `${label}: graph canvas must render`)
+  const viewBox = String(canvas.props.viewBox || '')
+  const match = /^0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)$/.exec(viewBox)
+  assert.ok(match, `${label}: canvas viewBox must be finite ("${viewBox}")`)
+  assert.ok(Number(match[1]) > 0 && Number(match[2]) > 0, `${label}: canvas viewBox must be positive`)
+  const camera = first('mru-graph__viewport')
+  assert.ok(camera, `${label}: camera transform group must render`)
+  const transform = String(camera.props.transform || '')
+  assert.match(transform, /^translate\((-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)\) scale\((\d+(?:\.\d+)?)\)$/,
+    `${label}: camera transform must be finite ("${transform}")`)
+  const zoom = Number(canvas.attrs['data-zoom'])
+  assert.ok(Number.isFinite(zoom) && zoom > 0, `${label}: data-zoom must be finite (${canvas.attrs['data-zoom']})`)
+}
+
 // ---------------------------------------------------------------- host mock
 const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const PARSE_ID = '22222222-2222-4222-8222-222222222222'
@@ -683,6 +704,7 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     await settle(14)
     assert.ok(calls.some((call) => call.method === 'graph.doc'), 'opening the graph must fetch graph.doc')
     assert.ok(first('mru-graph'), 'graph surface must render')
+    assertFiniteGraphCanvas('doc graph')
     const graphView = captured.get('MruGraphView')
     if (graphView) {
       assert.equal(graphView.mode, 'doc', 'doc graph view must be in doc mode')
@@ -740,6 +762,7 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     assert.ok(calls.some((call) => call.method === 'graph.library'), 'opening the library graph must fetch graph.library')
     assert.ok(first('mru-main--graph'), 'library graph must take the main column')
     assert.ok(first('mru-graph'), 'library graph surface must render')
+    assertFiniteGraphCanvas('library graph')
     const graphView = captured.get('MruGraphView')
     if (graphView) {
       assert.equal(graphView.mode, 'library', 'library graph view must be in library mode')

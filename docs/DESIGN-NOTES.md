@@ -345,6 +345,16 @@ pitch via a CSS radial-gradient — texture that helps pan/zoom orientation, not
 Nodes are labeled dots with a **type ring**; labels carry a paper-colored halo (`paint-order`
 + 3px stroke) so they stay legible over edges and the dot grid.
 
+**Infinite canvas.** The SVG viewBox mirrors the canvas' measured CSS pixel box, so the world is
+not a fixed 1000×680 sheet and nothing is clipped at an artificial border. The viewport `<g>`
+camera (`screen = world * k + (x, y)`) pans without bounds, wheel zoom is anchored at the cursor,
+zoom buttons are anchored at the canvas centre, and nodes can be dragged out past the seeded
+layout sheet — pinned positions are kept verbatim (the layout only clamps newly laid-out nodes,
+and the drag simulation runs unbounded). Opening a graph, switching document/library and the
+「适应视图」 button fit every node back into view (capped at 100% for tiny graphs); the dot grid
+pans/zooms with the camera (screen step kept between 10–44px); and a filter/collapse relayout
+that would leave the visible map out of the camera re-fits it instead of showing empty paper.
+
 | node type | ring / ink | notes |
 |---|---|---|
 | concept | host ink | the neutral center of the map |

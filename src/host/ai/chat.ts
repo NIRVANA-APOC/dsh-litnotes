@@ -538,8 +538,8 @@ async function createCitationAnnotations(input: {
       if (result.ids.length >= maxNew) break
       if (citation === null || typeof citation !== 'object' || citation.verified !== true) continue
       const blockKey = boundedString(citation.blockKey, 120)
-      const start = Number.isInteger(citation.start) ? Math.max(0, citation.start) : 0
-      const end = Number.isInteger(citation.end) ? Math.max(start, citation.end) : start
+      const start = typeof citation.start === 'number' && Number.isInteger(citation.start) ? Math.max(0, citation.start) : 0
+      const end = typeof citation.end === 'number' && Number.isInteger(citation.end) ? Math.max(start, citation.end) : start
       const aspect = normalizeAspect(citation.aspect)
       const candidate = { blockKey, start, end, aspect }
       // Shared single-source dedupe rule: same block + overlapping range + aspect.

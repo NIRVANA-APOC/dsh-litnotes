@@ -205,10 +205,18 @@ export function Tethers({
       if (paper !== null) observer.observe(paper)
       if (margin !== null) observer.observe(margin)
     }
+    // AI margin entries mount/stream independently of reader state; any child
+    // list change in the margin re-measures the tether endpoints.
+    let mutations: MutationObserver | null = null
+    if (margin !== null && typeof MutationObserver !== 'undefined') {
+      mutations = new MutationObserver(() => schedule())
+      mutations.observe(margin, { childList: true, subtree: true })
+    }
     return () => {
       scroller.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
       observer?.disconnect()
+      mutations?.disconnect()
     }
   }, [marginRef, paperRef, schedule, scrollRef])
 

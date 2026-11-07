@@ -25,12 +25,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flip, offset, shift, useFloating } from '@floating-ui/react'
 import { Icon } from '../design/icons.tsx'
 import { IconButton, Menu, Spinner, type MenuItem } from '../design/primitives.tsx'
+import { useInjectedStyle } from '../design/use-style.ts'
 import { useLibraryStore } from '../state/library.ts'
 import { useUiStore } from '../state/ui.ts'
 import { useT } from '../shell/locale-context.ts'
 import {
   aiT,
   chatTurns,
+  citationFlags,
   displayText,
   errorText,
   excerpt,
@@ -43,7 +45,7 @@ import {
   turnHasAspect,
   unverifiedBreakdown,
 } from './chat.ts'
-import type { AiFailure, ChatEntry, ChatTurn, QuestionMark } from './chat.ts'
+import type { ChatEntry, ChatTurn, QuestionMark } from './chat.ts'
 import { AiComposer } from './AiComposer.tsx'
 import { AiMarginFilterChips } from './AiMarginFilterChips.tsx'
 import { AiMarkdown } from './markdown.tsx'
@@ -51,6 +53,8 @@ import { CitationCard, CitationChip } from './Citation.tsx'
 import type { CitationPayload } from './Citation.tsx'
 import { installReaderBridge, useMarginAnnotationCounts } from './reader-bridge.ts'
 import { setAiTranslate, useAiStore } from './store.ts'
+import type { AiFailure, AiStreamError } from './store.ts'
+import aiCss from './styles.css'
 
 /** Props of {@link AiMarginEntries} (the reader-owned mirror lives in `reader/api.ts`). */
 export interface AiMarginEntriesProps {
@@ -71,7 +75,6 @@ interface CitationCardState {
   index: number
   citation: CitationPayload['citation']
   verified: boolean
-  rect: DOMRect
 }
 
 /** How long a citation card survives a pointer leave (ms; frozen 1.0.0 value). */
@@ -138,6 +141,8 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   /* ----- reader seam + store wiring ------------------------------------- */
+
+  useInjectedStyle('ai', aiCss)
 
   useEffect(() => {
     installReaderBridge()
@@ -225,7 +230,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       cancelCardHide()
       const rect = event.currentTarget.getBoundingClientRect()
       refs.setPositionReference(rectReference(rect))
-      setCard({ index: payload.index, citation: payload.citation, verified: payload.verified, rect })
+      setCard({ index: payload.index, citation: payload.citation, verified: payload.verified })
     },
     [cancelCardHide, refs],
   )
@@ -247,7 +252,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
     (event: React.MouseEvent<HTMLElement>, payload: CitationPayload) => {
       const citation = payload.citation
       if (citation === null) return
-      if (!payload.verified && citation.reason === 'entailment-unsupported') {
+      if (citationFlags(citation, payload.verified).unsupported) {
         // A real quote that does not support the claim: explain instead of jump.
         showCitation(event, payload)
         return
@@ -536,20 +541,18 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       ) : null}
       <AiComposer documentId={documentId} available={available} modelLabel={modelLabel} onJump={jump} />
       {card !== null && card.citation !== null ? (
-        <div ref={refs.setFloating} style={floatingStyles}>
-          <CitationCard
-            t={t}
-            index={card.index}
-            citation={card.citation}
-            verified={card.verified}
-            style={{}}
-            floatingRef={() => {}}
-            onKeep={cancelCardHide}
-            onLeave={scheduleCardHide}
-            onClose={closeCard}
-            onJump={jump}
-          />
-        </div>
+        <CitationCard
+          t={t}
+          index={card.index}
+          citation={card.citation}
+          verified={card.verified}
+          style={floatingStyles}
+          floatingRef={refs.setFloating}
+          onKeep={cancelCardHide}
+          onLeave={scheduleCardHide}
+          onClose={closeCard}
+          onJump={jump}
+        />
       ) : null}
     </div>
   )
@@ -580,7 +583,7 @@ interface TurnViewProps {
   flash: boolean
   collapsed: boolean
   showEntailment: boolean
-  streamError: ReturnType<typeof useAiStore.getState>['streamError']
+  streamError: AiStreamError | null
   onToggleCollapse: () => void
   onCopy: (entryId: string) => void
   onRegenerate: (entryId: string) => void
@@ -634,25 +637,34 @@ function TurnView(props: TurnViewProps): ReactElement {
   const breakdown = unverifiedBreakdown(assistant?.unverified)
   const annotationCount = assistant?.annotationIds.length ?? 0
 
-  const renderCitation = (index: number): ReactElement => {
+  const citationLookup = useMemo(() => {
     const lookup = new Map<number, { citation: CitationPayload['citation']; verified: boolean }>()
-    for (const citation of assistant?.citations ?? []) lookup.set(citation.index, { citation, verified: citation.verified !== false })
+    for (const citation of assistant?.citations ?? []) {
+      lookup.set(citation.index, { citation, verified: citation.verified !== false })
+    }
     for (const citation of assistant?.unverified ?? []) {
       if (!lookup.has(citation.index)) lookup.set(citation.index, { citation, verified: false })
     }
-    const entry = lookup.get(index)
-    return (
-      <CitationChip
-        index={index}
-        citation={entry?.citation ?? null}
-        verified={entry?.verified ?? false}
-        t={citationHandlers.t}
-        onHover={citationHandlers.onHover}
-        onLeave={citationHandlers.onLeave}
-        onClick={citationHandlers.onClick}
-      />
-    )
-  }
+    return lookup
+  }, [assistant])
+
+  const renderCitation = useCallback(
+    (index: number): ReactElement => {
+      const entry = citationLookup.get(index)
+      return (
+        <CitationChip
+          index={index}
+          citation={entry?.citation ?? null}
+          verified={entry?.verified ?? false}
+          t={citationHandlers.t}
+          onHover={citationHandlers.onHover}
+          onLeave={citationHandlers.onLeave}
+          onClick={citationHandlers.onClick}
+        />
+      )
+    },
+    [citationLookup, citationHandlers],
+  )
 
   const actions: ReactElement[] = []
   if (assistant !== null && streaming) {
@@ -834,6 +846,3 @@ function TurnView(props: TurnViewProps): ReactElement {
 
 /** Re-export the citation jump handler type used by the reader's tether layer. */
 export type AiCitationPayload = CitationPayload
-
-/** Reader-provided fallbacks used when the store hook is not mounted (tests). */
-export { navTargetScrollTop }

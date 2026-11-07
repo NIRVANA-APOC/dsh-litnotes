@@ -1256,3 +1256,103 @@ test('concurrency cap queues additional parses and drains when a slot frees', as
     await teardown(env, manager)
   }
 })
+
+test('resume restarts a persisted page repair and splices the pages back', async () => {
+  const env = await setup()
+  const fake = createRepairFake({ apiBase: env.config.apiBase, docId: env.id })
+  const manager = makeManager(env, fake)
+  try {
+    await seedParsedPaper(env)
+    const seeded = env.store.get(env.id)
+    assert.ok(seeded?.parse !== null && seeded?.parse !== undefined)
+    const previousParse = seeded.parse
+    // Simulate a host that died while the repair was polling: the reparsed
+    // result archive is only fetched, never re-submitted.
+    await env.store.update(env.id, {
+      status: 'parsing',
+      error: null,
+      parse: {
+        engine: 'standard',
+        modelVersion: 'vlm',
+        language: 'ch',
+        options: { isOcr: false, enableFormula: true, enableTable: true, pageRanges: '2' },
+        phase: 'polling',
+        taskId: null,
+        batchId: 'repair-resume',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        pages: 3,
+        progress: null,
+        hasContentList: true,
+        repairPages: [2],
+        repairRestore: { ...previousParse },
+        repairPreviousPages: 3,
+      },
+    })
+    await manager.resume()
+    const final = await waitFor(
+      () => {
+        const current = env.store.get(env.id)
+        return current !== undefined && current.status === 'parsed' && current.parse?.repair != null ? current : null
+      },
+      { label: 'resumed page repair completion' },
+    )
+    const finalParse = parseOf(final)
+    assert.deepEqual(finalParse.repair?.pages, [2])
+    assert.equal(finalParse.repairPages, null)
+    assert.equal(finalParse.pages, 3)
+    assert.equal(fake.state.submissions, 0, 'resume must not resubmit the repair')
+    assert.ok((await env.store.readMarkdown(env.id)).markdown.includes('recovered symbol q'))
+  } finally {
+    await teardown(env, manager)
+  }
+})
+
+test('annotations are re-anchored and persisted BEFORE the terminal parsed write', async () => {
+  const env = await setup()
+  const fake = createFakeMineru({ apiBase: env.config.apiBase, docId: env.id })
+  let reanchorCalls = 0
+  let reanchorCallsWhenParsedWritten = -1
+  const manager = makeManager(env, fake, TOKEN, undefined, ({ annotations }) => {
+    reanchorCalls += 1
+    return annotations.map((annotation) => ({ ...annotation, reanchored: true }))
+  })
+  const originalUpdate = env.store.update.bind(env.store)
+  env.store.update = async (id, patch) => {
+    if (patch.status === 'parsed' && reanchorCallsWhenParsedWritten === -1) {
+      reanchorCallsWhenParsedWritten = reanchorCalls
+    }
+    return originalUpdate(id, patch)
+  }
+  try {
+    const parsedDir = env.store.parsedDir(env.id)
+    await mkdir(parsedDir, { recursive: true })
+    await writeFile(join(parsedDir, 'full.md'), '# Old\n')
+    await env.store.saveAnnotations(env.id, {
+      items: [
+        {
+          id: 'ann-order',
+          blockKey: 'b0:old',
+          start: 0,
+          end: 3,
+          quote: 'Old',
+          color: 'sage',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    const meta = env.store.get(env.id)
+    assert.ok(meta !== undefined)
+    await manager.start(
+      env.id,
+      normalizeParseOptions({ engine: 'standard' }, meta, ctxInfo(true, env.config.maxUploadBytes)),
+    )
+    await waitFor(() => env.store.get(env.id)?.status === 'parsed', { label: 'reparse completion' })
+    assert.equal(reanchorCallsWhenParsedWritten, 1, 'the re-anchor pass ran before parsed was persisted')
+    const annotations = await env.store.loadAnnotations(env.id)
+    assert.equal(annotations.items[0]?.reanchored, true, 're-anchored annotations are persisted with the terminal write')
+  } finally {
+    await teardown(env, manager)
+  }
+})

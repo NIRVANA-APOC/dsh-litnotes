@@ -16,9 +16,7 @@ import type { NormalizedAnnotation } from '../../shared/annotate/highlight.ts'
 import { AspectDot, IconButton, Textarea, cx } from '../design/primitives.tsx'
 import { useRectFloating } from './floating.ts'
 import type { StaleAnnotation } from './annotations.ts'
-
-/** Margin origin filter values shared with the Lead-owned UI store. */
-export type MarginFilter = 'all' | 'chat' | 'ai' | 'user'
+import type { MarginFilter } from '../state/ui.ts'
 
 /** Aspect ink for an annotation: explicit aspect first, annotation color second. */
 export function aspectOfAnnotation(annotation: NormalizedAnnotation): Aspect | null {

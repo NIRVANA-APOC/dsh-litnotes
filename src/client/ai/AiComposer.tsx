@@ -11,7 +11,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useRef } from 'react'
 import { Button, IconButton, Kbd } from '../design/primitives.tsx'
-import { Icon } from '../design/icons.tsx'
 import { useT } from '../shell/locale-context.ts'
 import { excerpt } from './chat.ts'
 import { clearReaderSelection } from './reader-bridge.ts'
@@ -157,9 +156,6 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
           </Button>
         )}
       </div>
-      <span className="ln-ai__hint-sr" aria-hidden="true">
-        <Icon name="clock" size={12} />
-      </span>
     </div>
   )
 }

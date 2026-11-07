@@ -97,7 +97,6 @@ export function documentMetaParts(document: DocumentSummary, t: LitnotesTranslat
   if (pages !== null) parts.push(t('rail.rowMeta.pages', { count: pages }))
   const words = document.wordCount
   if (typeof words === 'number' && words > 0) parts.push(t('rail.rowMeta.words', { count: formatNumber(words) }))
-  parts.push(statusLabel(t, document.status))
   const engine = document.parse?.engine
   if (engine !== undefined && engine !== null) parts.push(engineLabel(t, engine))
   return parts

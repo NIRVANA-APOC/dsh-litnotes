@@ -91,6 +91,8 @@ export interface ReaderNotice {
 export interface ReaderJumpRequest {
   blockKey: string
   flash: boolean
+  /** Target paper; the request survives the store's own open() for it. */
+  documentId: string | null
   /** Monotonic id so the scene handles each request exactly once. */
   seq: number
 }
@@ -166,7 +168,7 @@ export interface ReaderState {
   deleteAnnotation: (id: string) => void
   removeAnnotations: (ids: readonly string[]) => void
   /** Ask the scene to scroll to a block; the store keeps the request until handled. */
-  requestJump: (blockKey: string, options?: { flash?: boolean }) => void
+  requestJump: (blockKey: string, options?: { flash?: boolean; documentId?: string }) => void
   /** Record the block under the reading line (updates position memory + prefs). */
   recordPosition: (blockKey: string) => void
   translateBlock: (blockKey: string, options?: TranslateBlockOptions) => Promise<void>
@@ -563,6 +565,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     const hostPrefs = prefs()
     const restoreBlockKey =
       remembered ?? (hostPrefs.lastDocumentId === documentId ? hostPrefs.lastBlockKey : null)
+    // A graph→source / citation jump may be requested before this open starts;
+    // keep it when it targets this document.
+    const pendingJump = get().jumpRequest
+    const keepJump = pendingJump !== null && pendingJump.documentId === documentId ? pendingJump : null
     set({
       documentId,
       document,
@@ -583,7 +589,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       translationProviders: {},
       translateAll: null,
       restoreBlockKey,
-      jumpRequest: null,
+      jumpRequest: keepJump,
       notice: null,
     })
     baseIds = new Set()
@@ -802,7 +808,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   requestJump: (blockKey, options = {}) => {
     if (blockKey === '') return
     jumpSeq += 1
-    set({ jumpRequest: { blockKey, flash: options.flash !== false, seq: jumpSeq } })
+    set({
+      jumpRequest: {
+        blockKey,
+        flash: options.flash !== false,
+        documentId: options.documentId ?? get().documentId,
+        seq: jumpSeq,
+      },
+    })
   },
 
   recordPosition: (blockKey) => rememberPosition(blockKey),

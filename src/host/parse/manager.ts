@@ -1096,7 +1096,13 @@ export function createParseManager(options: CreateParseManagerOptions): ParseMan
     }
   }
 
-  /** Persist the terminal success state (and adopt the first heading as title). */
+  /**
+   * Persist the terminal success state (and adopt the first heading as title).
+   *
+   * Annotations are re-anchored and persisted BEFORE the terminal
+   * `status:'parsed'` write, so a poller that observes `parsed` can never read
+   * stale annotation anchors/`stale` flags (regression guard).
+   */
   async function finishSuccess(task: RuntimeTask, result: TaskSuccessResult): Promise<void> {
     const current = store.get(task.id)
     if (current === undefined) return
@@ -1109,6 +1115,7 @@ export function createParseManager(options: CreateParseManagerOptions): ParseMan
           : typeof previous.pages === 'number' && Number.isInteger(previous.pages)
             ? previous.pages
             : null
+      await reanchorAfterParse(task)
       try {
         await store.update(task.id, {
           status: 'parsed',
@@ -1134,7 +1141,6 @@ export function createParseManager(options: CreateParseManagerOptions): ParseMan
       } catch (error) {
         log.warn?.(`[dsh-litnotes] cannot persist repaired state for ${task.id}: ${errorMessage(error)}`)
       }
-      await reanchorAfterParse(task)
       return
     }
     const patch: Partial<Omit<DocumentMeta, 'parse'>> & { parse: Partial<ParseState> } = {
@@ -1153,13 +1159,13 @@ export function createParseManager(options: CreateParseManagerOptions): ParseMan
     }
     const derived = typeof result.title === 'string' ? result.title.trim() : ''
     if (derived !== '' && current.title === defaultTitleOf(current)) patch.title = derived.slice(0, 300)
+    await reanchorAfterParse(task)
     try {
       await store.update(task.id, patch)
       log.info?.(`[dsh-litnotes] parsed ${task.id} (${task.engine})`)
     } catch (error) {
       log.warn?.(`[dsh-litnotes] cannot persist parsed state for ${task.id}: ${errorMessage(error)}`)
     }
-    await reanchorAfterParse(task)
   }
 
   /** Persist the terminal failure/cancelled state. */

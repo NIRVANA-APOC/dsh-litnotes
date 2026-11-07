@@ -356,6 +356,7 @@ export const useAiStore = create<AiState>((set, get) => {
         )
         const unverified = normalizeCitationList(frame.unverified, true)
         const followups = Array.isArray(frame.followups) ? frame.followups : []
+        const annotationIds = Array.isArray(frame.annotationIds) ? frame.annotationIds : []
         run.answered = true
         updateEntry(run.id, (entry) => ({
           ...entry,
@@ -363,17 +364,17 @@ export const useAiStore = create<AiState>((set, get) => {
           citations,
           unverified,
           followups: followups.filter((item) => typeof item === 'string' && item.trim() !== '').map((item) => item.trim()),
-          annotationIds: frame.annotationIds,
+          annotationIds,
           entailment: frame.entailment,
           phase: '',
           streaming: true,
           serverId: frame.messageId !== '' ? frame.messageId : entry.serverId,
         }))
-        if (frame.annotationIds.length > 0 && !run.announced) {
+        if (annotationIds.length > 0 && !run.announced) {
           run.announced = true
           const hooks = get().hostHooks
           void hooks.onAnnotationsChanged?.()
-          toast('ai.annotationsNotice', 'success', { count: frame.annotationIds.length })
+          toast('ai.annotationsNotice', 'success', { count: annotationIds.length })
         }
         return
       }

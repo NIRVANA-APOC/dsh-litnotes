@@ -11,8 +11,8 @@
 import type { ReactElement } from 'react'
 import type { LocalCapabilities, ParseOptions } from '../../../shared/model.ts'
 import type { LitnotesTranslate } from '../locale-context.ts'
-import { Segmented, Select, Switch, TextInput } from '../design/primitives.tsx'
-import { Button } from '../design/primitives.tsx'
+import { Segmented, Select, Switch, TextInput } from '../../design/primitives.tsx'
+import { Button } from '../../design/primitives.tsx'
 import { engineHint, engineOptions, languageOptions, localSupportFor, modelVersionOptions } from './options.ts'
 import { useT } from '../locale-context.ts'
 

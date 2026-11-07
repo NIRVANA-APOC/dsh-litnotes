@@ -167,8 +167,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ln-doc__progress {
-  position: static;
+.ln-doc__progressBar {
   flex: 0 0 52px;
 }
 

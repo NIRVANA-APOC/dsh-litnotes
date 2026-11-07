@@ -96,6 +96,13 @@ function streamedText(frames: readonly ChatFrame[]): string {
   return framesOf(frames, 'delta').map((frame) => frame.text).join('')
 }
 
+/** Read the host-computed offsets of a verified citation (fails when absent). */
+function offsetsOf(citation: Citation): { start: number; end: number } {
+  expect(typeof citation.start, 'verified citations carry a start offset').toBe('number')
+  expect(typeof citation.end, 'verified citations carry an end offset').toBe('number')
+  return { start: citation.start as number, end: citation.end as number }
+}
+
 /** Stable error code of one frame (`''` for non-error frames). */
 function errorCodeOf(frame: ChatFrame | undefined): string {
   return frame !== undefined && frame.type === 'error' ? frame.code : ''
@@ -437,8 +444,11 @@ test('a grounded turn streams start → deltas → answer → graph → done and
   expect(first.verified).toBe(true)
   expect(first.blockKey).toBe(method.key)
   expect(first.aspect).toBe('method')
-  expect(first.start).toBe(0)
-  expect(method.plainText.slice(first.start, first.end)).toBe('We propose block-sparse attention with learned routing.')
+  const firstOffsets = offsetsOf(first)
+  expect(firstOffsets.start).toBe(0)
+  expect(method.plainText.slice(firstOffsets.start, firstOffsets.end)).toBe(
+    'We propose block-sparse attention with learned routing.',
+  )
   expect(second.aspect).toBe('result')
   expect(second.page).toBeNull()
 
@@ -456,9 +466,10 @@ test('a grounded turn streams start → deltas → answer → graph → done and
   expect(annotation.chatId).toBe(`doc:${DOC_ID}`)
   expect(annotation.messageId).toBe(answer.messageId)
   expect(annotation.model).toEqual({ provider: 'fake-provider', model: 'fake-model' })
+  const secondOffsets = offsetsOf(second)
   expect(annotations[1]?.color).toBe('sky')
-  expect(annotations[1]?.start).toBe(second.start)
-  expect(annotations[1]?.end).toBe(second.end)
+  expect(annotations[1]?.start).toBe(secondOffsets.start)
+  expect(annotations[1]?.end).toBe(secondOffsets.end)
 
   // Knowledge delta: only verified block keys survive; graph frame + callback.
   expect(graphCalls.length).toBe(1)
@@ -531,11 +542,12 @@ test('quote verification: whitespace normalization and the ≥20-char prefix fal
   expect(answer.unverified.length).toBe(0)
   for (const verified of answer.citations) {
     expect(verified.verified).toBe(true)
-    expect(verified.end).toBeGreaterThan(verified.start)
-    expect(verified.end - verified.start).toBeLessThanOrEqual(method.plainText.length)
+    const offsets = offsetsOf(verified)
+    expect(offsets.end).toBeGreaterThan(offsets.start)
+    expect(offsets.end - offsets.start).toBeLessThanOrEqual(method.plainText.length)
     // Offsets address the original plain text; the highlighted slice is either
     // the whole (whitespace-normalized) quote or an accepted prefix of it.
-    const highlighted = normalizeQuoteText(method.plainText.slice(verified.start, verified.end))
+    const highlighted = normalizeQuoteText(method.plainText.slice(offsets.start, offsets.end))
     const quoted = normalizeQuoteText(verified.quote)
     expect(quoted.startsWith(highlighted), `${highlighted} is not a prefix of ${quoted}`).toBe(true)
   }
@@ -543,11 +555,13 @@ test('quote verification: whitespace normalization and the ≥20-char prefix fal
   const firstCitation = answer.citations[0]
   const secondCitation = answer.citations[1]
   if (firstCitation === undefined || secondCitation === undefined) throw new Error('missing citations')
-  expect(normalizeQuoteText(method.plainText.slice(firstCitation.start, firstCitation.end))).toBe(
+  const firstOffsets = offsetsOf(firstCitation)
+  const secondOffsets = offsetsOf(secondCitation)
+  expect(normalizeQuoteText(method.plainText.slice(firstOffsets.start, firstOffsets.end))).toBe(
     normalizeQuoteText(firstCitation.quote),
   )
-  expect(secondCitation.end - secondCitation.start).toBeLessThanOrEqual(40)
-  expect(secondCitation.end - secondCitation.start).toBeGreaterThanOrEqual(20)
+  expect(secondOffsets.end - secondOffsets.start).toBeLessThanOrEqual(40)
+  expect(secondOffsets.end - secondOffsets.start).toBeGreaterThanOrEqual(20)
   // Both citations dedupe to the same overlapping method annotation → one created.
   expect(answer.annotationIds.length).toBe(1)
   expect(store.state.annotations.items.length).toBe(1)

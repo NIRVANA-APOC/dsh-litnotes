@@ -124,7 +124,10 @@ export function jumpToBlock(blockKey: string, options: ReaderBlockJumpOptions = 
   if (targetDocumentId !== null && ui.currentDocumentId !== targetDocumentId) {
     ui.openDocument(targetDocumentId)
   }
-  useReaderStore.getState().requestJump(blockKey, { flash: options.flash !== false })
+  useReaderStore.getState().requestJump(blockKey, {
+    flash: options.flash !== false,
+    documentId: targetDocumentId ?? undefined,
+  })
 }
 
 /** Document order of a block key (`null` when it does not resolve). */

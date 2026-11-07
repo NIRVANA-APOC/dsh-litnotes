@@ -71,12 +71,27 @@ test('target scrollTop: message lands padding px below the container top', () =>
   assert.equal(mruAiNavTargetScrollTop(Number.NaN, 50, 0), 38)
 })
 
-test('aspect legend items: five aspects, always with a text label', () => {
-  const items = mruAiAspectLegendItems(null)
-  assert.deepEqual(items.map((item) => item.aspect), ['definition', 'context', 'method', 'result', 'limitation'])
+test('aspect legend items: five aspects resolved through the reader aspect.* keys', () => {
+  // ui/chat.js keeps no copy deck: without a translate callback the key is the
+  // fallback label (still guaranteed non-empty).
+  const untranslated = mruAiAspectLegendItems(null)
+  assert.deepEqual(untranslated.map((item) => item.aspect), ['definition', 'context', 'method', 'result', 'limitation'])
+  assert.deepEqual(untranslated.map((item) => item.label), [
+    'aspect.definition',
+    'aspect.context',
+    'aspect.method',
+    'aspect.result',
+    'aspect.limitation',
+  ])
+  const dictionary = {
+    'aspect.definition': '定义',
+    'aspect.context': '背景',
+    'aspect.method': '方法',
+    'aspect.result': '结果',
+    'aspect.limitation': '局限',
+  }
+  const items = mruAiAspectLegendItems((key) => dictionary[key] || key)
   assert.deepEqual(items.map((item) => item.label), ['定义', '背景', '方法', '结果', '局限'])
   for (const item of items) assert.equal(typeof item.label, 'string')
   assert.equal(items.every((item) => item.label.trim() !== ''), true)
-  const english = mruAiAspectLegendItems((key) => (key === 'ai.aspect.method' ? 'Method' : key))
-  assert.equal(english.find((item) => item.aspect === 'method').label, 'Method')
 })

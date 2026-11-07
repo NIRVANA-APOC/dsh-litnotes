@@ -320,3 +320,134 @@ test('document order is newest first', async () => {
     await rm(dataDir, { recursive: true, force: true })
   }
 })
+
+test('saveAnnotations with baseIds implements the additive 3-way merge', async () => {
+  const dataDir = await makeDataDir()
+  const store = createStore({ dataDir })
+  /** One minimal annotation item. */
+  const item = (id, note, extra = {}) => ({
+    id,
+    blockKey: 'b3:ab12cd34',
+    start: 0,
+    end: 5,
+    quote: 'hello',
+    note,
+    color: 'sage',
+    ...extra,
+  })
+  try {
+    const meta = await createDocument(store, dataDir)
+    // The client starts from A + B.
+    await store.saveAnnotations(meta.id, { version: 1, items: [item('a', 'A'), item('b', 'B')] })
+
+    // A concurrent AI/agent writer appends C, which is unknown to the client.
+    await store.mutateAnnotations(meta.id, (items) => {
+      items.push(item('c', 'AI note', { origin: 'ai', aspect: 'method' }))
+      return { items }
+    })
+
+    // Client edits A, deletes B, adds D and sends the base id set it had loaded.
+    const persisted = await store.saveAnnotations(meta.id, {
+      version: 1,
+      items: [item('a', 'A edited'), item('d', 'D')],
+      baseIds: ['a', 'b'],
+    })
+    assert.deepEqual(persisted.items.map((entry) => entry.id).sort(), ['a', 'c', 'd'])
+    assert.equal(persisted.items.find((entry) => entry.id === 'a').note, 'A edited')
+    assert.equal(persisted.items.find((entry) => entry.id === 'c').note, 'AI note', 'concurrent addition survives')
+    assert.equal(persisted.items.find((entry) => entry.id === 'b'), undefined, 'base-id deletion wins')
+    // The returned list is exactly what was persisted.
+    const loaded = await store.loadAnnotations(meta.id)
+    assert.deepEqual(loaded.items.map((entry) => entry.id).sort(), ['a', 'c', 'd'])
+
+    // Duplicate / non-string base ids are tolerated; unknown ids never delete data.
+    const again = await store.saveAnnotations(meta.id, {
+      version: 1,
+      items: [item('a', 'A again')],
+      baseIds: ['a', 'a', '', 42, 'ghost'],
+    })
+    assert.deepEqual(again.items.map((entry) => entry.id).sort(), ['a', 'c', 'd'])
+
+    // No baseIds (or a non-array value) keeps the replace semantics unchanged.
+    const replaced = await store.saveAnnotations(meta.id, { version: 1, items: [item('z', 'Z')] })
+    assert.deepEqual(replaced.items.map((entry) => entry.id), ['z'])
+    assert.deepEqual((await store.loadAnnotations(meta.id)).items.map((entry) => entry.id), ['z'])
+    const legacy = await store.saveAnnotations(meta.id, { version: 1, items: [item('y', 'Y')], baseIds: 'a' })
+    assert.deepEqual(legacy.items.map((entry) => entry.id), ['y'])
+
+    // An empty base set means "the client had loaded nothing": every on-disk
+    // annotation is a concurrent addition and is appended, never deleted.
+    const keepUnknown = await store.saveAnnotations(meta.id, { version: 1, items: [], baseIds: [] })
+    assert.deepEqual(keepUnknown.items.map((entry) => entry.id), ['y'])
+  } finally {
+    await store.dispose()
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
+test('mutateAnnotations is an atomic read-modify-write that loses no concurrent writer', async () => {
+  const dataDir = await makeDataDir()
+  const store = createStore({ dataDir })
+  /** One minimal annotation item. */
+  const item = (id) => ({ id, blockKey: 'b3:ab12cd34', start: 0, end: 5, quote: 'hello', note: id, color: 'sage' })
+  try {
+    const meta = await createDocument(store, dataDir)
+    assert.deepEqual(await store.mutateAnnotations(meta.id, (items) => items), { version: 1, items: [] })
+
+    // Interleaved appends: every writer must survive.
+    await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        store.mutateAnnotations(meta.id, (items) => {
+          items.push(item(`n-${index}`))
+          return { items }
+        }),
+      ),
+    )
+    const loaded = await store.loadAnnotations(meta.id)
+    assert.equal(loaded.items.length, 20)
+    assert.deepEqual(
+      loaded.items.map((entry) => entry.id).sort(),
+      Array.from({ length: 20 }, (_, index) => `n-${index}`).sort(),
+    )
+
+    // A new array replaces the list; an undefined return persists in-place edits.
+    const replaced = await store.mutateAnnotations(meta.id, () => [item('only')])
+    assert.deepEqual(replaced.items.map((entry) => entry.id), ['only'])
+    const inPlace = await store.mutateAnnotations(meta.id, (items) => {
+      items[0].note = 'changed in place'
+    })
+    assert.equal(inPlace.items[0].note, 'changed in place')
+    // Async mutators and {items} wrappers are supported.
+    const asyncResult = await store.mutateAnnotations(meta.id, async (items) => {
+      items.push(item('async-note'))
+      return { items }
+    })
+    assert.equal(asyncResult.items.length, 2)
+
+    // A throwing mutator rejects without writing anything.
+    await assert.rejects(
+      store.mutateAnnotations(meta.id, () => {
+        throw new Error('mutation failed')
+      }),
+      /mutation failed/,
+    )
+    assert.equal((await store.loadAnnotations(meta.id)).items.length, 2)
+
+    // Corrupt annotation files read as an empty list and are repaired by the write.
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(store.docDir(meta.id), 'annotations.json'), '{broken json')
+    const repaired = await store.mutateAnnotations(meta.id, (items) => {
+      assert.deepEqual(items, [])
+      return [item('repaired')]
+    })
+    assert.deepEqual(repaired.items.map((entry) => entry.id), ['repaired'])
+
+    // Unknown documents, invalid ids and non-function mutators reject cleanly.
+    await assert.rejects(store.mutateAnnotations(randomUUID(), (items) => items), (error) => error.code === 'not-found')
+    await assert.rejects(store.mutateAnnotations('../escape', (items) => items), (error) => error.code === 'bad-request')
+    await assert.rejects(store.mutateAnnotations(meta.id, 'nope'), (error) => error.code === 'bad-request')
+  } finally {
+    await store.dispose()
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})

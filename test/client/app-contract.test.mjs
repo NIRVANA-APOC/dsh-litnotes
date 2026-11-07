@@ -88,16 +88,45 @@ test('AI view preferences are host-persisted and validated', () => {
 })
 
 test('the AI label set covers both client modules', () => {
-  // While ui/chat.js / ui/graph.js are placeholders this only validates the
-  // dictionary; once the modules land it also asserts every t() key they use
-  // is registered in app.js (missing keys would surface as raw key strings).
+  // The copy decks live in app.js only (this round): chat.js/graph.js reach the
+  // dictionary through the mruAiT / mruGraphText / tr wrappers. Every literal
+  // key they pass plus every programmatic family must be registered.
   const zh = dictionaryKeys('ZH')
+  const en = dictionaryKeys('EN')
   const used = new Set()
+  const patterns = [
+    /mruAiT\([^,]+,\s*'([a-zA-Z0-9_.-]+)'/g,
+    /mruGraphText\([^,]+,\s*'([a-zA-Z0-9_.-]+)'/g,
+    /\btr\('([a-zA-Z0-9_.-]+)'/g,
+  ]
   for (const source of [chat, graph]) {
-    for (const match of source.matchAll(/(?<![A-Za-z0-9_.$])t\(['"]([a-zA-Z0-9_.]+)['"]/g)) used.add(match[1])
+    for (const pattern of patterns) {
+      for (const match of source.matchAll(pattern)) {
+        // A trailing dot means the module builds the key from a constant
+        // (`'ai.aspect.' + aspect`); the family is asserted below instead.
+        if (!match[1].endsWith('.')) used.add(match[1])
+      }
+    }
   }
-  const missing = [...used].filter((key) => !zh.has(key))
-  assert.deepEqual(missing, [], `ui/chat.js or ui/graph.js use unregistered t() keys: ${missing.join(', ')}`)
+  // Programmatic families rendered from constants inside the modules.
+  const graphTypes = ['concept', 'method', 'finding', 'definition', 'limitation', 'section', 'question', 'insight', 'paper', 'topic']
+  const graphEdges = ['defines', 'uses', 'supports', 'contradicts', 'part_of', 'leads_to', 'evolves_from', 'relates', 'answers', 'mentions', 'shares']
+  const graphSources = ['ai-summary', 'qa', 'user', 'aggregate']
+  const aspects = ['definition', 'context', 'method', 'result', 'limitation']
+  for (const type of graphTypes) used.add(`graph.${type}`)
+  for (const type of graphEdges) used.add(`graph.edge.${type}`)
+  for (const source of graphSources) used.add(`graph.source.${source}`)
+  for (const aspect of ['definition', 'method', 'result', 'limitation']) used.add(`graph.aspect.${aspect}`)
+  for (const aspect of aspects) used.add(`aspect.${aspect}`)
+  const missingZh = [...used].filter((key) => !zh.has(key))
+  const missingEn = [...used].filter((key) => !en.has(key))
+  assert.deepEqual(missingZh, [], `ui/chat.js or ui/graph.js use unregistered zh keys: ${missingZh.join(', ')}`)
+  assert.deepEqual(missingEn, [], `ui/chat.js or ui/graph.js use unregistered en keys: ${missingEn.join(', ')}`)
+  // The per-module fallback decks are gone; the dictionary is the only source.
+  assert.doesNotMatch(chat, /const mruAiCopy = \{/, 'chat.js must not keep a local copy deck')
+  assert.doesNotMatch(chat, /mruAiCopyLanguage/, 'chat.js must not probe the locale for a local deck')
+  assert.doesNotMatch(graph, /const MRU_GRAPH_TEXT = \{/, 'graph.js must not keep a local copy deck')
+  assert.doesNotMatch(graph, /function mruGraphLanguage\(/, 'graph.js must not probe the locale for a local deck')
 })
 
 test('a successful reparse reloads annotations before normalizing them', () => {
@@ -110,4 +139,59 @@ test('build pipeline concatenates chat and graph before app', () => {
   assert.match(build, /read\('ui\/chat\.js'\)/, 'build-client must read ui/chat.js')
   assert.match(build, /read\('ui\/graph\.js'\)/, 'build-client must read ui/graph.js')
   assert.match(build, /\[markdown, highlight, chat, graph, app\]/, 'bundle order must be markdown, highlight, chat, graph, app')
+})
+
+test('margin notes expose the AI spark and the origin/aspect filter', () => {
+  assert.match(app, /const MRU_NOTES_FILTERS = \['all', 'ai', 'user'\]/, 'margin origin filter values are fixed')
+  assert.match(app, /notesFilter: 'all',/, 'notesFilter defaults to all')
+  assert.match(app, /prefs\.notesFilter = MRU_NOTES_FILTERS\.includes\(prefs\.notesFilter\)/, 'notesFilter must be normalized')
+  assert.match(app, /const changeNotesFilter = \(value\) =>/, 'app must own the filter handler')
+  assert.match(app, /updatePrefs\(\{ notesFilter: next \}\)/, 'the origin filter must persist host-side')
+  const margin = app.slice(app.indexOf('function MruMargin('), app.indexOf('/** Bottom status bar.'))
+  for (const className of [
+    'mru-note-filter', 'mru-note-filter__chip', 'mru-note-filter__aspect',
+    'mru-note-filter__status', 'mru-note__origin', 'mru-note--ai',
+  ]) {
+    assert.ok(margin.includes(className), `margin filter/spark markup must emit ${className}`)
+  }
+  assert.match(margin, /notes\.filterAi/, 'the AI filter chip must use the registered copy')
+  assert.match(margin, /mru-note__origin[\s\S]{0,160}MruGlyph, \{ name: 'spark'/, 'AI notes must show the spark marker')
+  assert.match(app, /notesFilter,\n\s*onNotesFilterChange: changeNotesFilter,/, 'MineruApp must pass the filter state into the margin')
+  // The note editor carries the AI provenance into the edit surface too.
+  assert.match(app, /origin: annotation\.origin \|\| 'user',/, 'the note editor must receive the annotation origin')
+  assert.match(app, /mru-noteeditor__origin/, 'the note editor must render the AI origin badge')
+})
+
+test('graph curation is wired through one patch-shaped onUpdateGraph', () => {
+  const start = app.indexOf('onUpdateGraph: (patch, legacyEdges)')
+  assert.ok(start > 0, 'MineruApp must expose the patch-shaped onUpdateGraph')
+  const body = app.slice(start, app.indexOf('\n    }', start))
+  assert.match(body, /mruPost\('graph\.update'/, 'curation must post graph.update')
+  assert.match(body, /Array\.isArray\(source\.nodes\)/, 'nodes must ride the patch')
+  assert.match(body, /Array\.isArray\(source\.merge\)/, 'merge must ride the patch')
+  assert.match(body, /payload\.merge = source\.merge/, 'merge must reach the host payload')
+  assert.match(body, /return mruPost\('graph\.update'/, 'the handler must resolve the updated graph')
+  assert.ok(app.includes('return graph;'), 'the promise must resolve the updated KG')
+})
+
+test('conversation export and the download helper are wired', () => {
+  assert.match(app, /onExportConversation: \(markdown, filename\) => mruDownloadText\(filename, markdown\)/,
+    'the AI panel must receive the export hook')
+  assert.match(app, /const mruDownloadText = \(filename, text, mime\) =>/, 'a shared text-download helper must exist')
+  assert.match(app, /const mruSafeExportName = \(name\) =>/, 'export filenames must be sanitized')
+  assert.match(app, /URL\.createObjectURL\(blob\)/, 'exports must use a Blob download')
+  assert.match(app, /anchor\.download = mruSafeExportName\(filename\)/, 'the download must use the sanitized name')
+})
+
+test('the auto-build switch is persisted, hinted and reachable two ways', () => {
+  assert.match(app, /const autoBuildGraphFor = \(doc\) =>/, 'a shared auto-build guard must exist')
+  assert.match(app, /!state\.prefs\.graphAutoBuild \|\| !mruAiState\(state\.status\)\.graph/, 'auto-build must be gated by the pref and graph availability')
+  assert.match(app, /autoBuiltGraphsRef\.current\.has\(id\)/, 'auto-build must run once per document per session')
+  assert.match(app, /toast\(t\('toast\.autoGraph'\)\)/, 'auto-build must tell the reader it started')
+  assert.match(app, /if \(doc\.status === 'parsed' && previous !== 'parsed'\) autoBuildGraphFor\(doc\)/, 'the parse transition must auto-build')
+  assert.match(app, /state\.docView !== 'graph'[\s\S]{0,900}autoBuildGraphFor\(doc\)/, 'opening an empty graph view must recover a missed auto-build')
+  assert.match(app, /t\('settings\.sectionAi'\)/, 'the AI settings section must exist')
+  assert.match(app, /settings\.graphAutoBuildHint/, 'the switch must explain itself')
+  assert.match(app, /settings\.graphAutoBuildUnavailable/, 'the switch must explain when it cannot work')
+  assert.match(app, /aiGraphReady/, 'the switch must follow AI availability')
 })

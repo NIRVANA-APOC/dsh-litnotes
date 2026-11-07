@@ -12,13 +12,16 @@
  * Public exports (pure helpers are unit-tested directly from this file):
  *   mruAiParseAnswer(text)        -> { answer, data, hasFence }
  *   mruAiCitationMarkers(text)    -> [{ type:'text'|'citation', text, start, end, index? }]
+ *   mruAiCitationFlags(citation, verified) -> { partial, unsupported }
+ *   mruAiUnverifiedBreakdown(unverified)   -> { unsupported, generic, total }
+ *   mruAiExportMarkdown(messages, meta)    -> { filename, markdown } | null
  *   mruAiNormalizeMessages(raw)   -> ChatMessage[] (docs/AI-SPEC.md §2 shape)
  *   MruAiPanel(props)             -> React component
  *
  * Props consumed (exactly docs/AI-SPEC.md §6):
  *   { t, documentId, documentTitle, modelLabel, available, katexReady, context,
  *     onJump, onAnnotationsChanged, onGraphDelta, onOpenGraph, post, streamChat,
- *     onNotify }
+ *     onNotify, onExportConversation(markdown, filename) }
  * All callbacks are optional at runtime (the panel degrades to a read-only /
  * retry state rather than throwing when the host is not wired yet). `post` is
  * `mruPost`-shaped; `streamChat(request, { onFrame, signal })` is the NDJSON
@@ -32,6 +35,12 @@
  *   .mru-ai__chip--selection    context chip for the current text selection
  *   .mru-ai__chip--visible      context chip for the current visible paragraph
  *   .mru-ai__citation--missing  an inline [n] with no citation data in the message
+ *   .mru-ai__citation--partial  verified citation whose quote only partly supports
+ *                               its claim (docs/RESEARCH.md entailment pass)
+ *   .mru-ai__claim              claim-check meta row inside the citation card
+ *   .mru-ai__claim--partial     part-of-claim-check row for a partial verdict
+ *   .mru-ai__claim--unsupported claim-check row for an unsupported verdict
+ *   .mru-ai__notice--entailment answer notice for entailment-unsupported citations
  *   .mru-ai__action--compact    small icon-only action (chip clear, dismiss)
  * State is otherwise expressed through `data-available`, `data-busy`,
  * `data-state`, `data-streaming`, `data-index`, `data-verified` and
@@ -39,142 +48,14 @@
  * `.mru-code`, `.mru-inline-code`, `.mru-formula` and `.mru-link` classes so the
  * reader typography applies unchanged.
  *
- * Locale: every string goes through `props.t` with the keys listed in
- * `mruAiCopy` below. When a key is missing (the locale dictionaries are owned by
- * app.js) the panel falls back to this file's zh/en copy, choosing en when a
- * probe of an existing dictionary key says the locale is English. The panel
- * never writes the document body or browser storage; the citation card is a
- * fixed-position overlay rendered inside the component tree.
+ * Locale: every string goes through `props.t` / `mruAiT(t,key,params)` with the
+ * `ai.*` keys registered in the app dictionaries (ui/app.js ZH/EN); the wrapper
+ * does `{param}` interpolation and falls back to the key, so this module keeps
+ * no copy of its own. Aspect labels reuse the reader keys
+ * `aspect.definition|context|method|result|limitation`. The panel never writes
+ * the document body or browser storage; the citation card is a fixed-position
+ * overlay rendered inside the component tree.
  */
-
-/* -------------------------------------------------------------------------- */
-/* Copy deck / locale fallback                                                 */
-/* -------------------------------------------------------------------------- */
-
-const mruAiCopy = {
-  zh: {
-    'ai.title': 'AI 精读',
-    'ai.modelDefault': '默认模型',
-    'ai.modelUnavailable': '模型未连接',
-    'ai.openGraph': '知识图谱',
-    'ai.emptyTitle': '从这篇论文开始',
-    'ai.emptyText': '回答只依据这份解析稿；每条结论带可跳转的引用，已验证的引用会自动写成页边批注。',
-    'ai.unavailableTitle': 'AI 模型尚未就绪',
-    'ai.unavailableText': '在 DSH 设置中配置默认模型后，就可以基于解析稿提问并标注原文。',
-    'ai.loadingHistory': '正在载入对话…',
-    'ai.historyError': '对话载入失败。',
-    'ai.quickSummary': '总结全文',
-    'ai.quickSolved': '这篇论文解决了什么',
-    'ai.quickMethod': '方法是什么',
-    'ai.quickLimits': '有什么局限',
-    'ai.quickConcept': '解释这个概念',
-    'ai.placeholder': '就这篇论文提问…',
-    'ai.hint': '⌘/Ctrl + Enter 发送 · Shift + Enter 换行',
-    'ai.busyHint': '正在回答，可先写下一条问题…',
-    'ai.send': '发送',
-    'ai.stop': '停止',
-    'ai.thinking': '正在检索并生成…',
-    'ai.stopped': '已停止生成',
-    'ai.answerEmpty': '没有收到回答，请重试。',
-    'ai.retry': '重试',
-    'ai.dismiss': '关闭',
-    'ai.citationsCount': '共 {count} 条引用',
-    'ai.unverifiedNotice': '{count} 条引用未通过校验，已置灰且不会写入批注。',
-    'ai.citationLabel': '引用 {index}',
-    'ai.citationLabelPage': '引用 {index}，第 {page} 页',
-    'ai.missingCitation': '引用 {index}（数据缺失）',
-    'ai.jump': '跳到原文',
-    'ai.unverifiedShort': '未通过校验',
-    'ai.aspect.definition': '定义',
-    'ai.aspect.method': '方法',
-    'ai.aspect.result': '结果',
-    'ai.aspect.limitation': '局限',
-    'ai.aspect.context': '背景',
-    'ai.regenerate': '重新生成',
-    'ai.copy': '复制',
-    'ai.copied': '已复制回答',
-    'ai.copyFailed': '复制失败',
-    'ai.annotationsNotice': '已在原文标注 {count} 处引用',
-    'ai.selection': '选中文本',
-    'ai.visible': '当前段落',
-    'ai.clearContext': '移除上下文',
-    'ai.noDocument': '先从文献库选一篇已解析的论文。',
-    'ai.errHost': 'AI 服务还未就绪，请稍后重试。',
-    'ai.errModel': '模型不可用，请检查 DSH 的默认模型配置。',
-    'ai.errFailed': '模型调用失败，请重试。',
-    'ai.errContext': '检索到的上下文过长，请缩小提问范围。',
-    'ai.errAborted': '生成已中断。',
-    'ai.errNetwork': '网络请求失败，请重试。',
-    'ai.errGeneric': '这次提问没有完成。',
-    'ai.followups': '继续追问',
-    'ai.legendTitle': '颜色图例',
-    'ai.navLabel': '问题导航',
-    'ai.navJump': '跳到第 {index} 个问题',
-    'ai.navQuestion': '问题 {index}',
-    'ai.toLatest': '回到最新',
-  },
-  en: {
-    'ai.title': 'AI reading',
-    'ai.modelDefault': 'Default model',
-    'ai.modelUnavailable': 'Model unavailable',
-    'ai.openGraph': 'Knowledge graph',
-    'ai.emptyTitle': 'Start with this paper',
-    'ai.emptyText': 'Answers use only this parsed paper. Every claim carries a jumpable citation, and verified citations become margin annotations.',
-    'ai.unavailableTitle': 'AI model not ready',
-    'ai.unavailableText': 'Configure a default model in DSH settings to ask questions and annotate the source.',
-    'ai.loadingHistory': 'Loading conversation…',
-    'ai.historyError': 'Could not load the conversation.',
-    'ai.quickSummary': 'Summarize the paper',
-    'ai.quickSolved': 'What problem does this paper solve?',
-    'ai.quickMethod': 'What is the method?',
-    'ai.quickLimits': 'What are the limitations?',
-    'ai.quickConcept': 'Explain this concept',
-    'ai.placeholder': 'Ask about this paper…',
-    'ai.hint': '⌘/Ctrl + Enter to send · Shift + Enter for a new line',
-    'ai.busyHint': 'Answering… you can draft the next question',
-    'ai.send': 'Send',
-    'ai.stop': 'Stop',
-    'ai.thinking': 'Retrieving and writing…',
-    'ai.stopped': 'Generation stopped',
-    'ai.answerEmpty': 'No answer arrived. Try again.',
-    'ai.retry': 'Retry',
-    'ai.dismiss': 'Dismiss',
-    'ai.citationsCount': '{count} citations',
-    'ai.unverifiedNotice': '{count} citations failed verification. They are dimmed and are not saved as annotations.',
-    'ai.citationLabel': 'Citation {index}',
-    'ai.citationLabelPage': 'Citation {index}, page {page}',
-    'ai.missingCitation': 'Citation {index} (data missing)',
-    'ai.jump': 'Jump to source',
-    'ai.unverifiedShort': 'Unverified',
-    'ai.aspect.definition': 'Definition',
-    'ai.aspect.method': 'Method',
-    'ai.aspect.result': 'Result',
-    'ai.aspect.limitation': 'Limitation',
-    'ai.aspect.context': 'Context',
-    'ai.regenerate': 'Regenerate',
-    'ai.copy': 'Copy',
-    'ai.copied': 'Answer copied',
-    'ai.copyFailed': 'Copy failed',
-    'ai.annotationsNotice': 'Marked {count} citations in the paper',
-    'ai.selection': 'Selection',
-    'ai.visible': 'Current paragraph',
-    'ai.clearContext': 'Remove context',
-    'ai.noDocument': 'Select a parsed paper first.',
-    'ai.errHost': 'The AI service is not ready yet. Try again shortly.',
-    'ai.errModel': 'The model is unavailable. Check the default model in DSH.',
-    'ai.errFailed': 'The model call failed. Try again.',
-    'ai.errContext': 'The retrieved context is too long. Narrow the question.',
-    'ai.errAborted': 'Generation was interrupted.',
-    'ai.errNetwork': 'The request failed. Try again.',
-    'ai.errGeneric': 'This question did not finish.',
-    'ai.followups': 'Follow up',
-    'ai.legendTitle': 'Colour legend',
-    'ai.navLabel': 'Question navigator',
-    'ai.navJump': 'Jump to question {index}',
-    'ai.navQuestion': 'Question {index}',
-    'ai.toLatest': 'Back to latest',
-  },
-}
 
 /** Quick prompts shown in the empty state (docs/AI-SPEC.md §6). */
 const mruAiQuickPrompts = [
@@ -188,33 +69,28 @@ const mruAiQuickPrompts = [
 /** Aspect values accepted from the host (mirrors lib/ai/aspects.js). */
 const mruAiAspects = ['definition', 'method', 'result', 'limitation', 'context']
 
-/** Pick the fallback copy language by probing an existing app dictionary key. */
-function mruAiCopyLanguage(t) {
-  if (typeof t !== 'function') return 'zh'
-  let probe = ''
-  try {
-    probe = t('margin.outline')
-  } catch {
-    probe = ''
-  }
-  return probe === 'Outline' || probe === 'Notes' ? 'en' : 'zh'
-}
+/** Entailment verdicts the host may attach to a citation (docs/RESEARCH.md). */
+const mruAiEntailmentValues = ['supported', 'partial', 'unsupported', 'unchecked']
 
-/** Translate through props.t, falling back to the local copy deck. */
+/** Unverified reason for a verified quote that does not support its claim. */
+const mruAiEntailmentUnsupportedReason = 'entailment-unsupported'
+
+/**
+ * Translate through the app dictionaries (ui/app.js ZH/EN): `{param}`
+ * interpolation plus key-as-fallback. This module carries no copy of its own
+ * (docs/AI-SPEC.md §6 — all copy lives in the app dictionaries).
+ */
 function mruAiT(t, key, params) {
   let value = ''
   if (typeof t === 'function') {
     try {
-      value = t(key, params)
+      value = t(key)
     } catch {
       value = ''
     }
   }
-  if (typeof value !== 'string' || value === '' || value === key) {
-    const deck = mruAiCopy[mruAiCopyLanguage(t)] || mruAiCopy.zh
-    value = typeof deck[key] === 'string' ? deck[key] : (mruAiCopy.zh[key] || key)
-  }
-  if (params !== undefined && typeof value === 'string' && value.indexOf('{') !== -1) {
+  if (typeof value !== 'string' || value === '') value = String(key)
+  if (params !== undefined && params !== null) {
     value = value.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
   }
   return value
@@ -496,6 +372,11 @@ function mruAiAspect(value) {
   return mruAiAspects.indexOf(value) === -1 ? 'context' : value
 }
 
+/** Normalize one entailment verdict; unknown/absent values become ''. */
+function mruAiNormalizeEntailment(value) {
+  return mruAiEntailmentValues.indexOf(value) === -1 ? '' : value
+}
+
 /** Normalize model route objects (`{provider, model}`). */
 function mruAiNormalizeModel(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
@@ -555,9 +436,54 @@ function mruAiNormalizeCitationList(raw, forceUnverified) {
       aspect: mruAiAspect(item.aspect),
       note: mruAiString(item.note),
       verified: forceUnverified === true ? false : item.verified !== false,
+      // Entailment pass (docs/RESEARCH.md line 177): a verified quote can still
+      // be partial/unsupported for the claim it is attached to; unsupported
+      // entries arrive here in `unverified` with reason 'entailment-unsupported'.
+      entailment: mruAiNormalizeEntailment(item.entailment),
+      entailmentReason: mruAiString(item.entailmentReason),
+      reason: mruAiString(item.reason),
     })
   }
   return out
+}
+
+/**
+ * Entailment flags for one citation chip/card.
+ *
+ * `partial` — the quote only partly supports the claim (verified, warned, still
+ * jumpable). `unsupported` — the quote does not support the claim: the host
+ * moved it to `unverified` (reason `entailment-unsupported`); the UI keeps it
+ * dimmed and must not jump from it.
+ *
+ * @param {object|null} citation normalized citation
+ * @param {boolean} verified whether the host validated the quote
+ * @returns {{partial:boolean, unsupported:boolean}}
+ */
+export function mruAiCitationFlags(citation, verified) {
+  const item = citation !== null && typeof citation === 'object' ? citation : {}
+  const entailment = mruAiString(item.entailment)
+  const reason = mruAiString(item.reason)
+  return {
+    partial: entailment === 'partial',
+    unsupported: verified === false
+      && (reason === mruAiEntailmentUnsupportedReason || entailment === 'unsupported'),
+  }
+}
+
+/**
+ * Split the unverified citations into entailment-unsupported entries and every
+ * other failure reason, so the answer footer can pick the right notice.
+ *
+ * @param {object[]} unverified normalized unverified citations
+ * @returns {{unsupported:number, generic:number, total:number}}
+ */
+export function mruAiUnverifiedBreakdown(unverified) {
+  const list = Array.isArray(unverified) ? unverified : []
+  let unsupported = 0
+  for (let i = 0; i < list.length; i += 1) {
+    if (mruAiCitationFlags(list[i], false).unsupported) unsupported += 1
+  }
+  return { unsupported, generic: list.length - unsupported, total: list.length }
 }
 
 /** Normalize one history payload (array, `{messages}`, or `{value:{messages}}`). */
@@ -628,6 +554,138 @@ export function mruAiNormalizeMessages(raw) {
     })
   }
   return out
+}
+
+/* -------------------------------------------------------------------------- */
+/* Conversation export (docs/AI-SPEC.md §6 / PLAN C5)                         */
+/* -------------------------------------------------------------------------- */
+
+/** Format an export timestamp as `YYYY-MM-DD HH:mm` in local time. */
+function mruAiExportStamp(value) {
+  const text = mruAiString(value).trim()
+  if (text === '') return ''
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return text
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + ` ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** Sanitize a conversation title into a portable Markdown download filename. */
+function mruAiExportFilename(title) {
+  let base = mruAiString(title)
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\s-]+/, '')
+    .replace(/[.\s-]+$/, '')
+  if (base.length > 80) base = base.slice(0, 80).replace(/[.\s-]+$/, '')
+  if (base === '') base = 'ai-conversation'
+  return `${base}.md`
+}
+
+/** Split normalized messages into question -> answers turns for export. */
+function mruAiExportTurns(messages) {
+  const list = Array.isArray(messages) ? messages : []
+  const turns = []
+  for (let i = 0; i < list.length; i += 1) {
+    const message = list[i]
+    if (message === null || typeof message !== 'object') continue
+    if (message.role === 'user') {
+      turns.push({ question: mruAiString(message.question), answers: [] })
+      continue
+    }
+    let turn = turns.length > 0 ? turns[turns.length - 1] : null
+    if (turn === null || turn.answers.length > 0) {
+      turn = { question: mruAiString(message.question), answers: [] }
+      turns.push(turn)
+    }
+    turn.answers.push(message)
+  }
+  return turns
+}
+
+/** One exported citation line: `[n] · p.page · aspect · quote · note`. */
+function mruAiExportCitationLine(citation, verified, t) {
+  const item = citation !== null && typeof citation === 'object' ? citation : {}
+  const parts = [`[${Number(item.index) || 0}]`]
+  if (item.page !== null && Number(item.page) > 0) parts.push(`p.${Number(item.page)}`)
+  parts.push(mruAiT(t, 'aspect.' + mruAiAspect(item.aspect)))
+  const quote = mruAiString(item.quote).replace(/\s+/g, ' ').trim()
+  if (quote !== '') parts.push(quote)
+  const note = mruAiString(item.note).replace(/\s+/g, ' ').trim()
+  if (note !== '') parts.push(note)
+  if (verified !== true) parts.push(mruAiT(t, 'ai.exportUnverified'))
+  return parts.join(' · ')
+}
+
+/** Export lines for one answer's verified citations followed by unverified ones. */
+function mruAiExportCitationLines(citations, unverified, t) {
+  const lines = []
+  const verifiedList = Array.isArray(citations) ? citations : []
+  const unverifiedList = Array.isArray(unverified) ? unverified : []
+  for (let i = 0; i < verifiedList.length; i += 1) {
+    lines.push(mruAiExportCitationLine(verifiedList[i], true, t))
+  }
+  for (let i = 0; i < unverifiedList.length; i += 1) {
+    lines.push(mruAiExportCitationLine(unverifiedList[i], false, t))
+  }
+  return lines
+}
+
+/**
+ * Render one conversation as a portable Markdown document (docs/AI-SPEC.md §6,
+ * PLAN C5). Localized through `meta.t` with the reserved `ai.export*` keys; the
+ * answer markdown is embedded verbatim and each answer's citations become a
+ * `[n] · p.page · aspect · quote · note` list (unverified entries are marked).
+ *
+ * @param {object[]|object} messages ChatMessage[] (or a `{messages}` history payload)
+ * @param {{title?:string, modelLabel?:string, exportedAt?:string,
+ *          t?:((key:string, params?:object)=>string)|null}} [meta]
+ * @returns {{filename:string, markdown:string}|null} null for an empty conversation
+ */
+export function mruAiExportMarkdown(messages, meta) {
+  const source = meta !== null && typeof meta === 'object' ? meta : {}
+  const t = typeof source.t === 'function' ? source.t : null
+  const list = mruAiNormalizeMessages(messages)
+  const turns = mruAiExportTurns(list)
+  if (turns.length === 0) return null
+  const title = mruAiString(source.title).trim()
+  const head = [title !== '' ? `# ${title} — ${mruAiT(t, 'ai.exportTitle')}` : `# ${mruAiT(t, 'ai.exportTitle')}`, '']
+  const modelLabel = mruAiString(source.modelLabel).trim()
+  if (modelLabel !== '') head.push(`- ${mruAiT(t, 'ai.exportModel')}: ${modelLabel}`)
+  const exportedAt = mruAiString(source.exportedAt).trim()
+  head.push(`- ${mruAiT(t, 'ai.exportTime')}: ${mruAiExportStamp(exportedAt !== '' ? exportedAt : new Date().toISOString())}`)
+  const blocks = []
+  for (let i = 0; i < turns.length; i += 1) {
+    const turn = turns[i]
+    const ordinal = i + 1
+    const block = [`## ${mruAiT(t, 'ai.exportQuestion', { index: ordinal })}`]
+    const question = mruAiString(turn.question).trim()
+    if (question !== '') block.push(question)
+    block.push('', `## ${mruAiT(t, 'ai.exportAnswer', { index: ordinal })}`)
+    const answers = []
+    const citations = []
+    const unverified = []
+    for (let a = 0; a < turn.answers.length; a += 1) {
+      const message = turn.answers[a]
+      const answer = mruAiString(message.answer).trim()
+      if (answer !== '') answers.push(answer)
+      if (Array.isArray(message.citations)) citations.push(...message.citations)
+      if (Array.isArray(message.unverified)) unverified.push(...message.unverified)
+    }
+    if (answers.length > 0) block.push(answers.join('\n\n'))
+    const citationLines = mruAiExportCitationLines(citations, unverified, t)
+    if (citationLines.length > 0) {
+      block.push('', `### ${mruAiT(t, 'ai.exportCitation')}`)
+      for (let c = 0; c < citationLines.length; c += 1) block.push(`- ${citationLines[c]}`)
+    }
+    blocks.push(block.join('\n'))
+  }
+  return {
+    filename: mruAiExportFilename(title),
+    markdown: `${head.join('\n')}\n\n${blocks.join('\n\n')}\n`,
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -817,6 +875,7 @@ function mruAiLocalMessage(id, role, question) {
     usage: { inputTokens: 0, outputTokens: 0 },
     annotationIds: [],
     knowledge: { nodeIds: [], edgeIds: [] },
+    phase: '',
     createdAt: new Date().toISOString(),
     local: true,
   }
@@ -873,18 +932,21 @@ function MruAiCitationChip(props) {
   const citation = props.citation || null
   const index = Number(props.index) || 0
   const verified = Boolean(props.verified) && citation !== null
+  const flags = mruAiCitationFlags(citation, verified)
   const className = 'mru-ai__citation'
     + (verified ? '' : ' mru-ai__citation--unverified')
     + (citation === null ? ' mru-ai__citation--missing' : '')
+    + (flags.partial ? ' mru-ai__citation--partial' : '')
+  const entailment = citation !== null ? mruAiString(citation.entailment) : ''
+  const quote = citation !== null && citation.quote !== '' ? mruAiDisplayText(citation.quote) : ''
   return h('button', {
     type: 'button',
     className,
     'data-index': index,
     'data-verified': verified ? 'true' : 'false',
+    'data-entailment': entailment !== '' ? entailment : undefined,
     'aria-label': props.label || `[${index}]`,
-    title: citation !== null && citation.quote !== ''
-      ? mruAiDisplayText(citation.quote)
-      : (props.title || ''),
+    title: props.title !== undefined && props.title !== '' ? props.title : quote,
     onMouseEnter: (event) => {
       if (typeof props.onHover === 'function') {
         props.onHover(event, { index, citation, verified })
@@ -913,6 +975,8 @@ function MruAiCitationChip(props) {
 function mruAiCitationChipFor(citation, index, verified, options, key) {
   const t = options.t
   const page = citation && citation.page !== null && citation.page > 0 ? citation.page : 0
+  const isVerified = Boolean(verified) && citation !== null
+  const flags = mruAiCitationFlags(citation, isVerified)
   let label
   if (citation === null) {
     label = mruAiT(t, 'ai.missingCitation', { index: mruAiFormatCount(index) })
@@ -924,13 +988,25 @@ function mruAiCitationChipFor(citation, index, verified, options, key) {
   } else {
     label = mruAiT(t, 'ai.citationLabel', { index: mruAiFormatCount(index) })
   }
+  // Short entailment labels for accessible text + tooltips; the host styles the
+  // visual marker through `.mru-ai__citation--partial` / `--unverified`.
+  const marks = []
+  if (flags.partial) marks.push(mruAiT(t, 'ai.entailmentPartialShort'))
+  if (flags.unsupported) marks.push(mruAiT(t, 'ai.entailmentUnsupportedShort'))
+  let title = citation === null ? label : ''
+  if (marks.length > 0) {
+    const suffix = marks.join(' · ')
+    label += ' · ' + suffix
+    const quote = citation !== null && citation.quote !== '' ? mruAiDisplayText(citation.quote) : ''
+    title = quote !== '' ? `${suffix} · ${quote}` : suffix
+  }
   return h(MruAiCitationChip, {
     key,
     index,
     citation,
-    verified: Boolean(verified) && citation !== null,
+    verified: isVerified,
     label,
-    title: citation === null ? label : '',
+    title,
     onHover: options.onCitationHover,
     onLeave: options.onCitationLeave,
     onClick: options.onCitationClick,
@@ -1179,15 +1255,28 @@ function MruAiEvidenceFooter(props) {
       `footer-unverified-${citation.index}-${i}`,
     ))
   }
+  const breakdown = mruAiUnverifiedBreakdown(unverified)
+  const notices = []
+  if (breakdown.unsupported > 0) {
+    notices.push(h('div', {
+      key: 'entailment',
+      className: 'mru-ai__notice mru-ai__notice--entailment',
+    },
+      h('span', { className: 'mru-ai__spark', 'aria-hidden': 'true' }, '✦'),
+      h('span', null, mruAiT(t, 'ai.entailmentNotice', {
+        count: mruAiFormatCount(breakdown.unsupported),
+      }))))
+  }
+  if (breakdown.generic > 0) {
+    notices.push(h('div', { key: 'unverified', className: 'mru-ai__notice' },
+      h('span', { className: 'mru-ai__spark', 'aria-hidden': 'true' }, '✦'),
+      h('span', null, mruAiT(t, 'ai.unverifiedNotice', {
+        count: mruAiFormatCount(breakdown.generic),
+      }))))
+  }
   return h(React.Fragment, null,
     h('div', { className: 'mru-ai__citations' }, nodes),
-    unverified.length > 0
-      ? h('div', { className: 'mru-ai__notice' },
-          h('span', { className: 'mru-ai__spark', 'aria-hidden': 'true' }, '✦'),
-          h('span', null, mruAiT(t, 'ai.unverifiedNotice', {
-            count: mruAiFormatCount(unverified.length),
-          })))
-      : null)
+    notices.length > 0 ? notices : null)
 }
 
 /** One chat message row (user question or assistant answer). */
@@ -1206,6 +1295,8 @@ function MruAiMessage(props) {
   }
   const answer = mruAiString(message.answer)
   const streaming = Boolean(message.streaming)
+  const phase = mruAiString(message.phase)
+  const checkingClaims = streaming && phase === 'entailment'
   const showThinking = streaming && answer.trim() === ''
   const annotationCount = Array.isArray(message.annotationIds) ? message.annotationIds.length : 0
   const followups = Array.isArray(message.followups) ? message.followups : []
@@ -1237,9 +1328,16 @@ function MruAiMessage(props) {
   if (showThinking) {
     bubble.push(h('div', { key: 'thinking', className: 'mru-ai__streaming' },
       h(MruSpinner),
-      h('span', null, mruAiT(t, 'ai.thinking'))))
+      h('span', null, mruAiT(t, checkingClaims ? 'ai.checkingClaims' : 'ai.thinking'))))
   } else if (answerChildren.length > 0) {
     bubble.push(h('div', { key: 'answer', className: 'mru-ai__answer' }, answerChildren))
+    // Entailment pass (docs/RESEARCH.md): the answer text is already streamed,
+    // show that the host is now checking every citation against its claim.
+    if (checkingClaims) {
+      bubble.push(h('div', { key: 'claim-check', className: 'mru-ai__streaming' },
+        h(MruSpinner),
+        h('span', null, mruAiT(t, 'ai.checkingClaims'))))
+    }
   }
   if (message.stopped) {
     bubble.push(h('div', { key: 'stopped', className: 'mru-ai__notice' },
@@ -1324,12 +1422,15 @@ function MruAiCitationCard(props) {
   const citation = card.citation
   const index = card.index
   const verified = Boolean(card.verified)
+  const flags = mruAiCitationFlags(citation, verified)
   const t = props.t
   const position = mruAiOverlayPosition(card.rect, 340, 190)
   const meta = []
   meta.push(h('span', {
     key: 'chip',
-    className: 'mru-ai__citation' + (verified ? '' : ' mru-ai__citation--unverified'),
+    className: 'mru-ai__citation'
+      + (verified ? '' : ' mru-ai__citation--unverified')
+      + (flags.partial ? ' mru-ai__citation--partial' : ''),
     'data-index': index,
   }, `[${index}]`))
   if (citation.page !== null && citation.page > 0) {
@@ -1342,9 +1443,25 @@ function MruAiCitationCard(props) {
       index: mruAiFormatCount(index),
     })))
   }
-  meta.push(h('span', { key: 'aspect' }, ' · ' + mruAiT(t, 'ai.aspect.' + mruAiAspect(citation.aspect))))
+  meta.push(h('span', { key: 'aspect' }, ' · ' + mruAiT(t, 'aspect.' + mruAiAspect(citation.aspect))))
+  const entailmentReason = mruAiString(citation.entailmentReason)
+  if (flags.partial) {
+    meta.push(h('span', {
+      key: 'claim',
+      className: 'mru-ai__claim mru-ai__claim--partial',
+      title: entailmentReason !== '' ? mruAiDisplayText(entailmentReason) : undefined,
+    }, ' · ' + mruAiT(t, 'ai.claimCheck') + ': ' + mruAiT(t, 'ai.entailmentPartial')))
+  }
   if (!verified) {
-    meta.push(h('span', { key: 'unverified' }, ' · ' + mruAiT(t, 'ai.unverifiedShort')))
+    if (flags.unsupported) {
+      meta.push(h('span', {
+        key: 'claim',
+        className: 'mru-ai__claim mru-ai__claim--unsupported',
+        title: entailmentReason !== '' ? mruAiDisplayText(entailmentReason) : undefined,
+      }, ' · ' + mruAiT(t, 'ai.claimCheck') + ': ' + mruAiT(t, 'ai.entailmentUnsupported')))
+    } else {
+      meta.push(h('span', { key: 'unverified' }, ' · ' + mruAiT(t, 'ai.unverifiedShort')))
+    }
   }
   const children = [
     h('div', { key: 'meta' }, meta),
@@ -1355,7 +1472,10 @@ function MruAiCitationCard(props) {
       ? h('p', { key: 'note' }, mruAiDisplayText(citation.note))
       : null,
     h('div', { key: 'actions', className: 'mru-ai__actions' },
-      citation.blockKey !== ''
+      // An entailment-unsupported citation stays dimmed with no jump action
+      // (PLAN C4): the quote is real but does not support the claim, so the
+      // reader is not sent to the text as if it were evidence.
+      citation.blockKey !== '' && !flags.unsupported
         ? h('button', {
             key: 'jump',
             type: 'button',
@@ -1478,13 +1598,13 @@ export function mruAiNavTargetScrollTop(scrollTop, messageTop, containerTop, pad
   return Math.max(0, Math.round(base + (message - container) - (Number.isFinite(pad) ? pad : 12)))
 }
 
-/** Aspect colour legend entries (labels resolved through the chat copy deck). */
+/** Aspect colour legend entries (reader `aspect.*` labels from the app dictionaries). */
 const mruAiAspectLegendRows = [
-  ['definition', 'ai.aspect.definition'],
-  ['context', 'ai.aspect.context'],
-  ['method', 'ai.aspect.method'],
-  ['result', 'ai.aspect.result'],
-  ['limitation', 'ai.aspect.limitation'],
+  ['definition', 'aspect.definition'],
+  ['context', 'aspect.context'],
+  ['method', 'aspect.method'],
+  ['result', 'aspect.result'],
+  ['limitation', 'aspect.limitation'],
 ]
 
 /**
@@ -1704,11 +1824,19 @@ export function MruAiPanel(props) {
 
   const handleCitationClick = (event, payload) => {
     const citation = payload && payload.citation ? payload.citation : null
-    if (citation !== null && citation.blockKey !== '') {
+    if (citation === null) return
+    // An entailment-unsupported citation has a real blockKey but must not be
+    // presented as evidence: open the card (which explains the claim check and
+    // hides the jump action) instead of scrolling the paper.
+    if (mruAiCitationFlags(citation, Boolean(payload && payload.verified)).unsupported) {
+      showCitationCard(event, payload)
+      return
+    }
+    if (citation.blockKey !== '') {
       jumpToBlock(citation.blockKey)
       return
     }
-    if (citation !== null) showCitationCard(event, payload)
+    showCitationCard(event, payload)
   }
 
   const mruAiReducedMotion = () => {
@@ -1872,6 +2000,18 @@ export function MruAiPanel(props) {
       })))
       return
     }
+    if (type === 'phase') {
+      // New frame from the entailment pass (PLAN C4): the answer text has been
+      // streamed and the host is now checking citations against their claims.
+      // Unknown phase values are ignored so older hosts/frames stay harmless.
+      if (mruAiString(frame.phase) === 'entailment') {
+        setMessages((previous) => mruAiPatchMessage(previous, run.id, (message) => ({
+          ...message,
+          phase: 'entailment',
+        })))
+      }
+      return
+    }
     if (type === 'answer') {
       const markdown = mruAiString(frame.markdown)
       const parsed = mruAiParseAnswer(markdown !== '' ? markdown : run.draft)
@@ -1901,6 +2041,7 @@ export function MruAiPanel(props) {
         annotationIds: annotationIds.length > 0 ? annotationIds : message.annotationIds,
         serverId: serverId !== '' ? serverId : message.serverId,
         model: model !== null ? model : message.model,
+        phase: '',
         streaming: true,
       })))
       if (annotationIds.length > 0 && !run.announced) {
@@ -2152,6 +2293,49 @@ export function MruAiPanel(props) {
       () => mruAiNotify(api, mruAiT(api.t, 'ai.copied')),
       () => mruAiNotify(api, mruAiT(api.t, 'ai.copyFailed')),
     )
+  }
+
+  /**
+   * Export the whole conversation as Markdown (PLAN C5).
+   *
+   * Toast ownership is ours on both paths: `props.onExportConversation` returns
+   * `false` only when the browser download could not be triggered (the app never
+   * notifies); any other return value means the file was saved. Without a host
+   * exporter the Markdown is copied through the clipboard helper instead.
+   */
+  const exportConversation = () => {
+    const api = propsRef.current
+    if (!Array.isArray(messages) || messages.length === 0) return
+    const notifyExported = () => mruAiNotify(api, mruAiT(api.t, 'ai.exported'))
+    const notifyFailed = () => mruAiNotify(api, mruAiT(api.t, 'ai.exportFailed'))
+    let result = null
+    try {
+      result = mruAiExportMarkdown(messages, {
+        title: mruAiString(api.documentTitle) || documentTitle,
+        modelLabel: mruAiString(api.modelLabel) || modelLabel,
+        exportedAt: new Date().toISOString(),
+        t: api.t,
+      })
+    } catch {
+      result = null
+    }
+    if (result === null) {
+      notifyFailed()
+      return
+    }
+    if (typeof api.onExportConversation === 'function') {
+      let outcome
+      try {
+        outcome = api.onExportConversation(result.markdown, result.filename)
+      } catch {
+        notifyFailed()
+        return
+      }
+      if (outcome === false) notifyFailed()
+      else notifyExported()
+      return
+    }
+    mruAiCopyText(result.markdown).then(notifyExported, notifyFailed)
   }
 
   const regenerateMessage = (message) => {
@@ -2470,16 +2654,26 @@ export function MruAiPanel(props) {
         title: modelText,
         'data-available': available ? 'true' : 'false',
       }, modelText),
-      typeof source.onOpenGraph === 'function'
-        ? h('div', { className: 'mru-ai__actions' },
-            h('button', {
+      h('div', { className: 'mru-ai__actions' },
+        h('button', {
+          key: 'export',
+          type: 'button',
+          className: 'mru-ai__action',
+          title: tr('ai.export'),
+          'aria-label': tr('ai.export'),
+          disabled: messages.length === 0,
+          onClick: exportConversation,
+        }, h(MruGlyph, { name: 'export', size: 13 }), h('span', null, tr('ai.export'))),
+        typeof source.onOpenGraph === 'function'
+          ? h('button', {
+              key: 'graph',
               type: 'button',
               className: 'mru-ai__action',
               title: tr('ai.openGraph'),
               'aria-label': tr('ai.openGraph'),
               onClick: () => mruAiSafeCall(source.onOpenGraph),
-            }, h(MruGlyph, { name: 'link', size: 13 }), h('span', null, tr('ai.openGraph'))))
-        : null),
+            }, h(MruGlyph, { name: 'link', size: 13 }), h('span', null, tr('ai.openGraph')))
+          : null)),
     h('div', {
       className: 'mru-ai__messages',
       ref: messagesRef,

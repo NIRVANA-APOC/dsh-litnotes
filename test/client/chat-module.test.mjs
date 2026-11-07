@@ -38,13 +38,16 @@ test('chat.js exports exactly the documented names, all mruAi/MruAi-prefixed', (
   assert.deepEqual(names.sort(), [
     'MruAiPanel',
     'mruAiAspectLegendItems',
+    'mruAiCitationFlags',
     'mruAiCitationMarkers',
+    'mruAiExportMarkdown',
     'mruAiNavAwayFromLatest',
     'mruAiNavCurrentMark',
     'mruAiNavTargetScrollTop',
     'mruAiNormalizeMessages',
     'mruAiParseAnswer',
     'mruAiQuestionMarks',
+    'mruAiUnverifiedBreakdown',
   ].sort())
   for (const name of names) assert.match(name, /^(mruAi|MruAi)/)
 })
@@ -111,16 +114,35 @@ test('chat.js carries every required §8 .mru-ai class', () => {
 })
 
 test('extra modifier classes are documented in the file header', () => {
-  const header = chatSource.slice(0, chatSource.indexOf('const mruAiCopy'))
+  const header = chatSource.slice(0, chatSource.indexOf('/** Quick prompts shown'))
   for (const className of [
     'mru-ai__msg--streaming',
     'mru-ai__chip--selection',
     'mru-ai__chip--visible',
     'mru-ai__citation--missing',
+    'mru-ai__citation--partial',
+    'mru-ai__claim',
+    'mru-ai__claim--partial',
+    'mru-ai__claim--unsupported',
+    'mru-ai__notice--entailment',
     'mru-ai__action--compact',
   ]) {
     assert.ok(header.includes(className), `extra modifier not documented: ${className}`)
   }
+})
+
+test('chat.js carries no local copy deck (i18n consolidation, PLAN C6)', () => {
+  // All copy is registered in the app dictionaries (ui/app.js ZH/EN); the panel
+  // must go through mruAiT(t,key,params) only.
+  assert.doesNotMatch(chatSource, /\bmruAiCopy\b/)
+  assert.doesNotMatch(chatSource, /\bmruAiCopyLanguage\b/)
+  assert.doesNotMatch(chatSource, /'ai\.aspect\./)
+  // Chat aspect labels reuse the reader aspect.* keys.
+  assert.match(chatSource, /'aspect\.definition'/)
+  assert.match(chatSource, /'aspect\.context'/)
+  assert.match(chatSource, /'aspect\.method'/)
+  assert.match(chatSource, /'aspect\.result'/)
+  assert.match(chatSource, /'aspect\.limitation'/)
 })
 
 test('chat.js is valid ESM and importable without React', async () => {
@@ -138,7 +160,7 @@ test('markdown + highlight + chat concatenate into one parseable factory body', 
   const factory = new Function(
     'React',
     'h',
-    `${combined}\n;return { MruAiPanel, mruAiParseAnswer, mruAiCitationMarkers, mruAiNormalizeMessages };`,
+    `${combined}\n;return { MruAiPanel, mruAiParseAnswer, mruAiCitationMarkers, mruAiCitationFlags, mruAiUnverifiedBreakdown, mruAiExportMarkdown, mruAiNormalizeMessages };`,
   )
   const fakeReact = {
     createElement: () => null,
@@ -151,4 +173,6 @@ test('markdown + highlight + chat concatenate into one parseable factory body', 
   assert.equal(typeof exports.MruAiPanel, 'function')
   assert.deepEqual(exports.mruAiNormalizeMessages(null), [])
   assert.equal(exports.mruAiParseAnswer('plain').answer, 'plain')
+  assert.equal(exports.mruAiExportMarkdown([], {}), null)
+  assert.deepEqual(exports.mruAiUnverifiedBreakdown([]), { unsupported: 0, generic: 0, total: 0 })
 })

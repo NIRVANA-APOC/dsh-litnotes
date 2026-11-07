@@ -9,6 +9,10 @@ import {
   ANSWER_FENCE_OPEN,
   ANSWER_FENCE_TAG,
   CHAT_SYSTEM,
+  ENTAILMENT_FENCE_OPEN,
+  ENTAILMENT_FENCE_TAG,
+  ENTAILMENT_SYSTEM,
+  ENTAILMENT_VERDICTS,
   GRAPH_EXTRACTION_SYSTEM,
   GRAPH_FENCE_TAG,
   GRAPH_SUMMARY_PROMPT,
@@ -16,18 +20,23 @@ import {
   PROMPT_VERSION,
   SUMMARY_FENCE_TAG,
   chatUserPrompt,
+  entailmentPrompt,
   formatContextBlock,
   graphExtractionPrompt,
   graphSummaryUserPrompt,
   libraryConsolidationUserPrompt,
+  parseEntailmentOutput,
 } from '../../lib/ai/prompts.js'
 
 test('prompt version and fence tags are the documented contract', () => {
-  assert.equal(PROMPT_VERSION, 1)
+  assert.equal(PROMPT_VERSION, 2, 'bumped when the entailment pass landed')
   assert.equal(ANSWER_FENCE_TAG, 'litnotes-json')
   assert.equal(GRAPH_FENCE_TAG, 'litnotes-graph')
   assert.equal(SUMMARY_FENCE_TAG, 'litnotes-summary')
+  assert.equal(ENTAILMENT_FENCE_TAG, 'litnotes-entailment')
   assert.equal(ANSWER_FENCE_OPEN, '```litnotes-json')
+  assert.equal(ENTAILMENT_FENCE_OPEN, '```litnotes-entailment')
+  assert.deepEqual([...ENTAILMENT_VERDICTS], ['supported', 'partial', 'unsupported'])
 })
 
 test('CHAT_SYSTEM teaches grounding, citations, aspects and the JSON fence', () => {
@@ -143,4 +152,70 @@ test('graph prompts expose the graph/summary fences and bounded builders', () =>
   assert.match(library, /Papers:/)
   assert.match(library, /- Paper A \(2024\)/)
   assert.match(library, /- attention — 3 — 2 paper\(s\)/)
+})
+
+test('ENTAILMENT_SYSTEM teaches the verdict vocabulary and fence contract', () => {
+  assert.match(ENTAILMENT_SYSTEM, /```litnotes-entailment/)
+  for (const verdict of ['supported', 'partial', 'unsupported']) {
+    assert.ok(ENTAILMENT_SYSTEM.includes(`"${verdict}"`), `expected verdict ${verdict}`)
+  }
+  assert.match(ENTAILMENT_SYSTEM, /untrusted DATA/i)
+  assert.match(ENTAILMENT_SYSTEM, /Judge only the supplied quote/)
+  assert.match(ENTAILMENT_SYSTEM, /No text outside the/)
+})
+
+test('entailmentPrompt renders numbered claims with their quoted evidence', () => {
+  const prompt = entailmentPrompt([
+    { index: 1, aspect: 'method', note: 'The method is block-sparse attention.', quote: 'We propose block-sparse attention.' },
+    { index: 2, aspect: 'result', note: 'It improves throughput by 2.4x.', quote: 'improves throughput by 2.4x with equal accuracy' },
+  ])
+  assert.match(prompt, /\[1\] \(method\) claim: The method is block-sparse attention\./)
+  assert.match(prompt, /quote: "We propose block-sparse attention\."/)
+  assert.match(prompt, /\[2\] \(result\) claim: It improves throughput by 2\.4x\./)
+  assert.match(prompt, /litnotes-entailment/)
+  assert.ok(prompt.length < 40000)
+
+  // Empty / malformed input still yields a usable prompt.
+  const empty = entailmentPrompt([])
+  assert.match(empty, /no citations to verify/)
+  assert.match(entailmentPrompt(null), /no citations to verify/)
+  assert.match(entailmentPrompt([{ index: 0, quote: 'x' }, null, { quote: 'no index' }]), /no citations to verify/)
+
+  // Very long quotes are bounded.
+  const long = entailmentPrompt([{ index: 1, note: 'n', quote: 'x'.repeat(10000) }])
+  assert.ok(long.length < 40000)
+  assert.ok(!long.includes('x'.repeat(1600)), 'quote rendering is bounded')
+})
+
+test('parseEntailmentOutput parses the verdict fence tolerantly', () => {
+  const tagged = parseEntailmentOutput(
+    'Checking.\n\n```litnotes-entailment\n{"results":[{"index":1,"verdict":"supported","reason":"direct"},{"index":2,"verdict":"PARTIAL"},{"index":3,"verdict":"unsupported"}]}\n```\n',
+  )
+  assert.deepEqual(tagged, {
+    results: [
+      { index: 1, verdict: 'supported', reason: 'direct' },
+      { index: 2, verdict: 'partial', reason: '' },
+      { index: 3, verdict: 'unsupported', reason: '' },
+    ],
+  })
+
+  // Case/space tolerant tag, bare json fence fallback and bare object fallback.
+  assert.equal(parseEntailmentOutput('``` LitNotes-Entailment\n{"results":[]}\n```').results.length, 0)
+  const fencedJson = parseEntailmentOutput('```json\n{"results":[{"index":"7","verdict":"supported","reason":"x"}]}\n```')
+  assert.deepEqual(fencedJson.results, [{ index: 7, verdict: 'supported', reason: 'x' }])
+  const bare = parseEntailmentOutput('verdicts: {"results":[{"index":1,"verdict":"partial"}]}')
+  assert.deepEqual(bare.results, [{ index: 1, verdict: 'partial', reason: '' }])
+
+  // Invalid model output fails open (null) so the caller can mark 'unchecked'.
+  assert.equal(parseEntailmentOutput(''), null)
+  assert.equal(parseEntailmentOutput(null), null)
+  assert.equal(parseEntailmentOutput('no json here'), null)
+  assert.equal(parseEntailmentOutput('```litnotes-entailment\n{not json}\n```'), null)
+  assert.equal(parseEntailmentOutput('```litnotes-entailment\n{"citations":[]}\n```'), null)
+
+  // Invalid entries are dropped; a valid-but-empty list is still "checked".
+  const mixed = parseEntailmentOutput(
+    '```litnotes-entailment\n{"results":[{"index":0,"verdict":"supported"},{"index":2,"verdict":"maybe"},"nope",{"index":3,"verdict":"unsupported","reason":"r"}]}\n```',
+  )
+  assert.deepEqual(mixed.results, [{ index: 3, verdict: 'unsupported', reason: 'r' }])
 })

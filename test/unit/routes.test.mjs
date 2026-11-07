@@ -17,6 +17,7 @@ import { resolveConfig } from '../../lib/config.js'
 import { registerRoutes } from '../../lib/routes.js'
 import { createService } from '../../lib/service.js'
 import { createStore } from '../../lib/store.js'
+import { createGraphService } from '../../lib/ai/graph.js'
 
 const API = '/dsh-litnotes/api'
 const ASSETS = '/dsh-litnotes/assets'
@@ -57,7 +58,7 @@ function makeRes() {
 }
 
 /** Build a routed stack over a temp library. */
-async function setup({ rejection } = {}) {
+async function setup({ rejection, ai } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'dsh-litnotes-routes-'))
   const config = resolveConfig({ dataDir, apiBase: 'https://api.mineru.test' })
   const store = createStore({ dataDir })
@@ -72,7 +73,7 @@ async function setup({ rejection } = {}) {
     async resume() {},
     async dispose() {},
   }
-  const service = createServiceForTest(store, manager, config)
+  const service = createServiceForTest(store, manager, config, ai)
   const routes = []
   const ctx = {
     webServer: {
@@ -102,8 +103,8 @@ async function setup({ rejection } = {}) {
   return { dataDir, config, store, manager, service, routes, route, assetRoute, call, dispose }
 }
 
-/** Create the service with a stub manager. */
-function createServiceForTest(store, manager, config) {
+/** Create the service with a stub manager (and optionally an injected AI bundle). */
+function createServiceForTest(store, manager, config, ai) {
   return createService({
     store,
     manager,
@@ -114,6 +115,7 @@ function createServiceForTest(store, manager, config) {
     getTranslator: () => undefined,
     getLlm: () => undefined,
     getDefaultModel: () => undefined,
+    getAi: ai === undefined ? undefined : () => ai,
   })
 }
 
@@ -354,6 +356,139 @@ test('assets prefix route serves vendor files, 404s missing ones and rejects tra
     if (!evil.done) await once(evil, 'finish')
     assert.equal(evil.statusCode, 400)
     assert.equal(evil.json().error.code, 'bad-request')
+  } finally {
+    await teardown(env)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Annotation concurrency baseline + graph curation payloads (PLAN C1/C3)
+// ---------------------------------------------------------------------------
+
+test('annotations.save passes baseIds through and returns the persisted merged items', async () => {
+  const env = await setup()
+  try {
+    const upload = await callUpload(env, 'paper.pdf', Buffer.from('%PDF-1.4 baseIds'))
+    const document = upload.json().value.document
+    const base = { id: 'ann-base', blockKey: 'b0:deadbeef', start: 0, end: 4, quote: 'base', note: '', color: 'yellow' }
+    const first = await callJson(env, 'annotations.save', { id: document.id, annotations: [base] })
+    assert.equal(first.json().value.saved, true)
+    assert.deepEqual(first.json().value.items.map((item) => item.id), ['ann-base'])
+
+    // A concurrent AI/agent annotation lands after the client loaded its list.
+    await env.store.mutateAnnotations(document.id, (items) => {
+      items.push({
+        id: 'ann-ai',
+        blockKey: 'b1:feedface',
+        start: 1,
+        end: 5,
+        quote: 'ai',
+        note: '',
+        color: 'sky',
+        origin: 'ai',
+      })
+      return items
+    })
+    const merged = await callJson(env, 'annotations.save', {
+      id: document.id,
+      annotations: [{ ...base, note: 'edited' }],
+      baseIds: ['ann-base'],
+    })
+    assert.equal(merged.statusCode, 200)
+    assert.equal(merged.json().value.saved, true)
+    assert.equal(merged.json().value.items.length, 2, 'the concurrent AI annotation is returned')
+    assert.ok(merged.json().value.items.some((item) => item.id === 'ann-ai'))
+    assert.equal(merged.json().value.items.find((item) => item.id === 'ann-base').note, 'edited')
+    const readBack = (await callJson(env, 'library.get', { id: document.id })).json().value
+    assert.equal(readBack.annotations.length, 2, 'the returned items are the persisted ones')
+
+    // A non-array baseIds is a clean bad-request (nothing is written).
+    const bad = await callJson(env, 'annotations.save', {
+      id: document.id,
+      annotations: [],
+      baseIds: 'ann-base',
+    })
+    assert.equal(bad.statusCode, 400)
+    assert.equal(bad.json().error.code, 'bad-request')
+
+    // Entries are bounded/trimmed/de-duplicated; non-strings are ignored.
+    const bounded = await callJson(env, 'annotations.save', {
+      id: document.id,
+      annotations: [],
+      baseIds: [123, 'ann-base', ' ann-base '],
+    })
+    assert.equal(bounded.statusCode, 200)
+    assert.deepEqual(bounded.json().value.items.map((item) => item.id), ['ann-ai'])
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('graph.update forwards curation nodes and merge pairs to the graph engine', async () => {
+  const ai = { graph: null }
+  const env = await setup({ ai })
+  try {
+    // The real graph engine over the real store; reads/updates never need the LLM.
+    ai.graph = createGraphService({
+      store: env.store,
+      config: env.config,
+      logger: { warn() {} },
+      readMarkdown: (id) => env.store.readMarkdown(id),
+    })
+    const upload = await callUpload(env, 'paper.pdf', Buffer.from('%PDF-1.4 curation'))
+    const document = upload.json().value.document
+
+    const seeded = await callJson(env, 'graph.update', {
+      documentId: document.id,
+      nodes: [
+        { id: 'n-route-a', type: 'method', label: 'Route Alpha', source: 'ai-summary', weight: 1 },
+        { id: 'n-route-b', type: 'concept', label: 'Route Beta', source: 'ai-summary', weight: 2 },
+        { id: 'n-route-c', type: 'finding', label: 'Route Gamma', source: 'ai-summary', weight: 1 },
+      ],
+      edges: [
+        { id: 'e-route-1', from: 'n-route-a', to: 'n-route-c', type: 'uses', weight: 1, source: 'ai-summary' },
+        { id: 'e-route-2', from: 'n-route-a', to: 'n-route-b', type: 'uses', weight: 4, source: 'ai-summary' },
+      ],
+    })
+    assert.equal(seeded.statusCode, 200)
+    const seededGraph = seeded.json().value.graph
+    assert.equal(seededGraph.nodes.length, 3)
+    assert.ok(seededGraph.nodes.every((node) => node.curated === true), 'API-created nodes are curated')
+
+    const curated = await callJson(env, 'graph.update', {
+      documentId: document.id,
+      nodes: [
+        { id: 'n-route-a', label: 'Route Alpha Renamed', pinned: true, position: { x: 12.34, y: 56.78 } },
+        { id: 'n-route-b', pinned: true, position: { x: 900, y: 1200 } },
+      ],
+      merge: [{ from: 'n-route-c', into: 'n-route-b' }],
+    })
+    assert.equal(curated.statusCode, 200)
+    const graph = curated.json().value.graph
+    const alpha = graph.nodes.find((node) => node.id === 'n-route-a')
+    assert.equal(alpha.label, 'Route Alpha Renamed')
+    assert.equal(alpha.source, 'ai-summary', 'a curation patch never clobbers source')
+    assert.equal(alpha.curated, true)
+    assert.equal(alpha.pinned, true)
+    assert.deepEqual(alpha.position, { x: 12.3, y: 56.8 }, 'position is clamped/rounded')
+    const beta = graph.nodes.find((node) => node.id === 'n-route-b')
+    assert.equal(beta.pinned, true)
+    assert.deepEqual(beta.position, { x: 900, y: 1200 })
+    assert.equal(graph.nodes.some((node) => node.id === 'n-route-c'), false, 'merged source node is removed')
+    const uses = graph.edges.filter((edge) => edge.from === 'n-route-a' && edge.to === 'n-route-b' && edge.type === 'uses')
+    assert.equal(uses.length, 1, 'rewired duplicate edges dedupe')
+    assert.equal(uses[0].weight, 4, 'duplicate edges keep the max weight')
+    assert.ok(
+      graph.edges.every(
+        (edge) => graph.nodes.some((node) => node.id === edge.from) && graph.nodes.some((node) => node.id === edge.to),
+      ),
+      'no dangling edges survive curation',
+    )
+
+    const readBack = await callJson(env, 'graph.doc', { documentId: document.id })
+    const persisted = readBack.json().value.graph
+    assert.equal(persisted.nodes.find((node) => node.id === 'n-route-a').label, 'Route Alpha Renamed')
+    assert.equal(persisted.nodes.find((node) => node.id === 'n-route-b').pinned, true)
   } finally {
     await teardown(env)
   }

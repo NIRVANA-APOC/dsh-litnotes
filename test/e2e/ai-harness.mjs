@@ -21,7 +21,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseMarkdown, plainTextOfBlock } from '../../ui/markdown.js'
-import { createFakeDefaultModel, createFakeLlm } from '../helpers/fake-llm.mjs'
+import { createFakeDefaultModel, createFakeLlm, entailmentText } from '../helpers/fake-llm.mjs'
 import {
   createFakeCredentials,
   createFakeCtx,
@@ -297,6 +297,32 @@ export function findCitationTarget(markdown, needle) {
     }
   }
   throw new Error(`findCitationTarget: quote not found in parsed markdown: ${JSON.stringify(needle)}`)
+}
+
+/* ------------------------------------------------------------------ */
+/* Chat harness scripting                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Install a persistent fake-llm rule that answers every citation–claim
+ * entailment call of one harness, matched on the dedicated system prompt (the
+ * chat answer calls keep using the normal queue/rules). Each result is
+ * `{ index, verdict: 'supported'|'partial'|'unsupported', reason? }`.
+ *
+ * @param {{ llm: object }} harness - harness created by {@link createAiHarness}.
+ * @param {{ index: number, verdict: string, reason?: string }[]} results - verdicts.
+ * @returns {{ llm: object }} the same harness (for chaining).
+ */
+export function scriptEntailment(harness, results = []) {
+  if (harness === null || typeof harness !== 'object' || harness.llm === null || harness.llm === undefined
+    || typeof harness.llm.match !== 'function') {
+    throw new Error('scriptEntailment: a harness with a fake llm is required')
+  }
+  harness.llm.match(
+    (request) => typeof request?.system === 'string' && request.system.includes('litnotes-entailment'),
+    { text: entailmentText(results) },
+  )
+  return harness
 }
 
 /* ------------------------------------------------------------------ */

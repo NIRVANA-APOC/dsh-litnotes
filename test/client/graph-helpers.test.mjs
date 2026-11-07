@@ -15,6 +15,12 @@ import {
   mruGraphNodeSeparation,
   mruGraphLimitRenderEdges,
   mruGraphSimulationStep,
+  mruGraphCurationPatch,
+  mruGraphCurationPosition,
+  mruGraphCurationLabel,
+  mruGraphStoredPins,
+  mruGraphNodeIsPinned,
+  mruGraphMergeCandidates,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -708,4 +714,169 @@ test('simulation damps out after the drag is released', () => {
     steps: 90,
   })
   assert.ok(state.maxSpeed < Math.max(12, activeSpeed * 0.5), `motion settles (${activeSpeed} → ${state.maxSpeed})`)
+})
+
+
+// ---------------------------------------------------------------------------
+// Graph curation helpers (PLAN C1/C2: rename / merge / pin patch shapes)
+// ---------------------------------------------------------------------------
+
+test('mruGraphCurationPatch builds rename patches and validates the label', () => {
+  assert.deepEqual(
+    mruGraphCurationPatch('rename', { node: 'a', label: '  New name  ' }),
+    { nodes: [{ id: 'a', label: 'New name' }] },
+  )
+  // `id` and node objects are accepted as the source.
+  assert.deepEqual(
+    mruGraphCurationPatch('rename', { id: 'b', label: 'B2' }),
+    { nodes: [{ id: 'b', label: 'B2' }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('rename', { node: { id: 'c', label: 'Old' }, label: 'C2' }),
+    { nodes: [{ id: 'c', label: 'C2' }] },
+  )
+  assert.equal(mruGraphCurationPatch('rename', { node: 'a', label: '' }), null, 'empty labels are blocked')
+  assert.equal(mruGraphCurationPatch('rename', { node: 'a', label: '   ' }), null, 'whitespace is empty')
+  assert.equal(mruGraphCurationPatch('rename', { label: 'No id' }), null, 'a node id is required')
+  assert.equal(mruGraphCurationPatch('rename', null), null)
+})
+
+test('mruGraphCurationPatch caps rename labels at the 80-character contract', () => {
+  const long = '字'.repeat(90)
+  const patch = mruGraphCurationPatch('rename', { node: 'a', label: long })
+  assert.equal([...patch.nodes[0].label].length, 80)
+  assert.equal(patch.nodes[0].label, '字'.repeat(80), 'multi-byte characters survive the cap')
+  // The label helper is exported for the inline editor input cap too.
+  assert.equal(mruGraphCurationLabel('  name  '), 'name')
+  assert.equal([...mruGraphCurationLabel(long)].length, 80)
+  assert.equal(mruGraphCurationLabel(null), '')
+})
+
+test('mruGraphCurationPatch validates and rounds pin positions (C1)', () => {
+  assert.deepEqual(
+    mruGraphCurationPatch('pin', { node: 'a', position: { x: 120.04, y: 240.06 } }),
+    { nodes: [{ id: 'a', pinned: true, position: { x: 120, y: 240.1 } }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('pin', { id: 'b', position: { x: -8, y: 2000 } }),
+    { nodes: [{ id: 'b', pinned: true, position: { x: 0, y: 2000 } }] },
+    'positions clamp to [0, 2000]',
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('pin', { node: { id: 'c' }, position: { x: 0.06, y: 9999 } }),
+    { nodes: [{ id: 'c', pinned: true, position: { x: 0.1, y: 2000 } }] },
+  )
+  for (const position of [undefined, null, {}, { x: NaN, y: 1 }, { x: Infinity, y: 1 }, { x: '1', y: 2 }]) {
+    assert.equal(mruGraphCurationPatch('pin', { node: 'a', position }), null, `invalid position ${JSON.stringify(position)}`)
+  }
+  assert.equal(mruGraphCurationPatch('pin', { node: 'a', position: { x: 1, y: 2 }, label: 'ignored' }).nodes[0].label, undefined)
+})
+
+test('mruGraphCurationPatch builds unpin and merge patches', () => {
+  assert.deepEqual(
+    mruGraphCurationPatch('unpin', { node: 'a' }),
+    { nodes: [{ id: 'a', pinned: false }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('unpin', { id: 'a', position: { x: NaN, y: NaN } }),
+    { nodes: [{ id: 'a', pinned: false }] },
+    'unpin ignores any position',
+  )
+  assert.equal(mruGraphCurationPatch('unpin', {}), null)
+
+  assert.deepEqual(
+    mruGraphCurationPatch('merge', { from: 'a', into: 'b' }),
+    { merge: [{ from: 'a', into: 'b' }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('merge', { from: { id: 'a' }, into: { id: 'b' } }),
+    { merge: [{ from: 'a', into: 'b' }] },
+  )
+  assert.deepEqual(
+    mruGraphCurationPatch('merge', { from: 'a', target: 'b' }),
+    { merge: [{ from: 'a', into: 'b' }] },
+    'the target alias is accepted',
+  )
+  assert.equal(mruGraphCurationPatch('merge', { from: 'a', into: 'a' }), null, 'cannot merge a node into itself')
+  assert.equal(mruGraphCurationPatch('merge', { from: 'a' }), null)
+  assert.equal(mruGraphCurationPatch('merge', { into: 'b' }), null)
+})
+
+test('mruGraphCurationPatch returns null for unknown actions and keeps patches JSON-safe', () => {
+  for (const action of ['', 'delete', 'add-edge', null, undefined, 42]) {
+    assert.equal(mruGraphCurationPatch(action, { node: 'a', label: 'x' }), null)
+  }
+  const input = { node: 'a', position: { x: 12.345, y: 67.891 } };
+  const snapshot = JSON.stringify(input)
+  const patch = mruGraphCurationPatch('pin', input);
+  assert.equal(JSON.stringify(input), snapshot, 'must not mutate the caller input')
+  assert.deepEqual(JSON.parse(JSON.stringify(patch)), patch)
+})
+
+test('mruGraphCurationPosition validates, clamps and rounds to 0.1', () => {
+  assert.deepEqual(mruGraphCurationPosition({ x: 12.34, y: 56.78 }), { x: 12.3, y: 56.8 })
+  assert.deepEqual(mruGraphCurationPosition({ x: 0, y: 0 }), { x: 0, y: 0 })
+  assert.deepEqual(mruGraphCurationPosition({ x: -3.2, y: 2001.44 }), { x: 0, y: 2000 })
+  assert.deepEqual(mruGraphCurationPosition({ x: 999.96, y: 1000.04 }), { x: 1000, y: 1000 })
+  for (const value of [null, undefined, {}, [], 'nope', { x: NaN, y: 2 }, { x: 1, y: Infinity }, { x: '', y: 2 }]) {
+    assert.equal(mruGraphCurationPosition(value), null, `invalid position ${String(value)}`)
+  }
+})
+
+test('mruGraphNodeIsPinned trusts only a persisted boolean true', () => {
+  assert.equal(mruGraphNodeIsPinned({ pinned: true }), true)
+  assert.equal(mruGraphNodeIsPinned({ pinned: true, position: { x: 1, y: 2 } }), true)
+  assert.equal(mruGraphNodeIsPinned({ pinned: false }), false)
+  assert.equal(mruGraphNodeIsPinned({ pinned: 'true' }), false)
+  assert.equal(mruGraphNodeIsPinned({ pinned: 1 }), false)
+  assert.equal(mruGraphNodeIsPinned({}), false)
+  assert.equal(mruGraphNodeIsPinned(null), false)
+  assert.equal(mruGraphNodeIsPinned(undefined), false)
+})
+
+test('mruGraphStoredPins seeds only pinned nodes with a valid position', () => {
+  const pins = mruGraphStoredPins([
+    { id: 'a', pinned: true, position: { x: 10.04, y: 20.06 } },
+    { id: 'b', pinned: true },
+    { id: 'c', pinned: false, position: { x: 1, y: 2 } },
+    { id: 'd', position: { x: 1, y: 2 } },
+    { id: 'e', pinned: true, position: { x: NaN, y: 2 } },
+    { id: 'f', pinned: 'true', position: { x: 1, y: 2 } },
+    { id: 'g', pinned: true, position: { x: 5000, y: -1 } },
+    { id: '__proto__', pinned: true, position: { x: 1, y: 2 } },
+    null,
+    'junk',
+  ])
+  assert.deepEqual(pins, {
+    a: { x: 10, y: 20.1 },
+    g: { x: 2000, y: 0 },
+  })
+  assert.deepEqual(mruGraphStoredPins(null), {})
+  assert.deepEqual(mruGraphStoredPins(undefined), {})
+  assert.deepEqual(mruGraphStoredPins({}), {})
+  // Normalized nodes from the KG carry the same fields.
+  const normalized = normalizeGraph({
+    nodes: [{ id: 'n1', type: 'concept', label: 'A', pinned: true, position: { x: 88.8, y: 99.9 } }],
+    edges: [],
+  })
+  assert.deepEqual(mruGraphStoredPins(normalized.nodes), { n1: { x: 88.8, y: 99.9 } })
+})
+
+test('mruGraphMergeCandidates excludes the source, clusters and duplicate ids', () => {
+  const nodes = [
+    { id: 'a', type: 'concept', label: 'Alpha' },
+    { id: 'b', type: 'method', label: 'Beta' },
+    { id: 'cluster:type:method', type: 'method', label: 'Method ×2', cluster: true, members: ['b'] },
+    { id: 'b', type: 'method', label: 'Beta duplicate' },
+    { id: 'c', type: 'finding', label: 'Gamma' },
+    { id: '', type: 'concept', label: 'No id' },
+    null,
+  ]
+  const candidates = mruGraphMergeCandidates(nodes, 'a')
+  assert.deepEqual(candidates.map((node) => node.id), ['b', 'c'])
+  assert.equal(candidates[0].label, 'Beta', 'the first node with an id wins')
+  assert.deepEqual(mruGraphMergeCandidates(nodes, { id: 'a' }).map((node) => node.id), ['b', 'c'])
+  assert.deepEqual(mruGraphMergeCandidates(nodes, 'missing').map((node) => node.id), ['a', 'b', 'c'])
+  assert.deepEqual(mruGraphMergeCandidates([], 'a'), [])
+  assert.deepEqual(mruGraphMergeCandidates(null, 'a'), [])
 })

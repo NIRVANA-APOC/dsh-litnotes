@@ -65,13 +65,19 @@ test('index.js apply() boots, serves the API route and disposes cleanly', async 
 
   // --- apply: no throw, routes + effects registered -------------------------
   assert.doesNotThrow(() => plugin.apply(ctx, {}))
-  assert.equal(ctx.routes.length, 2, 'exactly the api + assets prefix routes are registered')
+  // The API prefix, the assets prefix and three exact NDJSON streaming routes.
+  assert.equal(ctx.routes.length, 5, 'api + assets prefixes + chat/graph/build stream routes')
   const api = ctx.routes.find((route) => route.path === API)
   const assets = ctx.routes.find((route) => route.path === '/dsh-litnotes/assets')
   assert.ok(api !== undefined, `${API} route registered`)
   assert.ok(assets !== undefined, 'assets route registered')
   assert.equal(api.kind, 'prefix')
   assert.equal(assets.kind, 'prefix')
+  for (const suffix of ['chat', 'graph.build', 'graph.library.rebuild']) {
+    const stream = ctx.routes.find((route) => route.path === `${API}/${suffix}`)
+    assert.ok(stream !== undefined, `${suffix} streaming route registered`)
+    assert.equal(stream.kind, 'exact')
+  }
   assert.equal(typeof api.handler, 'function')
   assert.ok(ctx.effects.length >= 3, 'boot, routes and agent-tool effects registered')
 

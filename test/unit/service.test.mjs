@@ -380,9 +380,9 @@ test('toolAnnotate locates a quote, derives the block key and round-trips remova
     const listed = await env.service.toolAnnotations(document.id)
     assert.equal(listed.annotations.length, 1)
 
-    // An explicit blockKey path also works.
+    // An explicit blockKey path also works (using a key that exists in the parse).
     const explicit = await env.service.toolAnnotate(document.id, {
-      blockKey: 'b9:0123abcd',
+      blockKey: added.annotation.blockKey,
       start: 1,
       end: 4,
       quote: 'abc',
@@ -390,7 +390,15 @@ test('toolAnnotate locates a quote, derives the block key and round-trips remova
       color: 'sage',
     })
     assert.equal(explicit.count, 2)
-    assert.equal(explicit.annotation.blockKey, 'b9:0123abcd')
+    assert.equal(explicit.annotation.blockKey, added.annotation.blockKey)
+
+    // A stale/unknown blockKey is rejected instead of saving an unrenderable note.
+    await assert.rejects(env.service.toolAnnotate(document.id, {
+      blockKey: 'b9:0123abcd',
+      start: 1,
+      end: 4,
+      quote: 'abc',
+    }), /不存在/)
 
     const removed = await env.service.toolUnannotate(document.id, added.annotation.id)
     assert.equal(removed.removed, true)
@@ -421,6 +429,16 @@ test('toolList reports compact rows with status/pages/engine', async () => {
       { id: list.documents[0].id, pages: list.documents[0].pages, engine: list.documents[0].engine },
       { id: document.id, pages: 12, engine: 'standard' },
     )
+    // A parsing document exposes live progress + the upstream MinerU phase so
+    // the Agent tool can report how far a long pipeline/OCR parse has come.
+    await env.store.update(document.id, {
+      status: 'parsing',
+      parse: { engine: 'standard', phase: 'polling', remoteState: 'pending', progress: { extracted: 3, total: 12 } },
+    })
+    const parsingList = await env.service.toolList()
+    assert.equal(parsingList.documents[0].remoteState, 'pending')
+    assert.deepEqual(parsingList.documents[0].progress, { extracted: 3, total: 12 })
+
     const detail = await env.service.toolGet(document.id)
     assert.equal(detail.document.id, document.id)
     assert.deepEqual(detail.annotations, [])

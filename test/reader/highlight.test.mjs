@@ -225,3 +225,52 @@ test('newAnnotationId returns unique a-prefixed ids', () => {
     ids.add(id)
   }
 })
+
+
+// ---------------------------------------------------------------------------
+// AI provenance must survive client normalization (docs/AI-SPEC.md §2)
+// ---------------------------------------------------------------------------
+
+test('normalizeAnnotation preserves AI provenance fields', () => {
+  const block = {
+    key: 'b7:abcd1234',
+    kind: 'paragraph',
+    plainText: 'The BEE method reduces duplicate backtracking.',
+  }
+  const normalized = normalizeAnnotation({
+    id: 'ai-1',
+    blockKey: 'b7:abcd1234',
+    start: 4,
+    end: 7,
+    quote: 'BEE',
+    color: 'sage',
+    note: '核心方法',
+    origin: 'ai',
+    aspect: 'method',
+    chatId: 'doc:abc',
+    messageId: 'msg-9',
+    model: { provider: 'deepseek-official', model: 'deepseek-flash' },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }, block)
+  assert.ok(normalized)
+  assert.equal(normalized.origin, 'ai')
+  assert.equal(normalized.aspect, 'method')
+  assert.equal(normalized.chatId, 'doc:abc')
+  assert.equal(normalized.messageId, 'msg-9')
+  assert.deepEqual(normalized.model, { provider: 'deepseek-official', model: 'deepseek-flash' })
+
+  const legacy = normalizeAnnotation({
+    id: 'u-1', blockKey: 'b7:abcd1234', start: 0, end: 3, quote: 'The', color: 'yellow', note: '',
+  }, block)
+  assert.equal(legacy.origin, undefined)
+  assert.equal(legacy.aspect, undefined)
+
+  const invalid = normalizeAnnotation({
+    id: 'x-1', blockKey: 'b7:abcd1234', start: 0, end: 3, quote: 'The',
+    origin: 'robot', aspect: 'nonsense', chatId: 42,
+  }, block)
+  assert.equal(invalid.origin, undefined, 'unknown origin is dropped')
+  assert.equal(invalid.aspect, undefined, 'unknown aspect is dropped')
+  assert.equal(invalid.chatId, undefined, 'non-string chatId is dropped')
+})

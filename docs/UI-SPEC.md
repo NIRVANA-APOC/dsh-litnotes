@@ -341,10 +341,25 @@ Parsing state (replaces setup when `status==='parsing'`):
 <div class="mru-parsing">
   <div class="mru-parsing__row"><span class="mru-spinner" aria-hidden="true"></span>
     <span class="mru-parsing__text">MinerU 正在解析 · 3 / 15 页</span>
+    <span class="mru-parsing__elapsed">已用时 1:24</span>
     <button class="mru-btn mru-btn--ghost mru-btn--sm">取消</button></div>
   <div class="mru-progress"><div class="mru-progress__fill" style="width:20%"></div></div>
+  [<p class="mru-parsing__hint">pipeline 模型或 OCR 解析较慢…</p>]
 </div>
 ```
+
+MinerU only reports page progress while the upstream task is `running`; the pipeline model and
+OCR often report `extracted_pages: 0` for the whole queue/warm-up phase. While no page has been
+extracted yet the panel must **not** show a determinate 0 % bar: it names the upstream phase
+(`parsing.phaseWaiting` / `parsing.phaseQueued` / `parsing.phaseRunning` /
+`parsing.phaseConverting`), ticks `.mru-parsing__elapsed` every second, and renders
+`.mru-progress--indeterminate` (a moving 36 % fill) instead of a frozen bar. `.mru-parsing__hint`
+appears for `modelVersion==='pipeline'` or OCR parses.
+
+When an already-parsed document is reparsed or page-repaired, the reading desk keeps showing the
+old paper and renders the same panel inline above it — `.mru-parsing.mru-parsing--inline`
+(680 px max width, bottom margin) — with the same phase/elapsed/indeterminate behaviour, so the
+long upstream wait never looks like a dead UI.
 
 Failed state: `.mru-fail` with `.mru-fail__title` 「解析没有完成」, `.mru-fail__text` (host
 message), `.mru-fail__actions` [重试] [换个引擎]. `mru-btn--primary` retry.
@@ -605,6 +620,12 @@ Keys live in the client dictionary; strings are exactly as below (sentence case,
 | setup.tokenAction | 去设置 | Open settings |
 | parsing.text | MinerU 正在解析 · {done} / {total} 页 | MinerU is parsing · {done} / {total} pages |
 | parsing.textNoProgress | MinerU 正在解析… | MinerU is parsing… |
+| parsing.phaseWaiting | 等待 MinerU 接收文件… | Waiting for MinerU to receive the file… |
+| parsing.phaseQueued | MinerU 排队中… | Queued at MinerU… |
+| parsing.phaseRunning | MinerU 正在解析… | MinerU is parsing… |
+| parsing.phaseConverting | 正在生成解析结果… | Preparing the parsed result… |
+| parsing.elapsed | 已用时 {time} | Elapsed {time} |
+| parsing.slowHint | pipeline 模型或 OCR 解析较慢（MinerU 侧可能排队数分钟）；完成后会自动进入阅读。 | The pipeline model and OCR are slower on MinerU (queueing can take minutes); the paper opens automatically when done. |
 | parsing.cancel | 取消 | Cancel |
 | fail.title | 解析没有完成 | Parsing didn't finish |
 | fail.retry | 重试 | Retry |

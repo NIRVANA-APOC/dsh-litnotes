@@ -2,12 +2,13 @@
  * dsh-litnotes — Host half.
  *
  * Wires the on-disk literature library (store), the MinerU parse manager, the
- * operation service shared by the HTTP API and the agent tool, the web routes,
- * and the `mineru` tool. The Client half is `lib/client.js` (generated from
- * ui/** by scripts/build-client.mjs) and reaches this half through the routes
- * registered here.
+ * operation service shared by the HTTP API and the agent tools, the web routes,
+ * the AI service bundle (grounded chat + knowledge graphs), and the library
+ * tools exposed to the DSH agent. The Client half is `lib/client.js` (generated
+ * from ui/** by scripts/build-client.mjs) and reaches this half through the
+ * routes registered here.
  *
- * Contract: docs/ARCH.md and docs/HOST-INTERFACES.md.
+ * Contracts: docs/ARCH.md, docs/HOST-INTERFACES.md, docs/AI-SPEC.md.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -17,7 +18,8 @@ import { createLocalEngine } from './lib/local-engine.js'
 import { createParseManager } from './lib/parse-manager.js'
 import { createService } from './lib/service.js'
 import { registerRoutes } from './lib/routes.js'
-import { registerAgentTool } from './lib/agent-tool.js'
+import { createAiServices } from './lib/ai/index.js'
+import { registerLibraryTools } from './lib/ai/tools.js'
 
 /** Plugin identity for Cordis rows. */
 export const name = 'dsh-litnotes'
@@ -56,6 +58,22 @@ export function apply(ctx, config) {
     fetchImpl: globalThis.fetch,
     localEngine,
   })
+  /** Optional model selection used by the AI engine. */
+  const defaultModelSelection = () => {
+    try {
+      return ctx.get('agentDefaultModel')?.currentSelection?.()
+    } catch {
+      return undefined
+    }
+  }
+  const ai = createAiServices({
+    store,
+    config: resolved,
+    logger,
+    getLlm: () => ctx.get('llm'),
+    getDefaultModel: defaultModelSelection,
+    hostVersion: HOST_VERSION,
+  })
   const service = createService({
     store,
     manager,
@@ -66,13 +84,8 @@ export function apply(ctx, config) {
     getTranslator: () => ctx.get('translator'),
     getLlm: () => ctx.get('llm'),
     localEngine,
-    getDefaultModel: () => {
-      try {
-        return ctx.get('agentDefaultModel')?.currentSelection?.()
-      } catch {
-        return undefined
-      }
-    },
+    getDefaultModel: defaultModelSelection,
+    getAi: () => ai.ensure(),
   })
 
   // Boot: initialize the library then resume interruptible parse tasks. Routes
@@ -99,10 +112,12 @@ export function apply(ctx, config) {
 
   ctx.effect(() => registerRoutes({ ctx, service, store, config: resolved, logger }),
     'dsh-litnotes: web routes')
-  ctx.effect(() => registerAgentTool({ ctx, service, config: resolved, logger }),
-    'dsh-litnotes: mineru agent tool')
+  ctx.effect(() => registerLibraryTools({
+    tools: ctx.get('tools'),
+    service,
+    config: resolved,
+    logger,
+  }), 'dsh-litnotes: library agent tools')
 
   logger.info?.('[dsh-litnotes] mounted (data=%s, api=%s)', resolved.dataDir, resolved.apiBase)
 }
-
-// reload marker: 1793968084

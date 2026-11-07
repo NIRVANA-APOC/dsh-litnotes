@@ -162,9 +162,11 @@ test('render returns a model-facing text content block', async () => {
       {
         id: 'a',
         title: 'Attention Is All You Need',
-        status: 'parsed',
+        status: 'parsing',
         pages: 15,
         engine: 'standard',
+        remoteState: 'pending',
+        progress: { extracted: 3, total: 15 },
         createdAt: '2026-01-01T00:00:00.000Z',
         error: null,
       },
@@ -178,6 +180,8 @@ test('render returns a model-facing text content block', async () => {
   assert.match(blocks[0].text, /Attention Is All You Need/)
   assert.match(blocks[0].text, /id=a/)
   assert.match(blocks[0].text, /15 页/)
+  assert.match(blocks[0].text, /进度 3\/15 页/)
+  assert.match(blocks[0].text, /MinerU pending/)
   assert.doesNotMatch(blocks[0].text, /undefined/)
 
   const readValue = {

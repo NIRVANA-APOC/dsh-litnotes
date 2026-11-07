@@ -1,6 +1,6 @@
 {
   "name": "dsh-litnotes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "AI-native literature workspace: local library, MinerU parsing, bilingual reading, grounded AI Q&A with clickable citations that auto-annotate the text, per-paper and library-wide knowledge graphs, and DSH agent tools over the library.",

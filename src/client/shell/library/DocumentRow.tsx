@@ -9,7 +9,6 @@ import { ProgressBar, Badge, IconButton, Menu, type MenuItem } from '../../desig
 import { Icon } from '../../design/icons.tsx'
 import type { DocumentSummary } from '../../../shared/model.ts'
 import { useT } from '../locale-context.ts'
-import { canRepair, repairPages } from './parse-request.ts'
 import { documentMetaParts, parseProgressText } from './format.ts'
 
 /** Props of {@link DocumentRow}. */
@@ -37,8 +36,7 @@ export function DocumentRow({
   const parsing = document.status === 'parsing'
   const failed = document.status === 'failed'
   const uploaded = document.status === 'uploaded'
-  const repairable = canRepair(document)
-  const pages = canRepair(document) ? repairPages(document).length : 0
+  const repairable = document.status === 'parsed' && document.parse?.engine !== 'local'
   const progress = document.parse?.progress ?? null
 
   const items: MenuItem[] = []
@@ -74,7 +72,7 @@ export function DocumentRow({
     items.push({
       type: 'item',
       id: 'repair',
-      label: t('rail.repairParse', { count: pages }),
+      label: t('rail.repair'),
       icon: 'layers',
       onSelect: onRepair,
     })

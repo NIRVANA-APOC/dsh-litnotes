@@ -50,10 +50,12 @@ import { AiComposer } from './AiComposer.tsx'
 import { AiMarginFilterChips } from './AiMarginFilterChips.tsx'
 import { AiMarkdown } from './markdown.tsx'
 import { CitationCard, CitationChip } from './Citation.tsx'
-import type { CitationPayload } from './Citation.tsx'
+import type { CitationAnchorEvent, CitationPayload } from './Citation.tsx'
 import { installReaderBridge, useMarginAnnotationCounts } from './reader-bridge.ts'
+import { adaptTranslate } from './translate.ts'
 import { setAiTranslate, useAiStore } from './store.ts'
 import type { AiFailure, AiStreamError } from './store.ts'
+import type { AiTranslate } from './chat.ts'
 import aiCss from './styles.css'
 
 /** Props of {@link AiMarginEntries} (the reader-owned mirror lives in `reader/api.ts`). */
@@ -114,6 +116,7 @@ function rectReference(rect: DOMRect): { getBoundingClientRect: () => DOMRect } 
 export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const { documentId, orderOf, onJump, onAnnotationsChanged, showEntailment = true } = props
   const t = useT()
+  const tr = useMemo(() => adaptTranslate(t), [t])
   const messages = useAiStore((state) => state.messages)
   const historyState = useAiStore((state) => state.historyState)
   const historyError = useAiStore((state) => state.historyError)
@@ -149,8 +152,8 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   }, [])
 
   useEffect(() => {
-    setAiTranslate((key, params) => t(key as Parameters<typeof t>[0], params))
-  }, [t])
+    setAiTranslate(tr)
+  }, [tr])
 
   useEffect(() => {
     useAiStore.getState().setHostHooks({ onJump, onAnnotationsChanged })
@@ -225,7 +228,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   }, [cancelCardHide])
 
   const showCitation = useCallback(
-    (event: React.MouseEvent<HTMLElement>, payload: CitationPayload) => {
+    (event: CitationAnchorEvent, payload: CitationPayload) => {
       if (payload.citation === null) return
       cancelCardHide()
       const rect = event.currentTarget.getBoundingClientRect()
@@ -249,7 +252,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   )
 
   const onCitationClick = useCallback(
-    (event: React.MouseEvent<HTMLElement>, payload: CitationPayload) => {
+    (event: CitationAnchorEvent, payload: CitationPayload) => {
       const citation = payload.citation
       if (citation === null) return
       if (citationFlags(citation, payload.verified).unsupported) {
@@ -363,7 +366,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
         useAiStore.getState().downloadConversation({
           title: document?.title ?? '',
           modelLabel,
-          t: (key, params) => t(key as Parameters<typeof t>[0], params),
+          t: tr,
         })
       },
     },
@@ -399,7 +402,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
         )}
         items={marks.map((mark) => ({
           id: mark.id,
-          label: `${aiT(t, 'ai.navQuestion', { index: mark.ordinal })} · ${excerpt(displayText(mark.question), 34)}`,
+          label: `${aiT(tr, 'ai.navQuestion', { index: mark.ordinal })} · ${excerpt(displayText(mark.question), 34)}`,
           icon: currentMarkId === mark.id ? 'check' : 'chevronRight',
           onSelect: () => jumpToQuestion(mark),
         }))}
@@ -432,7 +435,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
     stream = (
       <StateNote
         tone="error"
-        text={historyError === null ? t('ai.historyError') : errorText(t, historyError)}
+        text={historyError === null ? t('ai.historyError') : errorText(tr, historyError)}
         action={
           <button type="button" className="ln-ai__action" onClick={() => void useAiStore.getState().retryHistory()}>
             {t('ai.retry')}
@@ -471,10 +474,10 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   } else {
     stream = (
       <div className="ln-ai__turns">
-        {visibleTurns.map((turn, index) => (
+        {visibleTurns.map((turn) => (
           <TurnView
             key={turn.id}
-            t={t}
+            t={tr}
             turn={turn}
             isLatest={turn.id === lastAssistantId}
             busy={busy}
@@ -492,8 +495,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
             onStop={() => useAiStore.getState().stop()}
             onRetry={() => void useAiStore.getState().retryStream()}
             onDismissError={() => useAiStore.getState().dismissError()}
-            onJump={jump}
-            citationHandlers={{ t, onHover: showCitation, onLeave: scheduleCardHide, onClick: onCitationClick }}
+            citationHandlers={{ t: tr, onHover: showCitation, onLeave: scheduleCardHide, onClick: onCitationClick }}
           />
         ))}
       </div>
@@ -542,7 +544,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       <AiComposer documentId={documentId} available={available} modelLabel={modelLabel} onJump={jump} />
       {card !== null && card.citation !== null ? (
         <CitationCard
-          t={t}
+          t={tr}
           index={card.index}
           citation={card.citation}
           verified={card.verified}
@@ -575,7 +577,7 @@ function StateNote(props: { text: string; spinner?: boolean; tone?: 'error'; act
 
 /** Everything one turn needs to render. */
 interface TurnViewProps {
-  t: ReturnType<typeof useT>
+  t: AiTranslate
   turn: ChatTurn
   isLatest: boolean
   busy: boolean
@@ -591,12 +593,11 @@ interface TurnViewProps {
   onStop: () => void
   onRetry: () => void
   onDismissError: () => void
-  onJump: (blockKey: string) => void
   citationHandlers: {
     t: Parameters<typeof CitationChip>[0]['t']
-    onHover: (event: React.MouseEvent<HTMLElement>, payload: CitationPayload) => void
+    onHover: (event: CitationAnchorEvent, payload: CitationPayload) => void
     onLeave: () => void
-    onClick: (event: React.MouseEvent<HTMLElement>, payload: CitationPayload) => void
+    onClick: (event: CitationAnchorEvent, payload: CitationPayload) => void
   }
 }
 
@@ -619,7 +620,6 @@ function TurnView(props: TurnViewProps): ReactElement {
     onStop,
     onRetry,
     onDismissError,
-    onJump,
     citationHandlers,
   } = props
   const assistant: ChatEntry | null = turn.assistant

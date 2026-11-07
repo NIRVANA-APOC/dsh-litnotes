@@ -30,6 +30,7 @@ test('standard parse failure persists status=failed + a user-facing message', as
   assert.notEqual(failed.error, null)
   assert.match(String(failed.error), /mock extract failed/)
   assert.equal(requireParse(failed).phase, null)
+  assert.equal(requireParse(failed).remoteState, null, 'the upstream phase is cleared on failure')
   assert.equal(typeof requireParse(failed).finishedAt, 'string')
   assert.deepEqual(harness.store.stats(), { total: 1, parsed: 0, parsing: 0, failed: 1 })
 

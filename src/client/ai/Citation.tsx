@@ -9,7 +9,7 @@
  * as evidence.
  */
 
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import type { Aspect } from '../../shared/constants.ts'
 import type { AiCitation, AiTranslate, CitationFlags } from './chat.ts'
 import { aiT, citationFlags, displayText, formatCount } from './chat.ts'
@@ -21,12 +21,17 @@ export interface CitationPayload {
   verified: boolean
 }
 
+/** The part of a pointer/focus event citation handling needs (position anchor). */
+export interface CitationAnchorEvent {
+  currentTarget: HTMLElement
+}
+
 /** Handlers shared by every chip of one answer. */
 export interface CitationHandlers {
   t: AiTranslate
-  onHover: (event: ReactMouseEvent<HTMLElement>, payload: CitationPayload) => void
+  onHover: (event: CitationAnchorEvent, payload: CitationPayload) => void
   onLeave: () => void
-  onClick: (event: ReactMouseEvent<HTMLElement>, payload: CitationPayload) => void
+  onClick: (event: CitationAnchorEvent, payload: CitationPayload) => void
 }
 
 /** Read one citation aspect safely (labels resolve through `aspect.*` keys). */

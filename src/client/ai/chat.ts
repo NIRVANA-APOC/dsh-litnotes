@@ -561,11 +561,9 @@ export function normalizeMessages(raw: unknown): ChatEntry[] {
   for (let index = 0; index < list.length; index += 1) {
     const item = asRecord(list[index])
     if (item === null) continue
-    let role: 'user' | 'assistant' =
+    let role: 'user' | 'assistant' | '' =
       item['role'] === 'assistant' || item['role'] === 'user' ? item['role'] : ''
-    if (role === '') {
-      role = typeof item['answer'] === 'string' && item['answer'] !== '' ? 'assistant' : 'user'
-    }
+    if (role === '') role = typeof item['answer'] === 'string' && item['answer'] !== '' ? 'assistant' : 'user'
     let question = asString(item['question'])
     if (question === '') question = asString(item['content'])
     if (role === 'user' && question.trim() === '') continue

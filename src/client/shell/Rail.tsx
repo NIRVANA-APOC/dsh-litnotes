@@ -15,7 +15,7 @@ import { useLibraryStore } from '../state/library.ts'
 import { useSettingsStore } from '../state/settings.ts'
 import { useUiStore } from '../state/ui.ts'
 import { useImportController } from './library/import-controller.ts'
-import { Button, Chip, EmptyState, IconButton, Menu, Spinner, cx, useMediaQuery, type MenuItem } from '../design/primitives.tsx'
+import { Button, Chip, EmptyState, IconButton, Menu, cx, useMediaQuery, type MenuItem } from '../design/primitives.tsx'
 import { Icon } from '../design/icons.tsx'
 import { useT } from './locale-context.ts'
 import { useInjectedStyle } from '../design/use-style.ts'
@@ -29,7 +29,7 @@ import {
   type RailStatusFilter,
 } from './library/search.ts'
 import { defaultParseOptions } from './library/options.ts'
-import { lastParseOptions, repairPages, repairRequest, retryRequest } from './library/parse-request.ts'
+import { loadParseDetail, repairRequest, retryRequest, summaryParseOptions } from './library/parse-request.ts'
 import { formatNumber } from './library/format.ts'
 import { SHELL_LIBRARY_CSS } from './library/styles.ts'
 
@@ -140,16 +140,27 @@ export function Rail(): ReactElement {
 
   /** Retry a failed parse with the document's last options (no modal). */
   const retryDocument = (document: DocumentSummary): void => {
-    const base: ParseOptions = lastParseOptions(document) ?? defaultParseOptions(preferences)
+    const base: ParseOptions = defaultParseOptions(preferences)
     void startParse(document.id, retryRequest(document, base))
   }
 
   /** Repair the pages the last parse reported as unreadable (no modal). */
-  const repairDocument = (document: DocumentSummary): void => {
-    const pages = repairPages(document)
-    if (pages.length === 0) return
-    const base: ParseOptions = lastParseOptions(document) ?? defaultParseOptions(preferences)
-    void startParse(document.id, repairRequest(base, pages))
+  const repairDocument = async (document: DocumentSummary): Promise<void> => {
+    let detail
+    try {
+      detail = await loadParseDetail(document.id)
+    } catch {
+      useUiStore.getState().toast(t('err.load'), 'error')
+      return
+    }
+    if (detail.repairPages.length === 0) {
+      useUiStore.getState().toast(t('rail.repairNone'), 'info')
+      openDialog('reparse', document.id)
+      return
+    }
+    const base: ParseOptions =
+      detail.options ?? summaryParseOptions(document) ?? defaultParseOptions(preferences)
+    await startParse(document.id, repairRequest(base, detail.repairPages))
   }
 
   /** Clear search and status filter (empty-state action). */
@@ -188,7 +199,7 @@ export function Rail(): ReactElement {
       onOpen={() => openDoc(document.id)}
       onOpenDialog={(kind, id) => openDialog(kind, id)}
       onRetry={() => retryDocument(document)}
-      onRepair={() => repairDocument(document)}
+      onRepair={() => void repairDocument(document)}
       onCancel={() => void cancelParse(document.id)}
     />
   )
@@ -366,6 +377,3 @@ export function Rail(): ReactElement {
     </>
   )
 }
-
-/** Small helper re-exported for the dialogs: default options for a fresh parse. */
-export { defaultParseOptions }

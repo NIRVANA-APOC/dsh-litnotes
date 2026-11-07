@@ -26,7 +26,7 @@ import { afterEach, test } from 'vitest'
 import { expect } from 'vitest'
 
 import { TOKEN_KEY } from '../../src/host/config.ts'
-import type { WebRoute } from '../../src/host/host-services.ts'
+import type { PromptSection, WebRoute } from '../../src/host/host-services.ts'
 import { apply, inject, name } from '../../src/host/index.ts'
 import type { HostContext } from '../../src/host/host-services.ts'
 
@@ -116,6 +116,21 @@ function makeCtx(services: Record<string, unknown> = {}) {
   // The platform context is structurally compatible; the cast documents the
   // deliberate structural fake at the Cordis boundary.
   return { ctx: ctx as unknown as HostContext, routes, effects }
+}
+
+/** A fake `systemPrompt` service recording registered sections. */
+function makeSystemPrompt() {
+  const sections: PromptSection[] = []
+  const disposed: string[] = []
+  const service = {
+    section(section: PromptSection) {
+      sections.push(section)
+      return () => {
+        disposed.push(section.name)
+      }
+    },
+  }
+  return { sections, disposed, service }
 }
 
 /** A fake request readable carrying `body`. */
@@ -318,4 +333,24 @@ test('apply() respects an explicit dataDir from the row config', async () => {
   await waitFor(() => existsSync(join(explicit, 'documents')), 'custom library initialization')
   for (const effect of effects) effect.cleanup?.()
   await waitFor(() => routes.every((route) => route.disposed), 'route disposers')
+})
+
+test('apply() registers the static library hint in the agent system prompt', async () => {
+  const root = await makeDshHome()
+  process.env.DSH_HOME = root
+  const prompt = makeSystemPrompt()
+  const { ctx, routes, effects } = makeCtx({ systemPrompt: prompt.service })
+
+  expect(() => apply(ctx, {})).not.toThrow()
+  // Exactly one compact, static section naming the tool family and coordinates.
+  expect(prompt.sections.map((section) => section.name)).toEqual(['litnotes-library'])
+  expect(prompt.sections[0]?.order).toBe(55)
+  expect(prompt.sections[0]?.text).toContain('library_search')
+  expect(prompt.sections[0]?.text).toContain('blockKey')
+  expect(prompt.sections[0]?.text).toContain('library_manage')
+
+  for (const effect of effects) effect.cleanup?.()
+  await waitFor(() => routes.every((route) => route.disposed), 'route disposers')
+  // The section is owned by an effect, so plugin disposal removes it.
+  expect(prompt.disposed).toEqual(['litnotes-library'])
 })

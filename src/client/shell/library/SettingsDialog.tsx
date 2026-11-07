@@ -57,7 +57,7 @@ export function SettingsDialog(): ReactElement {
   const [tokenBusy, setTokenBusy] = useState(false)
   const [redetectBusy, setRedetectBusy] = useState(false)
   const [defaults, setDefaults] = useState<ParseOptions>(() => defaultParseOptions(preferences))
-  const sectionRefs = useRef<Partial<Record<SettingsSectionId, HTMLDivElement | null>>>({})
+  const sectionRefs = useRef<Partial<Record<SettingsSectionId, HTMLElement | null>>>({})
   const open = dialog === 'settings'
 
   useEffect(() => {

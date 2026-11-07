@@ -8,8 +8,8 @@
  */
 
 import { create } from 'zustand'
-import { ApiError, getHostClient } from '../../api/client.ts'
-import type { DocumentSummary, ParseOptions } from '../../../shared/model.ts'
+import { getHostClient } from '../../api/client.ts'
+import type { ParseOptions } from '../../../shared/model.ts'
 import { useLibraryStore } from '../../state/library.ts'
 import { useUiStore } from '../../state/ui.ts'
 import type { LitnotesTranslate } from '../locale-context.ts'
@@ -62,14 +62,19 @@ function removeUpload(set: (updater: (state: ImportControllerState) => Partial<I
   set((state) => ({ uploads: state.uploads.filter((item) => item.key !== key) }))
 }
 
-/** Run one file through upload + refresh + optional parse. */
+/** One imported document, as much as the import flow needs after upload. */
+export interface ImportedDocument {
+  id: string
+  title: string
+}
+
+/** Run one file through upload. */
 async function runUpload(
   set: (updater: (state: ImportControllerState) => Partial<ImportControllerState>) => void,
   key: string,
   file: File,
-  parseOptions: ParseOptions | null,
   t: LitnotesTranslate,
-): Promise<DocumentSummary | null> {
+): Promise<ImportedDocument | null> {
   try {
     const client = getHostClient()
     const { document } = await client.upload(file, {
@@ -114,9 +119,9 @@ export const useImportController = create<ImportControllerState>((set, get) => (
         ],
       }))
     }
-    const imported: DocumentSummary[] = []
+    const imported: ImportedDocument[] = []
     for (const entry of queue) {
-      const document = await runUpload(set, entry.key, entry.file, parseOptions, t)
+      const document = await runUpload(set, entry.key, entry.file, t)
       if (document !== null) imported.push(document)
     }
     if (imported.length === 0) return
@@ -168,8 +173,3 @@ export const useImportController = create<ImportControllerState>((set, get) => (
 
   dismissUpload: (key) => removeUpload(set, key),
 }))
-
-/** Reason text of a failed upload, with a fallback for non-Error throws. */
-export function uploadFailureCode(error: unknown): string {
-  return error instanceof ApiError ? error.code : 'unknown'
-}

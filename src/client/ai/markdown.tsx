@@ -251,7 +251,7 @@ function renderInline(children: readonly Token[], context: RenderContext): React
         stack.push({ tag: 's', href: '', children: [] })
         break
       case 'link_open':
-        stack.push({ tag: 'a', href: token.attrGet('href') ?? '', children: [] })
+        stack.push({ tag: 'a', href: String(token.attrGet('href') ?? ''), children: [] })
         break
       case 'strong_close':
       case 'em_close':
@@ -295,7 +295,7 @@ function blockElement(token: Token, children: ReactNode[]): ReactNode {
     case 'bullet_list_open':
       return <ul className="ln-ai__list">{children}</ul>
     case 'ordered_list_open': {
-      const start = Number(token.attrGet('start') ?? '1')
+      const start = Number(token.attrGet('start') ?? 1)
       return (
         <ol className="ln-ai__list" start={Number.isFinite(start) && start > 1 ? start : undefined}>
           {children}

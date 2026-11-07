@@ -9,25 +9,42 @@
  */
 
 import type { DocumentSummary, ParseOptions, ParseStartOptions } from '../../../shared/model.ts'
-import { problemPagesOf } from './format.ts'
+import { getHostClient } from '../../api/client.ts'
 
-/** Problem pages of the last repair attempt (empty when none). */
-export function repairPages(document: DocumentSummary): number[] {
-  return problemPagesOf(document)
-}
-
-/** Whether a document currently has a repair action worth offering. */
-export function canRepair(document: DocumentSummary): boolean {
-  if (document.status !== 'parsed') return false
-  if (document.parse?.engine === 'local') return false
-  return repairPages(document).length > 0
-}
-
-/** Options of the document's last parse, when recorded (for "retry"). */
-export function lastParseOptions(document: DocumentSummary): ParseOptions | null {
-  const options = document.parse?.options
-  if (options === null || options === undefined) return null
+/** Options of the a parse attempt, reconstructed from the light list row. */
+export function summaryParseOptions(document: DocumentSummary): ParseOptions | null {
+  const parse = document.parse
+  if (parse === null) return null
+  const options: ParseOptions = { isOcr: parse.ocr }
+  if (parse.engine !== null) options.engine = parse.engine
+  if (parse.modelVersion !== null) options.modelVersion = parse.modelVersion
+  if (parse.language !== null) options.language = parse.language
   return options
+}
+
+/** Detail fetched on demand for actions that need the full parse state. */
+export interface ParseDetail {
+  /** Options of the last parse (`null` before the first parse). */
+  options: ParseOptions | null
+  /** Pages the last page-scoped repair reported as failed. */
+  repairPages: number[]
+}
+
+/**
+ * Fetch the full document metadata (`library.get`) for an action that needs
+ * parse-repair state, which the library list deliberately trims.
+ *
+ * @param documentId - document id.
+ * @returns last parse options and problem pages.
+ */
+export async function loadParseDetail(documentId: string): Promise<ParseDetail> {
+  const { document } = await getHostClient().call('library.get', { id: documentId })
+  const parse = document.parse
+  const failed = parse?.repair?.failedPages
+  const repairPages = Array.isArray(failed)
+    ? failed.filter((page): page is number => typeof page === 'number' && Number.isInteger(page) && page > 0)
+    : []
+  return { options: parse?.options ?? null, repairPages }
 }
 
 /**
@@ -52,7 +69,5 @@ export function repairRequest(options: ParseOptions, pages: ReadonlyArray<number
 
 /** Request used by the row's "retry parsing" action (last options, else defaults). */
 export function retryRequest(document: DocumentSummary, fallback: ParseOptions): ParseStartOptions {
-  const last = lastParseOptions(document)
-  if (last !== null) return last
-  return { ...fallback }
+  return summaryParseOptions(document) ?? { ...fallback }
 }

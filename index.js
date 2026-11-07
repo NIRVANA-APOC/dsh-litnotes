@@ -1100,7 +1100,7 @@ function createLlmGateway(deps = {}) {
         if (rawChunk === null || typeof rawChunk !== "object") continue;
         const chunk = rawChunk;
         const type = typeof chunk.type === "string" ? chunk.type : "";
-        if (type === "text-delta" || type === "text") {
+        if (type === "text-delta" || type === "text" || type === "delta") {
           const text3 = typeof chunk.text === "string" ? chunk.text : typeof chunk.delta === "string" ? chunk.delta : "";
           if (text3 === "") continue;
           collected += text3.length;
@@ -16028,6 +16028,81 @@ function createAiServices(deps) {
   };
 }
 
+// src/host/ai/prompt-section.ts
+var LIBRARY_PROMPT_SECTION_NAME = "litnotes-library";
+var LIBRARY_PROMPT_SECTION_ORDER = 55;
+var LIBRARY_PROMPT_SECTION_TEXT = [
+  "A local literature library is available through dsh-litnotes: use the library_search, library_read, library_ask, library_annotate, library_translate, library_graph and library_manage tools when the task involves the user's papers.",
+  "Their results carry documentId, blockKey, page and quote coordinates \u2014 cite papers with those coordinates so the user can jump to the exact text.",
+  "Do not mention the literature library when the request is unrelated to it."
+].join("\n");
+var LIBRARY_PROMPT_SECTION = Object.freeze({
+  name: LIBRARY_PROMPT_SECTION_NAME,
+  order: LIBRARY_PROMPT_SECTION_ORDER,
+  text: LIBRARY_PROMPT_SECTION_TEXT
+});
+function noopDisposer() {
+}
+function asSystemPromptService(value) {
+  if (value === null || typeof value !== "object") return void 0;
+  return typeof value.section === "function" ? value : void 0;
+}
+var REGISTERED_CONTEXTS = /* @__PURE__ */ new WeakSet();
+function registerLibraryPromptSection(deps) {
+  const { ctx } = deps;
+  const log = deps.logger ?? {};
+  if (ctx === null || ctx === void 0 || typeof ctx.get !== "function") return noopDisposer;
+  if (REGISTERED_CONTEXTS.has(ctx)) return noopDisposer;
+  let serviceValue;
+  try {
+    serviceValue = ctx.get("systemPrompt");
+  } catch {
+    return noopDisposer;
+  }
+  const systemPrompt = asSystemPromptService(serviceValue);
+  if (systemPrompt === void 0) {
+    log.debug?.("[dsh-litnotes] systemPrompt service absent; library prompt section not registered");
+    return noopDisposer;
+  }
+  let sectionDisposer = noopDisposer;
+  try {
+    const value = systemPrompt.section(LIBRARY_PROMPT_SECTION);
+    if (typeof value === "function") sectionDisposer = value;
+  } catch (error) {
+    log.warn?.(
+      "[dsh-litnotes] cannot register the library prompt section: %s",
+      error?.message ?? error
+    );
+    return noopDisposer;
+  }
+  REGISTERED_CONTEXTS.add(ctx);
+  let disposed = false;
+  function cleanup2() {
+    if (disposed) return;
+    disposed = true;
+    REGISTERED_CONTEXTS.delete(ctx);
+    try {
+      sectionDisposer();
+    } catch (error) {
+      log.warn?.(
+        "[dsh-litnotes] library prompt section disposer failed: %s",
+        error?.message ?? error
+      );
+    }
+  }
+  if (typeof ctx.effect === "function") {
+    try {
+      return ctx.effect(() => cleanup2, "dsh-litnotes: library prompt section");
+    } catch (error) {
+      log.warn?.(
+        "[dsh-litnotes] cannot own the library prompt section effect: %s",
+        error?.message ?? error
+      );
+    }
+  }
+  return cleanup2;
+}
+
 // src/host/agent-tools.ts
 var LIBRARY_TOOL_NAMES = Object.freeze([
   "library_search",
@@ -23087,6 +23162,7 @@ function apply(ctx, config2) {
     normalizeParseOptions,
     describeMineruError
   });
+  registerLibraryPromptSection({ ctx, service, logger });
   ctx.effect(() => {
     let disposed = false;
     const ready = store.init().then(() => {

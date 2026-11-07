@@ -1419,3 +1419,38 @@ test('locateQuoteRange normalizes whitespace and maps offsets back to plainText'
 
   expect(normalizeQuoteText('  a\n\t b\u00a0c ')).toBe('a b c')
 })
+
+test('a regenerated turn excludes the replaced answer from the prompt history', async () => {
+  const fake = createFakeLlm()
+  fake.queueAnswer({ markdown: 'OLD ANSWER TO REPLACE about method.' })
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake })
+  const firstFrames = await collectFrames(chat, question({ question: 'First question?' }))
+  const firstAnswer = findFrame(firstFrames, 'answer')
+  const file = chatFile(store)
+  expect(file?.messages.length).toBe(2)
+
+  fake.queueAnswer({ markdown: 'Fresh regenerated answer.' })
+  const regenerating = makeChat({ store, fake })
+  await collectFrames(regenerating.chat, question({ question: 'First question?', regenerateOf: firstAnswer.messageId }))
+  const prompt = chatPrompt(fake)
+  expect(prompt.includes('OLD ANSWER TO REPLACE')).toBe(false)
+  expect(prompt.includes('Conversation so far')).toBe(false)
+})
+
+test('the route-owned abort signal (second argument) aborts the turn', async () => {
+  const fake = createFakeLlm()
+  byte: {
+    // Never called: the pre-aborted signal wins before document reads.
+  }
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake })
+  const controller = new AbortController()
+  controller.abort()
+  const frames: ChatFrame[] = []
+  for await (const frame of chat.stream(question(), controller.signal)) frames.push(frame)
+  expect(frames.length).toBe(1)
+  expect(errorCodeOf(frames[0])).toBe('aborted')
+  expect(fake.callCount()).toBe(0)
+  expect(chatFile(store)).toBeNull()
+})

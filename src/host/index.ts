@@ -26,6 +26,7 @@ import type {
   TranslatorService,
 } from './host-services.ts'
 import { createAiServices } from './ai/index.ts'
+import { registerLibraryPromptSection } from './ai/prompt-section.ts'
 import { registerLibraryTools } from './agent-tools.ts'
 import { createLocalEngine } from './parse/local/engine.ts'
 import { createParseManager } from './parse/manager.ts'
@@ -138,6 +139,11 @@ export function apply(ctx: HostContext, config?: Record<string, unknown>): void 
     normalizeParseOptions,
     describeMineruError,
   })
+
+  // Register the static literature-library hint in the agent system prompt.
+  // The helper owns its disposal through `ctx.effect` and is a safe no-op when
+  // the profile does not mount the `systemPrompt` service.
+  registerLibraryPromptSection({ ctx, service, logger })
 
   // Boot: initialize the library then resume interruptible parse tasks. Routes
   // are registered immediately; store methods await the same init promise.

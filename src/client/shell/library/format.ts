@@ -6,9 +6,9 @@
  * wording is used by the rail, the dialogs and the status bar.
  */
 
-import type { DocumentStatus, DocumentSummary } from '../../shared/model.ts'
+import type { DocumentStatus, DocumentSummary } from '../../../shared/model.ts'
 import type { LitnotesTranslate } from '../locale-context.ts'
-import type { ParseEngine } from '../../shared/constants.ts'
+import type { ParseEngine } from '../../../shared/constants.ts'
 
 /** Locale key of a parse-engine label. */
 export function engineLabelKey(engine: string | null | undefined): 'status.engine.standard' | 'status.engine.agent' | 'status.engine.local' | 'status.engine.none' {
@@ -100,13 +100,6 @@ export function documentMetaParts(document: DocumentSummary, t: LitnotesTranslat
   const engine = document.parse?.engine
   if (engine !== undefined && engine !== null) parts.push(engineLabel(t, engine))
   return parts
-}
-
-/** Problem pages of the last page-scoped repair attempt (empty when none). */
-export function problemPagesOf(document: DocumentSummary): number[] {
-  const failed = document.parse?.repair?.failedPages
-  if (!Array.isArray(failed)) return []
-  return failed.filter((page): page is number => typeof page === 'number' && Number.isInteger(page) && page > 0)
 }
 
 /** Whether a parsed document is currently being parsed again. */

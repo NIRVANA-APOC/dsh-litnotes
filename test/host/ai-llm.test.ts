@@ -355,3 +355,25 @@ describe('completeText', () => {
     expect(fake.callCount()).toBe(0)
   })
 })
+
+describe('streamText host chunk aliases', () => {
+  test('accepts text/delta host chunks and a finish chunk carrying usage', async () => {
+    const recordingLlm = {
+      stream(): AsyncGenerator<Record<string, unknown>> {
+        return (async function* generate(): AsyncGenerator<Record<string, unknown>> {
+          yield { type: 'text', text: 'a' }
+          yield { type: 'delta', delta: 'b' }
+          yield { type: 'finish', reason: 'stop', usage: { input_tokens: 3, output_tokens: 2 } }
+        })()
+      },
+    }
+    const gateway = makeGateway({ getLlm: () => recordingLlm })
+    const chunks = await collect(gateway.streamText(streamRequest()))
+    expect(deltas(chunks).map((chunk) => chunk.text).join('')).toBe('ab')
+    expect(chunks.find((chunk) => chunk.type === 'usage')).toEqual({
+      type: 'usage',
+      usage: { inputTokens: 3, outputTokens: 2 },
+    })
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+  })
+})

@@ -384,7 +384,11 @@ export const useAiStore = create<AiState>((set, get) => {
         return
       }
       case 'usage': {
-        updateEntry(run.id, (entry) => ({ ...entry, usage: frame.usage }))
+        const usage = {
+          inputTokens: frame.usage.inputTokens ?? 0,
+          outputTokens: frame.usage.outputTokens ?? 0,
+        }
+        updateEntry(run.id, (entry) => ({ ...entry, usage }))
         return
       }
       case 'done': {

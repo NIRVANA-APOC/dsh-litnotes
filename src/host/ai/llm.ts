@@ -506,7 +506,7 @@ export function createLlmGateway(deps: LlmGatewayDeps = {}): LlmGateway {
         if (rawChunk === null || typeof rawChunk !== 'object') continue
         const chunk = rawChunk as LlmStreamChunk & Record<string, unknown>
         const type = typeof chunk.type === 'string' ? chunk.type : ''
-        if (type === 'text-delta' || type === 'text') {
+        if (type === 'text-delta' || type === 'text' || type === 'delta') {
           const text =
             typeof chunk.text === 'string'
               ? chunk.text

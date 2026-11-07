@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 import type { DocumentSummary } from '../../shared/model.ts'
 import type { AnnotationColor, Aspect } from '../../shared/constants.ts'
 import { isAnnotatableBlock } from '../../shared/annotate/highlight.ts'
@@ -80,6 +80,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
 
   /* ---- store slices -------------------------------------------------- */
   const phase = useReaderStore((state) => state.phase)
+  const storeError = useReaderStore((state) => state.error)
   const storeDocument = useReaderStore((state) => state.document)
   const model = useReaderStore((state) => state.model)
   const pages = useReaderStore((state) => state.pages)
@@ -109,6 +110,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   const marginRef = useRef<HTMLElement | null>(null)
   const documentRef = useRef(document)
   documentRef.current = document
+  const openedFor = useRef<string | null>(null)
   const restoredFor = useRef<string | null>(null)
   const handledJump = useRef(0)
   const flashTimer = useRef<number | null>(null)
@@ -126,7 +128,6 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   const selCardBase = useRef<ReaderSelection | null>(null)
   const selSeq = useRef(0)
   const selCache = useRef(new Map<string, { translation: string; provider: string }>())
-  const [sidebarDocumentId, setSidebarDocumentId] = useState<string | null>(null)
 
   const activeDocument = storeDocument !== null && storeDocument.id === document.id ? storeDocument : document
   const title = activeDocument.title !== '' ? activeDocument.title : activeDocument.originalName
@@ -144,18 +145,18 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
 
   /* ---- open / close the document ------------------------------------- */
   useEffect(() => {
-    sidebarOpenedRef.current = documentRef.current.id
-    void useReaderStore.getState().open(documentRef.current)
+    const target = documentRef.current
+    openedFor.current = target.id
+    void useReaderStore.getState().open(target)
     return () => {
-      if (sidebarOpenedRef.current === documentRef.current.id) {
-        sidebarOpenedRef.current = null
+      // Only close the store when this scene still owns the open document
+      // (StrictMode double-invocation must not close the newer open).
+      if (openedFor.current === target.id) {
+        openedFor.current = null
         useReaderStore.getState().close()
       }
     }
   }, [document.id])
-  const sidebarOpenedRef = useRef<string | null>(null)
-  void setSidebarDocumentId
-  void sidebarDocumentId
 
   /* ---- page-mark preference changes rebuild the view model ------------ */
   const showPageMarks = preferences.showPageMarks
@@ -337,8 +338,8 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   }, [captureSelection])
 
   const handleKeyUp = useCallback(
-    (event: ReactMouseEvent<HTMLElement> | { key?: string }): void => {
-      const key = 'key' in event && typeof event.key === 'string' ? event.key : ''
+    (event: ReactKeyboardEvent<HTMLElement>): void => {
+      const key = event.key
       const selectionKey =
         key === 'Shift' ||
         key.startsWith('Arrow') ||
@@ -800,7 +801,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
             ) : phase === 'error' ? (
               <div className="ln-reader__state" role="status">
                 <p>{t('read.loadFailed')}</p>
-                <p className="ln-reader__stateDetail">{useReaderStore.getState().error ?? ''}</p>
+                <p className="ln-reader__stateDetail">{storeError ?? ''}</p>
                 <Button variant="ghost" icon="refresh" onClick={() => void useReaderStore.getState().open(document)}>
                   {t('read.retry')}
                 </Button>
@@ -910,7 +911,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
         />
       ) : null}
 
-      {selCard !== null && selection === null ? (
+      {selCard !== null ? (
         <SelectionTranslationCard
           t={t}
           card={selCard}

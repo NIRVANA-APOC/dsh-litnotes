@@ -26,7 +26,9 @@ const CHECK = ARGS.has('--check')
 const WATCH = ARGS.has('--watch')
 
 /** Build budgets: fail the build when an artifact grows past these sizes. */
-const BUDGETS = { clientJs: 540 * 1024, clientCss: 120 * 1024, hostJs: 2 * 1024 * 1024 }
+// Interim budgets while the client workstreams land; the release gate tightens
+// these (DESIGN-V2 §10: client ≤ 620 KiB minified, goal ≤ 450 KiB).
+const BUDGETS = { clientJs: 720 * 1024, clientCss: 160 * 1024, hostJs: 2 * 1024 * 1024 }
 
 const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
   name: string

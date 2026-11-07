@@ -7,7 +7,7 @@
  */
 
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ParseOptions } from '../../../shared/model.ts'
 import { useLibraryStore } from '../../state/library.ts'
 import { useSettingsStore } from '../../state/settings.ts'
@@ -15,17 +15,16 @@ import { useUiStore } from '../../state/ui.ts'
 import { Button, Dialog, ProgressBar } from '../../design/primitives.tsx'
 import { useT } from '../locale-context.ts'
 import { defaultParseOptions, rememberParseOptions } from './options.ts'
-import { canRepair, repairPages, repairRequest } from './parse-request.ts'
+import { loadParseDetail, repairRequest, summaryParseOptions, type ParseDetail } from './parse-request.ts'
 import { assembleEngineLabel, parseProgressText } from './format.ts'
 import { ParseOptionsForm } from './ParseOptionsForm.tsx'
 import { SHELL_LIBRARY_CSS } from './styles.ts'
 import { useInjectedStyle } from '../../design/use-style.ts'
 
-/** Merge the document's last options over the preference defaults. */
-function initialOptions(last: ParseOptions | null | undefined, preferences: Parameters<typeof defaultParseOptions>[0]): ParseOptions {
-  const base = defaultParseOptions(preferences)
-  if (last === null || last === undefined) return base
-  const merged: ParseOptions = { ...base }
+/** Merge the last parse options over the preference defaults. */
+function initialOptions(last: ParseOptions | null | undefined, defaults: ParseOptions): ParseOptions {
+  if (last === null || last === undefined) return { ...defaults }
+  const merged: ParseOptions = { ...defaults }
   if (last.engine !== undefined) merged.engine = last.engine
   if (last.localProvider !== undefined) merged.localProvider = last.localProvider
   if (last.modelVersion !== undefined) merged.modelVersion = last.modelVersion
@@ -58,20 +57,43 @@ export function ReparseDialog(): ReactElement {
   const [options, setOptions] = useState<ParseOptions>(() => defaultParseOptions(preferences))
   const [repairOnly, setRepairOnly] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [detail, setDetail] = useState<ParseDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const open = dialog === 'reparse' && document !== undefined
 
   // Reset the draft every time the dialog opens for a (possibly different) doc.
   useEffect(() => {
     if (!open || document === undefined) return
-    setOptions(initialOptions(document.parse?.options, useSettingsStore.getState().preferences))
-    setRepairOnly(document.status === 'parsed' && canRepair(document))
+    const defaults = defaultParseOptions(useSettingsStore.getState().preferences)
+    setOptions(initialOptions(summaryParseOptions(document), defaults))
+    setRepairOnly(false)
     setBusy(false)
+    setDetail(null)
+    setDetailLoading(document.status === 'parsed')
+    let cancelled = false
+    if (document.status === 'parsed') {
+      // Repair state lives in the full metadata only; fetch it on demand.
+      void loadParseDetail(document.id)
+        .then((value) => {
+          if (cancelled) return
+          setDetail(value)
+          setDetailLoading(false)
+          setOptions(initialOptions(value.options ?? summaryParseOptions(document), defaults))
+          setRepairOnly(value.repairPages.length > 0 && document.parse?.engine !== 'local')
+        })
+        .catch(() => {
+          if (!cancelled) setDetailLoading(false)
+        })
+    }
+    return () => {
+      cancelled = true
+    }
   }, [open, document])
 
-  const pages = useMemo(() => (document === undefined ? [] : repairPages(document)), [document])
-  const repairAvailable = document !== undefined && canRepair(document)
+  const pages = detail?.repairPages ?? []
+  const repairAvailable = pages.length > 0 && document?.parse?.engine !== 'local'
   const parsing = document?.status === 'parsing'
-  const lastOptions = document?.parse?.options ?? null
+  const lastOptions = detail?.options ?? null
 
   /** Start the selected parse (fresh or page repair) and close on dispatch. */
   const submit = async (): Promise<void> => {
@@ -112,7 +134,7 @@ export function ReparseDialog(): ReactElement {
               {t('rail.cancelParse')}
             </Button>
           ) : null}
-          <Button variant="primary" onClick={() => void submit()} disabled={busy || parsing}>
+          <Button variant="primary" onClick={() => void submit()} disabled={busy || parsing || detailLoading}>
             {busy ? t('dlg.reparse.starting') : t('dlg.reparse.start')}
           </Button>
         </>

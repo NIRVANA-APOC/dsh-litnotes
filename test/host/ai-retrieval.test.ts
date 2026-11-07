@@ -270,3 +270,28 @@ test('retrieval input validation surfaces a bad-request AiError', () => {
     expect((error as { code?: string }).code).toBe('bad-request')
   }
 })
+
+test('the document index cache evicts the oldest entry beyond its cap', () => {
+  let parseCalls = 0
+  const retriever = makeRetriever({
+    parseMarkdown: (markdown: string) => {
+      parseCalls += 1
+      return parseMarkdown(markdown)
+    },
+  })
+  // Nine distinct one-document indexes: the cap is eight, so doc-0 is evicted.
+  for (let index = 0; index < 9; index += 1) {
+    retriever.buildIndex({ documentId: `doc-${index}`, markdown: `${MARKDOWN}\nNote ${index}.` })
+  }
+  expect(parseCalls).toBe(9)
+  // Still cached (last eight): no re-parse.
+  retriever.buildIndex({ documentId: 'doc-8', markdown: `${MARKDOWN}\nNote 8.` })
+  expect(parseCalls).toBe(9)
+  // The evicted first document is parsed again.
+  retriever.buildIndex({ documentId: 'doc-0', markdown: `${MARKDOWN}\nNote 0.` })
+  expect(parseCalls).toBe(10)
+  // invalidate() with no argument clears the whole cache.
+  retriever.invalidate()
+  retriever.buildIndex({ documentId: 'doc-8', markdown: `${MARKDOWN}\nNote 8.` })
+  expect(parseCalls).toBe(11)
+})

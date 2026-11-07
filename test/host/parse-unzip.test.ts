@@ -285,3 +285,15 @@ test('an empty archive extracts to an empty result', () => {
   assert.deepEqual(filtered.entries, [])
   assert.equal(filtered.skipped, 1)
 })
+
+test('the size caps apply to extracted entries only (filtered entries are free)', () => {
+  // A filtered-out entry may exceed maxEntryBytes: it is never decompressed, so
+  // the frozen contract only bounds what the caller actually keeps.
+  const archive = makeStoredZip([
+    { name: 'layout.json', data: 'x'.repeat(4096) },
+    { name: 'full.md', data: '# tiny' },
+  ])
+  const result = unzip(archive, { filter: (name) => name === 'full.md', maxEntryBytes: 1024, maxTotalBytes: 1024 })
+  assert.deepEqual(result.entries.map((entry) => entry.name), ['full.md'])
+  assert.equal(result.skipped, 1)
+})

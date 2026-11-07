@@ -147,9 +147,11 @@ function buildDispatch(service: ServiceApi): DispatchTable {
     'parse.cancel': (payload) => service.cancelParse(requireString(payload, 'id')),
     'document.markdown': (payload) => service.readMarkdown(requireString(payload, 'id')),
     'annotations.save': (payload) =>
+      // The service validates the array shape; a missing/non-array payload is a
+      // clean `bad-request` rather than an accidental "clear the list".
       service.saveAnnotations(
         requireString(payload, 'id'),
-        (Array.isArray(payload.annotations) ? payload.annotations : []) as Annotation[],
+        payload.annotations as Annotation[],
         normalizeBaseIds(payload.baseIds),
       ),
     'translations.save': (payload) =>

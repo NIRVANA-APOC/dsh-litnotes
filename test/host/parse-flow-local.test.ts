@@ -15,7 +15,6 @@
 
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'vitest'
 import type { LocalExtractResult } from '../../src/host/contracts.ts'

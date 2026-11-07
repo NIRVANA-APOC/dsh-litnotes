@@ -24,6 +24,7 @@ export const zh = {
   /* Empty / loading / setup states. */
   'ai.emptyTitle': '从这一页开始提问',
   'ai.emptyText': '答案只根据本文内容生成，并标注来源段落。',
+  'ai.questionLabel': '你问',
   'ai.loadingHistory': '正在载入对话…',
   'ai.historyError': '对话载入失败。',
   'ai.unavailableTitle': 'AI 模型尚未就绪',
@@ -139,6 +140,7 @@ export const en: Record<keyof typeof zh, string> = {
 
   'ai.emptyTitle': 'Start from this page',
   'ai.emptyText': 'Answers are generated from this paper only, with source paragraphs cited.',
+  'ai.questionLabel': 'You asked',
   'ai.loadingHistory': 'Loading conversation…',
   'ai.historyError': 'Could not load the conversation.',
   'ai.unavailableTitle': 'AI model not ready',

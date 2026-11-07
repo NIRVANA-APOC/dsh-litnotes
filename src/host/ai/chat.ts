@@ -121,8 +121,8 @@ export interface VerifiedCitation extends Citation {
  * An unverified citation (invalid/duplicate/dangling/unsupported evidence).
  *
  * The frozen wire shape intentionally carries NO `start`/`end`/`page` on these
- * entries (they never anchor to the page); the shared `Citation` type requires
- * them, so the engine casts only at the wire/persistence boundary.
+ * entries (they never anchor to the page); the shared `Citation` fields are
+ * optional for exactly this reason.
  */
 export interface UnverifiedCitation {
   index: number
@@ -336,7 +336,11 @@ export function splitModelOutput(rawText: unknown): SplitModelOutput {
       const lastBrace = payloadText.lastIndexOf('}')
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         const salvaged = tryParseJson(payloadText.slice(firstBrace, lastBrace + 1))
-        payload = isContractPayload(salvaged) ? salvaged : null
+        // The frozen engine salvaged any JSON object here (not just the full
+        // contract shape) so a slightly malformed fence still yields citations.
+        payload = salvaged !== null && typeof salvaged === 'object' && !Array.isArray(salvaged)
+          ? (salvaged as Record<string, unknown>)
+          : null
       }
     }
   }
@@ -1438,15 +1442,14 @@ export function createChatService(deps: ChatServiceDeps): ChatService {
         log.warn?.('[dsh-litnotes] cannot persist chat turn: %s', (error as Error)?.message ?? error)
       }
 
-      // 7) answer / graph / usage / done frames. The unverified list has no
-      // page offsets by contract but the shared Citation type requires them;
-      // cast at the wire boundary to keep the frozen frame shape.
+      // 7) answer / graph / usage / done frames. Unverified citations carry no
+      // page offsets by contract (`Citation.start/end/page` are optional).
       yield {
         type: 'answer',
         messageId,
         markdown: answerMarkdown,
         citations: validated.citations,
-        unverified: validated.unverified as unknown as Citation[],
+        unverified: validated.unverified,
         entailment,
         followups,
         annotationIds: annotations.ids,

@@ -331,10 +331,11 @@ export interface Citation {
   index: number
   blockKey: string
   quote: string
-  /** Character offsets into the block plain text (Host-computed). */
-  start: number
-  end: number
-  page: number | null
+  /** Character offsets into the block plain text (Host-computed; absent while unverified). */
+  start?: number
+  end?: number
+  /** Page number when the citation is anchored (absent while unverified). */
+  page?: number | null
   aspect: Aspect
   note: string
   verified: boolean

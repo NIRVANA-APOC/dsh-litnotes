@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 
 import { TOKEN_KEY } from '../shared/constants.ts'
 import type { Preferences } from '../shared/model.ts'
-import { DEFAULT_PREFERENCES, normalizePreferences } from '../shared/preferences.ts'
+import { normalizePreferences } from '../shared/preferences.ts'
 import type { AiConfig, LocalConfig, ResolvedConfig, StoreApi } from './contracts.ts'
 import { WireError } from './wire.ts'
 
@@ -48,17 +48,8 @@ const DEFAULT_LOCAL_CONFIG: Readonly<LocalConfig> = Object.freeze({
 const DEFAULT_API_BASE = 'https://mineru.net'
 /** Default upload cap: 200 MiB (matches the MinerU standard limit). */
 const DEFAULT_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
-/** Accepted engines for the preference / parse options. */
-const ENGINES: ReadonlySet<string> = new Set(['auto', 'standard', 'agent', 'local'])
-/** Accepted MinerU model versions. */
-const MODEL_VERSIONS: ReadonlySet<string> = new Set(['pipeline', 'vlm'])
 /** Reasoning-effort ids accepted by the DeepSeek-family adapters. */
 const REASONING_EFFORTS: ReadonlySet<string> = new Set(['off', 'low', 'high', 'max'])
-/** Large language tags MinerU understands; other values pass through if sane. */
-const LANGUAGE_PATTERN = /^[a-z][a-z0-9_]{1,31}$/i
-
-/** Preference defaults re-exported for callers that render a settings form. */
-export { DEFAULT_PREFERENCES, normalizePreferences }
 
 /**
  * Structural view of the Host credentials service.
@@ -411,35 +402,4 @@ export async function savePreferences(store: StoreApi, preferences: unknown): Pr
   const merged = normalizePreferences({ ...current, ...patch })
   await store.writePreferences(merged)
   return merged
-}
-
-/**
- * Whether a string is one of the accepted parse engines (re-exported helper for
- * the route/tool layers).
- *
- * @param value - candidate engine id.
- * @returns true for `auto | standard | agent | local`.
- */
-export function isParseEngine(value: unknown): boolean {
-  return typeof value === 'string' && ENGINES.has(value)
-}
-
-/**
- * Whether a string is an accepted MinerU model version.
- *
- * @param value - candidate model version.
- * @returns true for `pipeline | vlm`.
- */
-export function isModelVersion(value: unknown): boolean {
-  return typeof value === 'string' && MODEL_VERSIONS.has(value)
-}
-
-/**
- * Whether a string is an accepted large language tag.
- *
- * @param value - candidate language tag.
- * @returns true when the tag matches the MinerU grammar.
- */
-export function isLanguageTag(value: unknown): value is string {
-  return typeof value === 'string' && LANGUAGE_PATTERN.test(value.trim())
 }

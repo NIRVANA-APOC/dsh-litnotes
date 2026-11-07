@@ -27,6 +27,8 @@ export interface ParseOptionsFormProps {
   disabled?: boolean
   /** Show the "open settings" shortcut next to the token warning. */
   onOpenSettings?: () => void
+  /** Hide the engine choice (page-repair requests carry no engine). */
+  showEngine?: boolean
 }
 
 /** Translate-aware token warning row. */
@@ -57,6 +59,7 @@ export function ParseOptionsForm({
   ext,
   disabled = false,
   onOpenSettings,
+  showEngine = true,
 }: ParseOptionsFormProps): ReactElement {
   const t = useT()
   const engine = value.engine ?? 'auto'
@@ -74,24 +77,26 @@ export function ParseOptionsForm({
 
   return (
     <div className="ln-parseform" data-disabled={disabled || undefined}>
-      <div className="ln-field">
-        <span className="ln-field__label">{t('parse.engine')}</span>
-        <div className="ln-field__control">
-          <Segmented
-            size="sm"
-            value={engine}
-            options={engineLabels}
-            onChange={(next) => patch({ engine: next })}
-            ariaLabel={t('parse.engine')}
-          />
-          <p className="ln-field__hint">{engineHint(engine, tokenConfigured, localSupport, t)}</p>
-          {engine === 'local' && !localSupport.supported && localSupport.reason !== null ? (
-            <p className="ln-field__hint ln-field__hint--warn">{localSupport.reason}</p>
-          ) : null}
+      {!showEngine ? null : (
+        <div className="ln-field">
+          <span className="ln-field__label">{t('parse.engine')}</span>
+          <div className="ln-field__control">
+            <Segmented
+              size="sm"
+              value={engine}
+              options={engineLabels}
+              onChange={(next) => patch({ engine: next })}
+              ariaLabel={t('parse.engine')}
+            />
+            <p className="ln-field__hint">{engineHint(engine, tokenConfigured, localSupport, t)}</p>
+            {engine === 'local' && !localSupport.supported && localSupport.reason !== null ? (
+              <p className="ln-field__hint ln-field__hint--warn">{localSupport.reason}</p>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
-      {needsToken ? <TokenWarning t={t} onOpenSettings={onOpenSettings} /> : null}
+      {showEngine && needsToken ? <TokenWarning t={t} onOpenSettings={onOpenSettings} /> : null}
 
       <div className="ln-field">
         <span className="ln-field__label">{t('parse.model')}</span>

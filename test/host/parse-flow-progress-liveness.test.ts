@@ -69,7 +69,7 @@ test('pipeline/OCR parse exposes the upstream phase and never persists a fake 0 
   const queuedRow = (await harness.service.listDocuments()).documents.find((row) => row.id === doc.id)
   assert.ok(queuedRow !== undefined)
   assert.equal(queuedRow.parse?.remoteState, 'pending')
-  assert.equal(queuedRow.parse?.options?.isOcr, true)
+  assert.equal(queuedRow.parse?.ocr, true)
   assert.equal(queuedRow.parse?.modelVersion, 'pipeline')
   assert.equal(queuedRow.parse?.progress, null)
   assert.equal(queuedRow.parse?.startedAt, requireParse(queued).startedAt, 'startedAt lets the client tick an elapsed timer')

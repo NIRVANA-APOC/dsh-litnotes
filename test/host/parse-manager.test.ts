@@ -1217,3 +1217,42 @@ test('the reanchor hook can be injected and its changes are persisted', async ()
 export type ManagerTestPlan = NormalizedParsePlan
 /** Keep the response type referenced for fake-server documentation. */
 export type ManagerTestResponse = MineruResponse
+
+test('concurrency cap queues additional parses and drains when a slot frees', async () => {
+  const env = await setup()
+  const fake = createFakeMineru({ apiBase: env.config.apiBase, docId: env.id, alwaysRunning: true })
+  const manager = makeManager(env, fake)
+  // Two more documents so the queue has something to hold.
+  const docIds = [env.id]
+  for (const name of ['second.pdf', 'third.pdf']) {
+    const id = randomUUID()
+    const tempPath = env.store.newTempPath(id)
+    await writeFile(tempPath, Buffer.from('%PDF-1.4 queued paper bytes'))
+    await env.store.createFromFile({ id, tempPath, originalName: name })
+    docIds.push(id)
+  }
+  try {
+    const meta = env.store.get(env.id)
+    assert.ok(meta !== undefined)
+    const normalized = normalizeParseOptions(
+      { engine: 'standard' },
+      meta,
+      ctxInfo(true, env.config.maxUploadBytes),
+    )
+    for (const id of docIds) await manager.start(id, normalized)
+    // Only `maxConcurrentParses` (2) tasks may reach MinerU; the third waits.
+    await waitFor(() => fake.state.submissions >= 2, { label: 'two concurrent submissions' })
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100)
+    })
+    assert.equal(fake.state.submissions, 2, 'the third parse waits for a slot')
+    for (const id of docIds) assert.equal(env.store.get(id)?.status, 'parsing')
+
+    // Cancelling one running parse frees a slot for the queued one.
+    await manager.cancel(docIds[1] ?? '')
+    await waitFor(() => fake.state.submissions >= 3, { label: 'queued parse started' })
+    assert.equal(env.store.get(docIds[2] ?? '')?.status, 'parsing')
+  } finally {
+    await teardown(env, manager)
+  }
+})

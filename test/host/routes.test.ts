@@ -799,3 +799,18 @@ test('HEAD requests answer asset/source metadata without a body', async () => {
     await teardown(env)
   }
 })
+
+test('annotations.save rejects a missing or non-array annotations payload', async () => {
+  const env = await setup()
+  try {
+    const upload = await callUpload(env, 'paper.pdf', Buffer.from('%PDF-1.4 shape'))
+    const document = (upload.json() as { value: { document: DocumentMeta } }).value.document
+    const missing = await callJson(env, 'annotations.save', { id: document.id })
+    expect(missing.statusCode).toBe(400)
+    expect((missing.json() as { error: { code: string } }).error.code).toBe('bad-request')
+    // Nothing was written by the rejected save.
+    expect((await env.store.loadAnnotations(document.id)).items).toEqual([])
+  } finally {
+    await teardown(env)
+  }
+})

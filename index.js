@@ -12994,7 +12994,7 @@ function splitModelOutput(rawText) {
       const lastBrace = payloadText.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         const salvaged = tryParseJson2(payloadText.slice(firstBrace, lastBrace + 1));
-        payload = isContractPayload(salvaged) ? salvaged : null;
+        payload = salvaged !== null && typeof salvaged === "object" && !Array.isArray(salvaged) ? salvaged : null;
       }
     }
   }
@@ -20639,10 +20639,14 @@ function buildDispatch(service) {
     },
     "parse.cancel": (payload) => service.cancelParse(requireString(payload, "id")),
     "document.markdown": (payload) => service.readMarkdown(requireString(payload, "id")),
-    "annotations.save": (payload) => service.saveAnnotations(
-      requireString(payload, "id"),
-      Array.isArray(payload.annotations) ? payload.annotations : [],
-      normalizeBaseIds(payload.baseIds)
+    "annotations.save": (payload) => (
+      // The service validates the array shape; a missing/non-array payload is a
+      // clean `bad-request` rather than an accidental "clear the list".
+      service.saveAnnotations(
+        requireString(payload, "id"),
+        payload.annotations,
+        normalizeBaseIds(payload.baseIds)
+      )
     ),
     "translations.save": (payload) => service.saveTranslations(
       requireString(payload, "id"),

@@ -1,378 +1,618 @@
-# dsh-litnotes — AI features architecture & contracts
+# dsh-litnotes — AI architecture & contracts
 
-This document is the implementation contract for the AI-native upgrade: grounded Q&A with
-citations that jump and auto-annotate, per-paper and library-wide knowledge graphs, and multiple
-DSH agent tools over the library. Read it together with `docs/VISION.md` (product detail),
-`docs/RESEARCH.md` (external landscape, supplementary), `docs/ARCH.md` (existing host/client
-architecture) and `docs/UI-SPEC.md` (existing reading-desk design contract).
+This document is the implementation contract for the plugin's AI layer: grounded reading Q&A with
+verified citations that mark the page, per-paper and library knowledge graphs, and the agent
+integration over the local library. It describes the current TypeScript implementation; the code
+in `src/host/ai/**`, `src/host/contracts.ts`, `src/shared/model.ts` and `src/shared/protocol.ts`
+is authoritative if this document and the code ever disagree.
 
-The plugin is `dsh-litnotes` (renamed from `dsh-mineru`; package name is the single source of
-identity). Every new route lives under `/dsh-litnotes/api/*`; the client bundle id is
-`dsh-litnotes`; locale namespace `dsh-litnotes`; panel id `litnotes`; data dir
-`~/.dsh/litnotes`.
+The AI layer is split in two halves:
+
+- **Host** (`src/host/ai/**`) — model gateway, lexical retrieval, prompt builders, grounded chat
+  and the knowledge-graph engine. Every model call goes through the Host `llm` service; every
+  write goes through the injected library store.
+- **Client** (`src/client/ai/**`) — "the margin voice": the conversation rendered inside the
+  reading margin, anchored to document positions, with citation chips/cards and filter seams.
+  The client never calls a model and never stores AI data; it drives the Host wire API.
+
+```
+Host:    routes/tools ──► ServiceApi ──► createAiServices (lazy bundle)
+                                              ├─ llm.ts        (DSH llm + tokenMeter)
+                                              ├─ retrieval.ts  (MiniSearch BM25+ over parser blocks)
+                                              ├─ chat.ts       (grounded turns → chat.json)
+                                              ├─ graph.ts      (KG → graph.json / library-graph.json)
+                                              └─ prompt-section.ts (static system-prompt hint)
+Client:  AiMarginEntries ──► Ai store ──► POST /dsh-litnotes/api/{chat,chat.history,chat.clear,graph.*}
+```
 
 ---
 
-## 1. Product principles for the AI layer
+## 1. Principles
 
-1. **Answers live in the margin, on the page.** The AI panel is the reading desk's right margin,
-   not a separate chat app. Every claim it makes is anchored to reader blocks.
-2. **Citation-first, then words.** The model must cite existing parser block keys with verbatim
-   quotes. The host re-validates every citation; unverifiable citations are marked and never
-   turned into annotations.
-3. **Every answer leaves a trace on the text.** Valid citations become highlights/annotations in
-   the document (aspect-colored), so multi-turn reading visibly fills the paper with knowledge.
-4. **The graph maintains itself.** AI reading comprehension builds a per-paper knowledge graph;
-   Q&A adds question/insight nodes and links; the library graph aggregates papers and topics.
-   Users curate by clicking, not by writing JSON.
+1. **Grounded and citation-first.** The model may answer only from context blocks supplied by the
+   Host. Every non-obvious claim must carry `[n]` markers backed by a model citation whose quote
+   is literally present in the cited block. Nothing outside the paper is allowed into an answer.
+2. **Trust is verified, then graded.** The Host verifies provenance first (block exists, quote is
+   contained, offsets are computed by the Host, never by the model) and then runs a second,
+   model-based citation–claim entailment pass. `supported` stays green, `partial` stays verified
+   with a warning, `unsupported` moves to `unverified` and never becomes an annotation or graph
+   knowledge. The pass fails open: provenance still stands when the classifier fails.
+3. **Every answer leaves a trace on the page.** Verified citations become aspect-colored AI
+   annotations through the store's atomic read-modify-write path, deduped against existing notes,
+   so multi-turn reading visibly fills the paper with knowledge. Unverified evidence never marks
+   the page.
+4. **The graph maintains itself; the user's edits win.** Reading comprehension builds the
+   per-paper graph; Q&A adds question/insight nodes and links; the library graph is deterministic
+   aggregation. User curation (rename, pin, merge) marks nodes `curated`, which survives forced
+   rebuilds; AI suggestions are proposals.
 5. **One knowledge base, two views.** Annotations, notes, chat answers and graph nodes share
-   block-key provenance. Clicking anything (citation, node, annotation) jumps to the same place.
-6. **The agent is a first-class reader too.** DSH chat can search, read, annotate, translate,
-   graph and question the library through focused tools that return citation-ready coordinates.
+   block-key provenance. Clicking a citation, a graph node or a margin entry jumps to the same
+   sentence in the paper.
+6. **The agent is a first-class reader.** DeepSeek Harness chat reaches the library through seven
+   focused tools that return citation-ready coordinates, plus one compact system-prompt section
+   that tells the agent the library exists without polluting unrelated conversations.
 
 ---
 
 ## 2. Data model
 
-Everything below is JSON on disk under the existing data dir. All writes go through the store's
-new aux APIs (atomic tmp+rename, per-document queues):
+All data is JSON on disk under the configured data directory. Writes are atomic
+(tmp file + rename) and serialized per document by the library store.
 
-```
-documents/<docId>/chat.json      # { version:1, messages: ChatMessage[] }
-documents/<docId>/graph.json     # doc knowledge graph (KG shape below)
-library-graph.json               # library knowledge graph
-```
-
-### ChatMessage
-
-```jsonc
-{
-  "id": "uuid",
-  "role": "user" | "assistant",
-  "question": "…",                    // assistant messages keep their question for context
-  "answer": "markdown with [1] markers",
-  "citations": [Citation],
-  "unverified": [Citation],           // failed validation; shown dimmed in the UI
-  "followups": ["…"],
-  "model": { "provider": "…", "model": "…" },
-  "usage": { "inputTokens": 0, "outputTokens": 0 },
-  "annotationIds": ["…"],             // annotations created from this answer
-  "knowledge": { "nodeIds": [], "edgeIds": [] },
-  "entailment": { "checked": true, "supported": 3, "partial": 1, "unsupported": 1 },
-  "createdAt": "ISO"
-}
-```
-
-`entailment` is the summary of the citation–claim check described below; it is `checked:false`
-with zeroed counts when the pass is disabled (`ai.entailmentCheck:false`) or failed open.
-
-### Citation
-
-```jsonc
-{
-  "index": 1,                          // [n] in the answer markdown
-  "blockKey": "b12:ab12cd34",          // reader parser block key
-  "quote": "exact substring of the block plain text",
-  "start": 34, "end": 78,              // computed by the host (not the model)
-  "page": 3,
-  "aspect": "definition|method|result|limitation|context",
-  "note": "one-sentence claim this citation supports",
-  "verified": true,
-  // citation–claim check (docs/RESEARCH.md §R2): the quote exists, but does the
-  // paragraph entail the claim in `note`?
-  "entailment": "supported|partial|unchecked",
-  "entailmentReason": "optional one-line model reason"
-}
-```
-
-Verification is two-stage: (1) **provenance** — the `blockKey` exists and the quote occurs in it
-(whitespace-normalized, prefix fallback) — then (2) **entailment** — one cheap post-answer model
-call judges each `(note, quote)` pair as `supported | partial | unsupported`. `unsupported`
-citations move to `unverified` with `reason:"entailment-unsupported"` (dimmed, never annotated,
-never turned into graph knowledge); `partial` stays verified but the UI says so. If the pass is
-**disabled** (`ai.entailmentCheck:false`) no extra call is made and citations carry no entailment
-field at all; if it is **malformed or fails** the citations stay verified with
-`entailment:"unchecked"` (fail-open — provenance still stands).
-
-Aspect → annotation color mapping (single source of truth in the host, `lib/ai/aspects.js`):
-
-| aspect | meaning | annotation color |
+| File | Path | Shape |
 |---|---|---|
-| definition | definition/background/terminology | `yellow` |
-| method | approach, architecture, algorithm | `sage` |
-| result | experiments, numbers, evidence | `sky` |
-| limitation | limitation, critique, open problem | `rose` |
-| context | related work, motivation, anything else | `yellow` |
+| conversation | `documents/<documentId>/chat.json` | `{ version: 1, messages: ChatMessage[] }` |
+| per-paper graph | `documents/<documentId>/graph.json` | `KnowledgeGraph` (`scope: 'document'`) |
+| library graph | `library-graph.json` | `KnowledgeGraph` (`scope: 'library'`) |
 
-### Annotation extension (existing `annotations.json` items)
+The formats are compatible with the frozen 1.0.0 data files: existing user libraries are read
+without migration, and 2.0 written files keep the same field names and semantics. Unknown extra
+fields are ignored on read; the significant fields are modelled in `src/shared/model.ts`.
 
-New optional fields: `origin: "user" | "ai"`, `aspect`, `chatId`, `messageId`, `model`.
-The client normalizer (`ui/highlight.js normalizeAnnotation`) and the store both preserve these
-fields across the whole-list save round-trip; a regression test covers it.
+### 2.1 ChatMessage
 
-**Reparse re-anchoring.** Block keys and offsets can change when a document is parsed again
-(full reparse or page-scoped repair). After every successful parse the host
-`lib/reanchor.js` relocates each annotation by its verbatim `quote` (same block → offsets fixed;
-another block → `blockKey` + offsets fixed, preferring the block nearest the old page; quote
-gone → annotation kept with `stale: true` and `staleReason`). The store and the client
-normalizer preserve `stale`/`staleReason`/`reanchored`, so a stale annotation is displayed in the
-margin as “位置已变化” and is never erased by a whole-list save.
-The client keeps rendering existing annotations unchanged; AI annotations get a small sparkle
-marker in the margin list and in the note editor (`origin:"ai"`), and the notes tab carries an
-origin/aspect filter: chips `全部 / AI 批注 / 我的批注` (counts) for the origin, and the aspect
-legend beneath the tabs doubles as the aspect filter — clicking a legend item (dot + label) filters
-to that aspect (pressed state), clicking it again clears; origin × aspect are AND-combined and the
-active-filter line shows shown/total plus 清除筛选. The origin filter is the host-persisted
-preference `notesFilter` (`all|ai|user`); the aspect selection is session-local. There is exactly
-one aspect-control surface: no separate dot-only filter row is rendered next to the legend. Deduping rule: a new AI annotation is
-skipped (and reported) when an existing annotation on the same block covers an overlapping range
-with the same aspect.
-
-**Concurrent writers.** Annotation writes are merged, never last-write-wins: the client saves the
-whole list with `baseIds` (the ids it loaded), the store keeps an incoming item for every base id
-(so local edits/deletes win) and appends any on-disk annotation whose id is unknown to the client
-(e.g. one just created by a Q&A/agent turn), so an answer can annotate while the reader edits.
-The AI annotation path itself uses the store's atomic `mutateAnnotations` read-modify-write, and
-chat turns use `mutateAux` on `chat.json` so two concurrent Q&A turns both persist.
-
-### Knowledge graph (KG) shape
-
-Used for both per-doc (`graph.json`) and library (`library-graph.json`) graphs:
-
-```jsonc
-{
-  "version": 1,
-  "scope": "document" | "library",
-  "documentId": "…",                   // document scope only
-  "generatedAt": "ISO",
-  "model": { "provider": "…", "model": "…" },
-  "overview": "markdown summary of the graph",
-  "tldr": "3-5 bullet TL;DR (document scope)",
-  "glossary": [{ "term": "…", "definition": "…", "blockKeys": [] }],
-  "nodes": [{
-    "id": "n-uuid",
-    "type": "concept|method|finding|definition|limitation|section|question|insight|paper|topic",
-    "label": "short name",
-    "summary": "1-2 sentences",
-    "blockKeys": ["b12:ab12cd34"],     // provenance in the document
-    "documentIds": ["…"],              // library scope: papers this node came from
-    "aspect": "method",               // optional, mirrors citation aspects
-    "source": "ai-summary|qa|user|aggregate",
-    "weight": 1,                       // importance, used for layout/filtering
-    "curated": true,                   // user edited this node (survives forced rebuilds)
-    "pinned": true,                    // optional: fixed canvas position
-    "position": { "x": 420, "y": 260 },// optional, infinite-canvas world pixels; host clamps ±100000
-    "createdAt": "ISO", "updatedAt": "ISO"
-  }],
-  "edges": [{
-    "id": "e-uuid",
-    "from": "n-…", "to": "n-…",
-    "type": "defines|uses|supports|contradicts|part_of|leads_to|evolves_from|relates|answers|mentions|shares",
-    "label": "optional edge label",
-    "source": "ai-summary|qa|user|aggregate",
-    "weight": 1
-  }],
-  "stats": { "nodes": 0, "edges": 0, "builtAtSeq": null }
+```ts
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  question?: string                 // assistant messages keep the question that produced them
+  answer?: string                   // assistant markdown WITHOUT the trailing JSON fence
+  citations: Citation[]             // verified citations
+  unverified: Citation[]            // failed evidence (dimmed in the UI)
+  followups?: string[]
+  model?: { provider: string; model: string }
+  usage?: { inputTokens?: number; outputTokens?: number }
+  annotationIds?: string[]          // annotations created from this answer
+  knowledge?: { nodeIds: string[]; edgeIds: string[] }
+  entailment?: EntailmentSummary
+  promptVersion?: number            // prompt-contract version active when the turn ran
+  createdAt: string
 }
 ```
 
-Node id rules: AI returns stable-ish ids per call; the host merges by normalized label + type
-(case-folded, punctuation-stripped) and keeps the existing id. Host caps: document graph 120
-nodes / 400 edges; library graph 600 nodes / 2000 edges as a safety cap, with a curation
-budget of 28 representative topics (each paper keeps ≥2). `shares` is library-only.
+Persistence invariants enforced by `chat.ts`:
 
-**User curation (document scope).** The graph card edits through
-`graph.update({ documentId, nodes?, edges?, merge? })`: rename/summary/aspect/weight updates are
-node upserts by id; `pin`/`unpin` persists `{pinned, position}` so the seeded layout and drag
-simulation keep the node where the reader put it; `merge:[{from,into}]` folds one node into
-another atomically — block provenance/document ids are unioned, edges are rewired and deduped,
-self-loops are dropped, the source node is removed and the target keeps its label. Any node a user
-edits gets `curated:true` and survives a forced rebuild (its label/position/provenance are
-re-applied to the rebuilt graph), so “AI suggestions are proposals, the user's edits win”. The
-library graph stays read-only: it is deterministic aggregation and is rebuilt from the papers.
-Manual edges are accepted through the same `edges` upsert (agent tool) but are not exposed in the
-reader UI this round.
+- A turn appends a user message `{ id, role: 'user', question, promptVersion, createdAt }` and an
+  assistant message with the fields above; at most 200 messages are kept (oldest dropped).
+- `regenerateOf` identifies an assistant message to replace; it is replaced in place instead of
+  appending a new question/answer pair. The replaced answer is also excluded from the prompt
+  history of the regeneration turn.
+- Turn persistence goes through the store's `mutateAux(documentId, 'chat.json', …)`
+  read-modify-write helper so two concurrent turns (or a turn plus `chat.clear`) never overwrite
+  each other.
+- On read, messages are defensively normalized: unknown fields are dropped, text and arrays are
+  bounded, corrupt files read as an empty conversation.
+
+### 2.2 Citation
+
+```ts
+interface Citation {
+  index: number                     // [n] in the answer markdown
+  blockKey: string                  // shared reading-block anchor, e.g. "b12:ab12cd34"
+  quote: string                     // verbatim substring of the block plain text
+  start?: number                    // Host-computed; absent while unverified
+  end?: number                      // Host-computed (exclusive); absent while unverified
+  page?: number | null              // Host-computed display page; absent while unverified
+  aspect: Aspect                    // definition | method | result | limitation | context
+  note: string                      // the claim this quote supports
+  verified: boolean
+  reason?: string                   // why an unverified citation failed
+  entailment?: 'supported' | 'partial' | 'unsupported' | 'unchecked'
+  entailmentReason?: string         // one-line classifier reason
+}
+```
+
+A **verified** citation always carries `start`/`end` (offsets into the block's plain text, the
+annotation offset space) and a `page` (`null` when unknown). An **unverified** citation may omit
+all three: it never anchors to the page, is never jumpable, is never annotated and never creates
+graph knowledge. `reason` values produced by the Host:
+
+| reason | meaning |
+|---|---|
+| `invalid-index` | the model citation has no positive integer `index` |
+| `duplicate-index` | a second citation reused an index |
+| `index-not-in-answer` | no `[n]` marker with that index exists in the visible answer |
+| `unknown-block` | `blockKey` is not a block of this document |
+| `empty-quote` | the quote is empty |
+| `quote-not-found` | the quote is not contained in the block (shared anchor rules below) |
+| `entailment-unsupported` | the entailment pass graded the quote as not supporting the claim |
+
+Aspect vocabulary and annotation ink (`src/shared/constants.ts`, re-exported by
+`src/host/ai/aspects.ts`):
+
+| aspect | meaning | ink |
+|---|---|---|
+| `definition` | definitions, terminology, background | `yellow` |
+| `method` | approach, architecture, algorithm, setup | `sage` |
+| `result` | experiments, measurements, evidence | `sky` |
+| `limitation` | limitations, critique, open problems | `rose` |
+| `context` | related work, motivation, everything else | `yellow` |
+
+Unknown or missing aspects normalize to `context`.
+
+### 2.3 EntailmentSummary
+
+```ts
+interface EntailmentSummary {
+  checked: boolean      // false when the pass was disabled or failed open
+  supported: number
+  partial: number
+  unsupported: number
+}
+```
+
+Persisted on the assistant message and carried on the `answer` frame. Citation-level verdicts are
+also kept on each citation (`entailment`, `entailmentReason`). With `ai.entailmentCheck: false`
+the pass makes no model call, no `phase` frame is emitted, citations carry no entailment field and
+the summary is `{ checked: false, supported: 0, partial: 0, unsupported: 0 }`. When the pass runs
+but the answer cannot be parsed or the classifier errors, the summary is the same all-zero shape
+and verified citations carry `entailment: 'unchecked'` (fail-open).
+
+### 2.4 Annotations (AI provenance and dedupe)
+
+Verified citations become annotations with the 1.0.0-compatible extension fields:
+
+```ts
+interface Annotation {
+  id: string
+  blockKey: string
+  start: number
+  end: number
+  quote: string
+  color: AnnotationColor            // aspect → ink mapping above
+  aspect?: Aspect
+  note?: string
+  origin?: 'user' | 'ai'
+  chatId?: string                   // "doc:<documentId>" for AI annotations
+  messageId?: string                // assistant message that created it
+  model?: { provider: string; model: string }   // model provenance object
+  createdAt?: string
+  updatedAt?: string
+  stale?: boolean
+  staleReason?: string
+  reanchored?: boolean
+}
+```
+
+- **Creation path.** The chat service calls the store's atomic
+  `mutateAnnotations(documentId, mutate)`; dedupe + cap + append + save run inside that
+  read-modify-write so a concurrent client save or agent annotation is never lost.
+- **Dedupe rule (shared anchors).** A new AI annotation is skipped when an existing annotation on
+  the same block covers an overlapping range with the same normalized aspect (the existing note
+  wins, including user notes). `findDuplicateAnnotation` in `src/shared/annotate/anchors.ts` is
+  the single implementation; the Host does not duplicate normalization logic.
+- **Cap.** At most `ai.maxAnnotationsPerAnswer` (default 5) new annotations are created per
+  answer; additional verified citations stay citations only. The store keeps at most 5000
+  annotations per document.
+- **Never annotated.** Unverified citations (any reason) and entailment-unsupported citations
+  create no annotations. Annotation-save failures are logged and never fail the answer.
+- **Aspect color** uses `aspectColor` from `src/host/ai/aspects.ts`; `definition` and `context`
+  share the yellow ink.
+- **Reparse stability.** After a reparse, annotations are relocated by the shared
+  `src/shared/annotate/reanchor.ts` pass (exact quote match → context window → `stale`), so AI
+  annotations survive page-scoped repair the same way user notes do.
+
+### 2.5 KnowledgeGraph
+
+```ts
+interface KnowledgeGraph {
+  version: 1
+  scope: 'document' | 'library'
+  documentId?: string                         // document scope only
+  generatedAt: string | null                  // null for a never-built placeholder graph
+  model?: { provider: string; model: string } | null
+  overview: string                            // Markdown orientation
+  tldr?: string                               // Markdown bullet list (document scope)
+  glossary?: Array<{ term: string; definition: string; blockKeys: string[] }>
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  stats: { nodes: number; edges: number; builtAtSeq?: number | null }
+}
+
+interface GraphNode {
+  id: string                                  // "n-<uuid>", or content-derived for library nodes
+  type: GraphNodeType                         // concept|method|finding|definition|limitation|
+                                              // section|question|insight|paper|topic
+  label: string
+  summary: string
+  blockKeys: string[]                         // provenance in the paper
+  documentIds?: string[]                      // library scope: papers this came from
+  aspect?: Aspect
+  source: GraphSource                         // ai-summary|qa|user|aggregate
+  weight: number
+  curated?: boolean                           // user-edited: survives forced rebuilds
+  pinned?: boolean                            // canvas position fixed by the user
+  position?: { x: number; y: number } | null  // world pixels, clamped ±100000
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface GraphEdge {
+  id: string                                  // "e-<hash of from|to|type>"
+  from: string
+  to: string
+  type: GraphEdgeType                         // defines|uses|supports|contradicts|part_of|
+                                              // leads_to|evolves_from|relates|answers|mentions|
+                                              // shares (library only)
+  label?: string
+  source: GraphSource
+  weight: number
+}
+```
+
+- **Ids.** Document nodes get `n-<uuid>` ids; merged duplicates keep the existing id. Library
+  paper/topic ids are content-derived (`n-paper-<sha1>`, `n-topic-<sha1>`) so rebuilding does not
+  reshuffle the graph. Edge ids are deterministic hashes of `from|to|type`.
+- **Caps.** Document graph: 120 nodes / 400 edges. Library graph: 600 nodes / 2000 edges.
+- **Library-only runtime field.** The library graph written to `library-graph.json` and streamed
+  in `graph` frames additionally carries `clusters`: `Array<{ id, label, nodeIds, size, weight }>`
+  (connected components of the topic-relation graph). This is an additive field on top of the
+  shared type and is preserved by the library reader.
+- `generatedAt`/`model` are `null` for a placeholder graph read before the first build; this is
+  the frozen on-disk shape and is emitted as-is.
+
+`GraphPatch` is the curation payload accepted by `graph.update`:
+
+```ts
+interface GraphPatch {
+  nodes?: Array<{
+    id: string
+    label?: string
+    summary?: string
+    aspect?: Aspect
+    weight?: number
+    pinned?: boolean
+    position?: { x: number; y: number } | null
+    type?: GraphNodeType
+  }>
+  edges?: GraphEdgeInput[]                    // { id?, from, to, type?, label?, weight? }
+  merge?: Array<{ from: string; to: string }>
+}
+```
+
+Semantics: node updates are field-by-field patches (a missing field never resets stored data;
+`source` is overwritten only when the caller sends it), every user edit sets `curated: true` and
+bumps `updatedAt`; pin/position are validated (finite, ±100000, rounded to 0.1 world pixels);
+`merge` folds `from` into `to` — evidence (`blockKeys`, `documentIds`) is unioned, the target
+keeps its label/summary/aspect and gains the higher weight, pinned/position are inherited when
+missing, both edge directions are rewired onto the target, self-loops are dropped and duplicate
+edges keep the highest weight. Unknown ids and malformed pairs are ignored, never an error. The
+engine also accepts creation of new nodes through the same payload (a node without `id`).
+
+### 2.6 ChatRequest
+
+```ts
+interface ChatRequest {
+  documentId: string
+  question: string
+  focus?: { blockKey?: string; selectionQuote?: string }  // reader focus/selection
+  mode?: 'doc'                                            // reserved; only document scope
+  regenerateOf?: string                                   // assistant message id to regenerate
+}
+```
+
+The Host trims the question to 4000 characters, accepts only `b<index>:<hash>` focus block keys,
+bounds the selection quote to 2000 characters, and rejects any mode other than `doc`.
 
 ---
 
-## 3. Host modules & interfaces
+## 3. Host engine modules
 
-New files, plain ESM, `node:` builtins only, no imports outside `lib/` + `ui/markdown.js`:
+Factories follow one pattern: a `create*` function takes injected dependencies and returns the
+contract facade from `src/host/contracts.ts`. The composition root
+(`src/host/index.ts`, Host-owned) injects the store, resolved config, logger and lazy service
+getters; the engines never read `ctx` directly and never import each other's Host workstreams.
 
-### lib/ai/aspects.js
-```js
-export const ASPECTS = ['definition','method','result','limitation','context']
-export const ASPECT_COLORS = { definition:'yellow', method:'sage', result:'sky', limitation:'rose', context:'yellow' }
-export function normalizeAspect(value) // unknown → 'context'
-export function aspectColor(aspect)
+### 3.1 `llm.ts` — model gateway over the DSH `llm` service
+
+```ts
+createLlmGateway({ getLlm, getDefaultModel, getTokenMeter, logger, config }) : LlmGateway
+// LlmGatewayApi contract: available(), route(), streamText(), completeText()
+// plus estimateTokens(text) for the prompt context budget
 ```
 
-### lib/ai/llm.js — model gateway over the Host `llm` service
-```js
-export function createLlmGateway({ getLlm, getDefaultModel, logger, config })
-  .available()                                  // boolean
-  .route()                                      // { provider, model } | null (config override → default selection)
-  .async *streamText({ system, messages, signal, maxTokens, temperature, purpose })
-      // yields { type:'delta', text } then { type:'usage', usage } /
-      // { type:'finish', reason }; throws LlmUnavailableError / LlmFailureError
-  .completeText(request)                        // collected string (bounded)
-export class AiError extends Error { code, detail }   // codes: llm-unavailable, llm-failed,
-                                                      //        context-too-large, aborted
-```
-Uses `ctx.get('llm').stream({ provider, model, system, messages:[{role:'user',content:[{type:'text',text}]}], maxTokens, temperature, signal })`
-and `ctx.get('agentDefaultModel')?.currentSelection()` for the default route. Config override:
-`config.ai.provider`, `config.ai.model`.
+- **Route resolution.** An explicit `config.ai.provider` + `config.ai.model` override wins; both
+  must be non-empty. Otherwise `ctx.get('agentDefaultModel').currentSelection()` (also accepts a
+  plain `{ provider, model }` object or a getter returning either). No route or no mounted
+  `llm.stream` → `available() === false` and model calls throw `llm-unavailable`.
+- **Reasoning effort is always pinned**: request value > `config.ai.reasoningEffort` > `low`.
+  The adapter's own default (`high`) can spend the whole completion budget on reasoning tokens
+  and produce an empty visible answer, so reading/utility calls never rely on it.
+- **Stream normalization.** Host chunks are normalized to `AiStreamChunk`:
+  `{ type:'delta', text }`, `{ type:'usage', usage }`, `{ type:'finish', reason:{ kind } }`.
+  Accepted input aliases: `text-delta`/`text`/`delta` with `text` or `delta`, `usage` with
+  snake_case/camelCase token fields, `finish` with string or `{ kind }` reason. Unknown chunk
+  types (reasoning, block markers, …) are ignored. One `usage` and exactly one `finish` are
+  emitted at the end.
+- **Bounds.** `maxTokens` clamps to 1–16384; `temperature` to 0–2; a single streamed completion
+  stops with `finish.length` past 800000 characters; `completeText` caps at 400000 characters
+  (default 120000).
+- **Context budget.** The gateway estimates the prompt size with the Host `tokenMeter`
+  (`estimateMessage`) when mounted, falling back to a `length / 4` heuristic. A request estimated
+  above 64000 prompt tokens throws `context-too-large` before reaching the Host. The engine's
+  own character budgets (`ai.maxContextChars`, graph chunk caps) normally keep prompts far below
+  that ceiling; the check is the safety valve.
+- **Errors.** `AiError` carries a stable `code` and an optional bounded, non-sensitive `detail`
+  (never prompt text). Codes: `llm-unavailable`, `llm-failed`, `ai-failed`,
+  `context-too-large`, `aborted`, `bad-request`. Aborts are recognized from the signal or from
+  `AbortError`/`ABORT_ERR` errors and mapped to `aborted`.
 
-### lib/ai/retrieval.js — lexical context builder over parsed blocks
-```js
-export function createRetriever({ parseMarkdown, plainTextOfBlock, logger })
-  .buildIndex({ documentId, markdown, contentList, outline })   // cached by markdown length+hash
-  .context({ documentId, markdown, contentList, question, focusBlockKey, selection, topK = 12, budgetChars = 9000 })
-      // → { blocks:[{ key, page, index, text, kind, score, section }],
-      //     outline:[{key,level,text}], sections, usedChars, totalBlocks }
-  .search({ ...same }, query, limit = 20)     // → blocks[] for agent tools (snippets)
-  .invalidate(documentId)
-```
-Implementation: split the parser model's blocks into token sets (ASCII words + CJK bigrams);
-BM25-ish scoring, neighbours of top hits, always include title/abstract head, focus block and
-selection block; deterministic ordering by document index for prompt stability. No dependencies,
-no embeddings.
+### 3.2 `retrieval.ts` — lexical retrieval over parser blocks
 
-### lib/ai/chat.js — grounded reading conversation
-```js
-export function createChatService({ llm, retriever, store, config, logger,
-                                    loadAnnotations, saveAnnotations, onGraphDelta,
-                                    mutateAnnotations?, mutateAux? })
-  .async history(documentId)                   // ChatMessage[]
-  .async clear(documentId)
-  .async *stream(request)                      // NDJSON frame objects (see §4)
-```
-Request:
-```jsonc
-{ "documentId": "…", "question": "…",
-  "focus": { "blockKey": "b12:…", "selectionQuote": "…" },
-  "mode": "doc",                               // reserved: "library" later
-  "regenerateOf": "messageId?" }
-```
-Flow: load history (last 6 turns) → retrieval.context() → build system+user prompt (§5) →
-stream model deltas → split answer from trailing structured JSON → validate block keys and
-quote containment (normalize whitespace; allow first 40 chars prefix fallback; offsets computed
-against block plainText) → **second entailment pass** over `(citation.note, quote)` (§5) →
-persist ChatMessage → create annotations for verified citations via the atomic
-`mutateAnnotations(documentId, mutate)` injected from the store (dedupe rule §2; unsupported
-citations never annotate) → optional graph delta via `onGraphDelta` (knowledge from the answer)
-→ emit final frames. Turn persistence goes through `mutateAux(documentId, 'chat.json', mutate)`
-so concurrent turns merge instead of overwriting. Both dependencies are optional for engine unit
-tests; without them the service falls back to the historical load/save path.
-Frames:
-```jsonc
-{ "type": "start", "messageId": "…", "model": { … } }
-{ "type": "delta", "text": "…" }                     // answer markdown streamed
-{ "type": "phase", "phase": "entailment" }            // checking claims; before the answer frame
-{ "type": "answer", "messageId": "…", "markdown": "…",
-  "citations": [Citation], "unverified": [Citation],
-  "followups": ["…"], "annotationIds": ["…"],
-  "entailment": { "checked": true, "supported": 3, "partial": 1, "unsupported": 1 } }
-{ "type": "graph", "delta": { "nodes": [...], "edges": [...] } }
-{ "type": "usage", "usage": { … } }
-{ "type": "done" }
-{ "type": "error", "code": "…", "message": "…" }
+```ts
+createRetriever({ logger }) : Retriever
+// RetrieverApi: buildIndex, context, search, blocks, invalidate (concrete type also returns
+// the built index view and the public block list)
 ```
 
-### lib/ai/graph.js — knowledge graph service
-```js
-export function createGraphService({ llm, store, config, logger, readMarkdown })
-  .async docGraph(documentId)                  // KG
-  .async *buildDocGraph(documentId, { signal, force })   // NDJSON frames:
-      { "type":"progress", "phase":"reading|extracting|merging|done", "done":n, "total":m, "chunk":i }
-      { "type":"graph", "graph": KG }
-      { "type":"error", "code":"…", "message":"…" }
-  .async mergeDocKnowledge(documentId, delta)  // nodes/edges from Q&A; returns KG
-  .async updateDocGraph(documentId, { nodes, edges, merge })  // user edits: rename/pin/merge
-  .async libraryGraph()                        // KG (aggregates doc graphs + paper nodes)
-  .async *rebuildLibraryGraph({ signal })      // aggregate deterministically; LLM consolidation optional
-```
-Doc build: chunk the document into ~3500-char section groups → for each chunk ask the model for
-`{nodes,edges}` JSON (schema in §5) → host normalizes/merges → after all chunks, one lightweight
-call for `overview` + `tldr` + `glossary` (bounded by `config.ai.graphSummaryChars`) → persist.
-Progress frames make the UI live. Cancellation via AbortSignal. Cost caps: `config.ai.maxGraphChunks`
-(default 12), ignore documents over `config.ai.maxGraphSourceChars` (default 160k chars) by
-reading the first N + section headings.
+Scoring is delegated to **MiniSearch** with BM25+-style ranking and prefix search; the retrieval
+policy (what to include and in which order) stays ours.
 
-Library aggregation: for each parsed doc ensure a doc graph (read from disk; if missing, create a
-lightweight graph from headings + annotations only, no LLM); create `paper` nodes; create `topic`
-nodes by normalized label across docs. It is **curated, not a union**: each paper contributes at
-most 10 nodes chosen by an importance score (type, weight, degree, evidence blockKeys, provenance),
-concepts appearing in ≥2 papers are always kept, near-duplicate labels (word-set aliases such as
-"spectral dominance" / "full spectral dominance") merge into one concept, and the total is capped at
-28 topics. Edges are
-value-bearing only: paper→topic `mentions`, topic→topic relations propagated from the real document
-graphs (typed, weight = number of papers), and paper↔paper `shares` edges weighted by shared
-concept count. There are no "any two co-occurring topics" edges. Clusters = connected components of
-the topic-topic relation graph; overview
-computed deterministically (top topics, paper list) with an optional LLM polish call.
+- **Tokenizer.** ASCII words are lowercased, punctuation-split and filtered by a small English
+  stop-word set; CJK runs are segmented with `Intl.Segmenter` (`word` granularity). The same
+  tokenizer runs at index and query time, so bilingual documents rank correctly without
+  embeddings.
+- **Indexed blocks.** Kinds `heading` (×1.5), `quote` (×1.1), `paragraph` (×1), `list` (×1),
+  `table` (×0.9), `code` (×0.6). Page markers, rules and figures are skipped. Page numbers come
+  from the shared `appendPageMarks` pass (MinerU content list), so citation pages match the
+  reader. Section labels are the last two headings, joined with ` > `.
+- **Hit rule.** MiniSearch prefix matches only shape the ranking; a block is a hit only when at
+  least one query term occurs in it exactly. This preserves the frozen lexical semantics (no
+  morphological false positives) while replacing the hand-rolled scorer.
+- **Cache.** One built index per document, keyed by a content signature
+  (`markdown.length:fnv1a(markdown):contentList.length`). Up to 8 documents are cached (LRU);
+  `invalidate(documentId)` drops one, `invalidate()` drops all.
+- **Context assembly** (`context({ documentId, markdown, contentList, question, focusBlockKey,
+  selection, topK, budgetChars })`) is deterministic:
+  1. the first three blocks (title/abstract head) are always included;
+  2. the reader's focus block and selection block (by block key, else by contained quote) are
+     always included;
+  3. the top `topK` lexical matches (`topK` clamped 1–40, default 12);
+  4. both neighbours of the four strongest matches;
+  5. blocks are ordered by document position (prompt stability);
+  6. a per-block cap (4000 chars) and the total character budget (`budgetChars` clamped
+     500–64000, default 9000; per-block prompt overhead counted as `key.length + 24`) enforce
+     the window; match/neighbour blocks are dropped rather than truncated when over budget,
+     head/focus/selection blocks may be truncated, and a degenerate budget still returns the
+     first block so the model always sees text.
+- **Search.** `search({ ...input, query, limit })` returns ranked block snippets
+  (`blockKey`/`key` alias, `index`, `kind`, `page`, `section`, `score`, `text` snippet ≤ 360
+  chars) for agent tools; limit clamps 1–50 (default 20). Query terms are tokenized with the
+  same tokenizer; empty/stop-word-only queries return `[]`.
+- **blocks()** exposes the ordered block list (`key`, `index`, `kind`, `page`, `section`,
+  `text`) used by the chat service for citation validation and offset lookup; the text is the
+  block's plain text, i.e. the annotation offset space.
+- **Bad input** (missing document id, unparsable document) surfaces `AiError('bad-request')`.
 
-### lib/ai/prompts.js
-All prompt text in one module (English instructions, answer language follows the user's question):
-`CHAT_SYSTEM`, `chatUserPrompt(context, question, history)`, `ENTAILMENT_SYSTEM`,
-`entailmentPrompt(citations)`, `parseEntailmentOutput(raw)`, the `ENTAILMENT_FENCE_*` /
-`ENTAILMENT_VERDICTS` constants, `GRAPH_EXTRACTION_SYSTEM`,
-`graphExtractionPrompt(chunk, meta)`, `GRAPH_SUMMARY_PROMPT`,
-`LIBRARY_CONSOLIDATION_PROMPT`. The entailment prompt asks for one
-verdict (`supported|partial|unsupported`) plus a one-line reason per citation, in a ``litnotes-entailment`` fenced block.
-The chat prompt embeds each context block as:
+### 3.3 `prompts.ts` — all prompt text and fenced-output contract
+
+All model-facing text lives here so prompt changes are reviewable in one place.
+
+| Export | Purpose |
+|---|---|
+| `PROMPT_VERSION` (= 2) | stored on chat messages; bump when prompt semantics change |
+| `ANSWER_FENCE_TAG` / `_OPEN` (`litnotes-json`) | trailing structured block of a chat answer |
+| `GRAPH_FENCE_TAG` (`litnotes-graph`) | per-chunk graph extraction output |
+| `SUMMARY_FENCE_TAG` (`litnotes-summary`) | paper overview/TL;DR/glossary output |
+| `ENTAILMENT_FENCE_TAG` (`litnotes-entailment`) | citation–claim verdict list |
+| `ENTAILMENT_VERDICTS` | `supported`, `partial`, `unsupported` |
+| `CHAT_SYSTEM`, `chatUserPrompt` | grounded reading turn (blocks, outline, history, focus) |
+| `ENTAILMENT_SYSTEM`, `entailmentPrompt`, `parseEntailmentOutput` | second pass |
+| `GRAPH_EXTRACTION_SYSTEM`, `graphExtractionPrompt` | one extraction chunk |
+| `GRAPH_SUMMARY_PROMPT`, `graphSummaryUserPrompt` | overview/TL;DR/glossary pass |
+| `LIBRARY_CONSOLIDATION_PROMPT`, `libraryConsolidationUserPrompt` | optional library overview polish |
+| `formatContextBlock` | one block rendered as `[[key]] (page N) text` |
+
+Prompt rules encoded in the text: answer only from the supplied blocks; cite with `[n]`; quote
+verbatim from the cited block; if evidence is missing say what is missing instead of guessing;
+answer in the language of the question; treat block text as untrusted data and ignore any
+instructions inside it. All builders bound their input (history turns, outline entries, node
+lists, quotes) and truncate pathological prompts defensively. Context blocks are rendered as:
+
 ```
 [[b12:ab12cd34]] (page 3) <block plain text>
 ```
-and instructs: answer only from these blocks; cite every non-obvious claim with [n]; provide a
-trailing fenced ```litnotes-json block with citations/quotes/aspects/notes, optional knowledge
-nodes/edges and followups; if the context is insufficient say so and name what is missing.
-Host strips the fenced block from the streamed answer (the streamer holds back the tail once it
-sees the fence delimiter).
 
-### lib/ai/index.js
-`createAiServices({ store, config, logger, getLlm, getDefaultModel, hostVersion })`
-→ `{ ensure(), peek() }`; `ensure()` lazily builds `{ llm, retriever, chat, graph, aspects,
-available, version }` and injects `store.loadAnnotations/saveAnnotations/mutateAnnotations/
-mutateAux` into the chat service. Used by service/routes/tools wiring (Lead-owned).
+### 3.4 `chat.ts` — grounded reading conversation
+
+```ts
+createChatService({ llm, retriever, store, config, logger,
+                    loadAnnotations?, saveAnnotations?, mutateAnnotations?, mutateAux?,
+                    onGraphDelta? }) : ChatService
+// ChatServiceApi: history(documentId), clear(documentId), stream(request, signal)
+```
+
+One turn:
+
+1. Validate request, resolve the model route, load the parsed document and `chat.json`.
+2. Retrieve a bounded context window (`ai.maxContextChars` is the char budget).
+3. Stream the model answer while **holding back the trailing JSON fence**: once the
+   `litnotes-json` opening delimiter is recognized (case/space tolerant), nothing from that point
+   on is streamed as answer text; while it has not yet appeared, at most `marker.length`
+   characters are withheld so a delimiter split across chunks is never rendered. `finish`/`usage`
+   chunks are collected, not rendered.
+4. Split the raw output into visible Markdown and the contract payload, truncate the answer to
+   60000 characters, and validate citations against the ordered parser blocks: `blockKey` must
+   exist and the quote must be contained in that block under the shared anchor rules
+   (whitespace-normalized substring first, then a ≥20-character prefix fallback of 40 then 20
+   characters; offsets always address the original plain text). Emit reasons from §2.2.
+5. **Entailment second pass** (when `ai.entailmentCheck` and there is at least one verified
+   citation and the gateway has `completeText`): emit `{ type:'phase', phase:'entailment' }`,
+   make one cheap bounded call (default 600 output tokens, temperature 0, reasoning effort
+   `off`), parse the `litnotes-entailment` fence tolerantly, and apply verdicts. `unsupported`
+   citations move to `unverified` with `reason: 'entailment-unsupported'`; `partial` stays
+   verified; missing/unparsable verdicts become `unchecked`. Model errors and malformed output
+   fail open; a consumer abort aborts the turn. The pass limits: ≤40 claims rendered, ≤60
+   verdicts accepted, quotes bounded to 1500 characters.
+6. Build the trusted knowledge delta: nodes survive only when at least one of their block keys is
+   a verified citation; edges survive only when both endpoint labels survive; at most 8 nodes /
+   12 edges; labels ≤80 characters; node types/edge types from the graph vocabularies. With no
+   verified citations the whole delta is dropped. The delta (plus question/messageId/model) is
+   handed to the injected `onGraphDelta`, and created ids are recorded in
+   `ChatMessage.knowledge`.
+7. Create annotations for the surviving verified citations (§2.4), persist the turn through
+   `mutateAux` (best effort), then emit the remaining frames.
+
+Limits: history turns `ai.historyTurns` (0–20, default 6) as `{question, answer}` pairs; raw
+model output consumed up to 200000 characters; ≤60 citations considered; ≤4 follow-ups (each
+≤200 characters); quotes ≤2000 characters; notes ≤500 characters; ≤4000 `[n]` markers scanned;
+questions ≤4000 characters; answers persisted/streamed ≤60000 characters.
+
+The stream generator never throws: expected failures are yielded as
+`{ type:'error', code, message }` frames so the HTTP route can keep writing after headers. Aborts
+never persist a half turn and never touch annotations. Unknown-mode requests (`mode != 'doc'`) are
+`bad-request`. An answer with no visible streamed text is `ai-failed` (a known failure mode when
+reasoning tokens consume the whole output budget).
+
+### 3.5 `graph.ts` — knowledge-graph service
+
+```ts
+createGraphService({ llm?, store, config, logger, readMarkdown? }) : GraphService
+// GraphServiceApi: docGraph, buildDocGraph, mergeDocKnowledge, updateDocGraph,
+//                  libraryGraph, rebuildLibraryGraph
+```
+
+**Document build** (`buildDocGraph(documentId, { signal, force })`):
+
+- A non-forced call returns the cached graph immediately (progress reading → done → graph).
+- Otherwise: progress `reading` → limit the source to `ai.maxGraphSourceChars` (first N chars +
+  an outline of the unread headings) → parse with the shared paper model → section-aware chunks
+  of ~3500 characters (greedy packing, oversized sections split at block boundaries with the
+  heading repeated), deterministically even-sampled down to `ai.maxGraphChunks` (default 12) so
+  the first and last chunk are always included → per chunk: one extraction call (temperature
+  0.1, `ai.graphMaxTokens`) and merge; progress `extracting` after every chunk.
+- Malformed JSON skips the chunk and continues; a failed call is counted and logged. If every
+  chunk call fails the build yields a `llm-failed` error frame; if every chunk is malformed the
+  graph stays empty rather than failing.
+- Node/edge merge: nodes dedupe by id first, then by normalized-label + type (existing id and
+  first label win); repeated extraction raises weight (capped at 5); provenance block keys are
+  unioned and validated against the chunk's keys; edge endpoints may be node ids or labels and
+  unknown labels create a placeholder node first; edges dedupe by `from|to|type`. The document
+  graph is capped at 120 nodes / 400 edges (curated nodes outrank weight so a rebuild can never
+  silently drop a user edit).
+- Progress `merging` → optional summary call (`min(ai.graphMaxTokens, 1600)`) fills
+  overview/TL;DR/glossary; on failure or malformed output a deterministic summary is generated
+  from the graph (top concepts, type list, definition nodes as glossary). The summary is bounded
+  by `ai.graphSummaryChars` in the prompt.
+- Before persisting, Q&A/user knowledge and `curated` nodes from the on-disk graph are merged
+  back into the rebuilt graph (`source: 'qa'|'user'` or `curated: true`); curated nodes keep
+  their label/summary/aspect/pinned/position identity. Finally `generatedAt`/`model` are
+  stamped, `stats` recomputed and `graph.json` written through the per-document queue; progress
+  `done` and one `graph` frame complete the stream.
+- An empty/short document yields an empty graph with a deterministic overview and preserves late
+  knowledge — no model calls.
+- Cancellation is checked between every await and forwarded to the model; it yields one
+  `{ type:'error', code:'aborted' }` frame and writes nothing.
+
+**Q&A merge** (`mergeDocKnowledge`): merges a `{ nodes, edges }` delta (also accepts the 1.0.0
+`{ knowledge: {...} }` wrapper) as `source: 'qa'`, resolving label endpoints and creating
+placeholder nodes; caps, fills missing deterministic summary fields and persists.
+
+**Curation** (`updateDocGraph`): applies §2.5 `GraphPatch` semantics inside the per-document
+queue, including rename/summary/aspect/weight updates, pin/unpin with clamped position, manual
+edge upserts and node merges; unknown ids are ignored. A user-edited node gets `curated: true`
+and survives a forced rebuild. This is the only write path for user curation; the library graph
+is read-only.
+
+**Library aggregation** (`libraryGraph`, `rebuildLibraryGraph`): deterministic aggregation of
+per-document graphs, not a union:
+
+- Parsed documents (status `parsed`, oldest first, then id) become `paper` nodes (`weight 2`,
+  content-derived id).
+- Each paper contributes at most its top 10 candidate nodes by importance
+  (`weight × 2 + min(12, degree) × 1.1 + min(4, blockKeys) × 0.35 + type value + source bonus`;
+  types `concept/method/finding/definition/limitation/insight`; headings and questions are not
+  topics). Concepts appearing in ≥2 papers are always kept. Near-duplicate labels merge through a
+  word-set alias rule (normalized labels, stop-worded content words; containment/reordered
+  variants with enough shared words fold into one topic) and the final set is capped at 28
+  topics, with every paper keeping at least two representatives.
+- Edges are value-bearing only: `paper -mentions-> topic` (weight 2), typed topic→topic
+  relations propagated from the real document-graph edges (aggregated weight, capped at 6;
+  deterministic unordered endpoint order), and paper↔paper `shares` edges weighted by the number
+  of shared representative topics (capped at 8, at most `max(20, documents × 3)` edges). There
+  are no synthetic "any two co-occurring topics" edges.
+- Clusters are connected components of the topic→topic relation graph (label of the highest
+  ranked member, size, summed weight), sorted by size then label.
+- Overview and TL;DR are computed deterministically from the aggregate; one optional LLM call
+  (`min(ai.graphMaxTokens, 1200)`, temperature 0.2) may polish them; failures keep the
+  deterministic text. The rebuilt graph is written to `library-graph.json`; no document graphs
+  are written during aggregation (a missing document graph is replaced by a lightweight
+  headings + annotation fallback, no model calls).
+- Frames: progress `reading` (initial `done:0,total:0`, then one per document) → `merging` →
+  `done`, then one `graph` frame; cancellation/failure yields one `error` frame and writes
+  nothing.
+
+### 3.6 `prompt-section.ts` — agent system-prompt integration
+
+`registerLibraryPromptSection({ ctx, service, logger })` registers exactly one static
+system-prompt section through `ctx.get('systemPrompt').section(...)`:
+
+```ts
+{
+  name: 'litnotes-library',
+  order: 55,
+  text: <three lines: literature library exists → use the library_* tools;
+         results carry documentId/blockKey/page/quote coordinates for citations;
+         stay silent about the library when the request is unrelated>
+}
+```
+
+- The text is **static** on purpose: a per-turn section derived from library state would make the
+  agent context vary with unrelated mutations, and an empty library still has a useful tool
+  (`library_manage` imports a paper).
+- Registration is effect-owned (`ctx.effect`) and idempotent: the returned disposer is safe to
+  call twice, a second registration for the same context is a no-op, and Cordis removes the
+  section with the plugin scope.
+- Absent `systemPrompt` service, throwing `ctx.get`, or a failing `section()` are safe no-ops
+  (debug/warn logged); the library simply loses the hint.
+
+### 3.7 `index.ts` — lazy AI bundle
+
+```ts
+createAiServices({ store, config, logger, getLlm?, getDefaultModel?, getTokenMeter?,
+                   hostVersion? }) : { ensure(): Promise<AiServicesApi>; peek(): AiServicesApi | undefined }
+```
+
+- `ensure()` builds the gateway, retriever, graph service and chat service once and memoizes the
+  result; concurrent callers share one build; a rejected build clears the promise so a later call
+  can retry. `peek()` returns the bundle only after a successful build.
+- The Host service getters are read per call, so the `llm`, `agentDefaultModel` and `tokenMeter`
+  services may mount after the plugin boots.
+- If the graph factory cannot be created (e.g. an incomplete store), the bundle still resolves
+  and exposes a degraded graph service whose methods reject / emit `llm-unavailable` error
+  frames — grounded Q&A keeps working (the graph engine is optional, as in 1.0.0).
+- `AiServicesApi` = `{ llm, retriever, chat, graph, available, version }`; `available` reflects
+  the gateway route at bundle creation (callers may also re-check `llm.available()` — the gateway
+  is live), `version` is the Host version string.
 
 ---
 
-## 4. HTTP API (Lead-owned wiring; module behavior above)
+## 4. Model output contract
 
-All routes under `/dsh-litnotes/api`, existing fence and envelope for JSON; streaming routes are
-raw NDJSON over POST (each line one JSON frame; `Content-Type: application/x-ndjson`).
+The model answers with Markdown followed by exactly one fenced JSON block per purpose. The Host
+enforces the contract; the prompts describe it.
 
-| method | route | body | response |
-|---|---|---|---|
-| POST | `/chat` | see §3 chat request | NDJSON stream |
-| POST | `/chat.history` | `{ documentId }` | `{ messages: ChatMessage[] }` |
-| POST | `/chat.clear` | `{ documentId }` | `{ cleared: true }` |
-| POST | `/graph.doc` | `{ documentId }` | `{ graph: KG }` |
-| POST | `/graph.build` | `{ documentId, force? }` | NDJSON stream (progress/graph/error) |
-| POST | `/annotations.save` | `{ id, annotations, baseIds? }` | `{ saved: true, items }` |
-| POST | `/graph.update` | `{ documentId, nodes?, edges?, merge? }` | `{ graph: KG }` |
-| POST | `/graph.library` | `{}` | `{ graph: KG }` |
-| POST | `/graph.library.rebuild` | `{}` | NDJSON stream |
-
-`graph.update` carries the curation patch: `nodes` upsert by id (`label/summary/aspect/weight/
-pinned/position`), `edges` upsert, `merge:[{from,into}]` folds a node into another (§2). The JSON
-`/annotations.save` route accepts optional `baseIds` (the ids the client loaded) and returns the
-merged `{saved:true, items}` list, which the client adopts as its new base set (§2 concurrent
-writers). Streaming frames add `{type:'phase',phase:'entailment'}` before `answer`, and the
-`answer` frame carries the `entailment` summary.
-
-Streaming implementation notes: `ctx.webServer.register({ kind:'exact', path:'/dsh-litnotes/api/chat', handler })`;
-fence first; `res.writeHead(200, {'content-type':'application/x-ndjson','cache-control':'no-store','x-accel-buffering':'no'})`;
-write frames with `res.write(JSON.stringify(frame)+'\n')`; `req` close aborts the AbortController;
-never throw after headers (emit an error frame). Client uses `fetch` with `ReadableStream` +
-`TextDecoder` + line splitter.
-
----
-
-## 5. Model output contract
-
-Single-shot answer (chat): the model returns markdown, then exactly one fenced block:
+### 4.1 Chat answer — ```litnotes-json
 
 ````
 …answer markdown with [1] and [2] citations…
@@ -392,270 +632,368 @@ Single-shot answer (chat): the model returns markdown, then exactly one fenced b
 ```
 ````
 
-Rules the host enforces: quote must be a substring of the block plain text after whitespace
-normalization (or a ≥ 20-char prefix); `blockKey` must exist; `index` must appear as `[n]` in the
-answer; knowledge node labels must be ≤ 80 chars; unknown graph node references create the node
-first. The streaming layer buffers once it sees `litnotes-json` so the raw JSON never reaches the
-answer UI.
+Host-enforced rules: the fence is held back from the streamed answer; `blockKey` must exist;
+`quote` must be contained in the block under the shared anchor rules; `index` must appear as
+`[n]` in the answer; duplicate indices are reported once; `knowledge` is optional, only
+text-grounded nodes/edges survive (block keys must be verified citations, ≤8 nodes / ≤12 edges,
+labels ≤80 characters, follow-ups ≤4); unknown knowledge types fall back to `concept` /
+`relates`. The fallback splitter also accepts a trailing bare ```json fence whose payload looks
+like this contract, and salvages the first JSON object inside a malformed fence.
 
-Graph extraction contract (one chunk): fenced ```litnotes-graph block with
-`{ "nodes":[{type,label,summary,blockKeys[],aspect?}], "edges":[{from,to,type,label?}] }`.
-Summary contract: ```litnotes-summary with `{ "overview": "markdown", "tldr": ["…"], "glossary":[{term,definition,blockKeys}] }`.
+### 4.2 Graph extraction — ```litnotes-graph
 
-Entailment contract (one call over all verified citations of one answer):
+```jsonc
+{
+  "nodes": [{ "type": "method", "label": "sparse attention", "summary": "1-2 sentences",
+              "blockKeys": ["b12:ab12cd34"], "aspect": "method" }],
+  "edges": [{ "from": "sparse attention", "to": "long-range dependency", "type": "supports" }]
+}
+```
 
-````
-```litnotes-entailment
+Prompt rules: extract only knowledge explicitly present in the chunk; block keys copied from the
+chunk's `[[…]]` markers (0–3 per node); node/edge type vocabulary; labels ≤80 characters,
+deduplicated; ≤20 nodes / 30 edges per chunk; no text outside the fence. The Host sanitizes
+types (fallback `concept` / `relates`), labels, summaries, block keys (validated against the
+chunk), weights and provenance, and tolerates fences with any tag/loose JSON.
+
+### 4.3 Document summary — ```litnotes-summary
+
+```jsonc
+{
+  "overview": "2-4 short Markdown paragraphs",
+  "tldr": ["3-5 one-sentence takeaways"],
+  "glossary": [{ "term": "exact term", "definition": "1-2 sentences", "blockKeys": ["b12:…"] }]
+}
+```
+
+Host rules: overview ≤ `ai.graphSummaryChars`; `tldr` normalized to Markdown bullets (≤5);
+glossary bounded (≤40 entries, block keys validated); an empty/unparsable payload falls back to
+the deterministic summary derived from the graph.
+
+### 4.4 Citation–claim entailment — ```litnotes-entailment
+
+```jsonc
 {
   "results": [
-    { "index": 1, "verdict": "supported|partial|unsupported", "reason": "one line" }
+    { "index": 1, "verdict": "supported", "reason": "one line" },
+    { "index": 2, "verdict": "partial", "reason": "one line" }
   ]
 }
 ```
-````
 
-Rules the host enforces: verdicts are matched by `index`; unknown/missing indices are treated as
-`unchecked` (fail-open); the pass is skipped entirely when `ai.entailmentCheck` is false or the
-model route is unavailable; `unsupported` moves the citation to `unverified`
-(`reason:"entailment-unsupported"`) before annotations/graph deltas are built; `partial` keeps
-`verified:true` plus `entailment:"partial"` for the UI warning.
+Host rules: verdicts are exactly `supported | partial | unsupported`; matched to citations by
+`index`; invalid/missing verdicts are treated as `unchecked`; ≤40 claims rendered and ≤60
+verdicts accepted; the parser is tolerant (tagged fence preferred, bare JSON fence or bare object
+accepted); anything unparsable fails open. `unsupported` moves the citation to `unverified`
+(`reason: 'entailment-unsupported'`) before annotations and graph knowledge are built; `partial`
+stays verified with the verdict recorded for the UI warning.
+
+### 4.5 Library overview polish (no fence)
+
+The optional library consolidation call asks for raw Markdown (no fence, no JSON): one short
+paragraph plus 3–6 bullets naming the main directions of the library and the papers that
+exemplify them, grounded in the supplied deterministic aggregates, under ~200 words. A fenced
+`litnotes-summary` payload is also accepted; failures keep the deterministic overview.
 
 ---
 
-## 6. Client modules & UI contract
+## 5. Wire contract
 
-New UI source files (concatenated into the bundle in this order: markdown, highlight, chat,
-graph, app):
+Transport: `POST <API_PREFIX>/<method>` with one JSON body. `API_PREFIX` is
+`/dsh-litnotes/api`; the client derives URLs from `document.baseURI` so reverse proxies work.
+JSON methods answer one envelope:
 
-### ui/chat.js
-```js
-function MruAiPanel(props)   // React component; full chat UI for one document
+```jsonc
+{ "ok": true, "value": <result> }
+{ "ok": false, "error": { "code": "<wire code>", "message": "<bilingual message>" } }
 ```
-Props from app.js:
-```js
-{
-  t,                                  // locale translate (props.t of the app)
-  documentId, documentTitle,
-  modelLabel,                         // e.g. "deepseek-flash" or ""
-  available,                          // false → setup hint instead of composer
-  katexReady,
-  context,                            // { visibleBlockKey, visibleText, selection: {quote, blockKey} | null }
-  onJump(blockKey),                   // scroll+flash a block
-  onAnnotationsChanged(),             // app reloads annotations
-  onGraphDelta(delta),                // app refreshes doc graph state
-  onOpenGraph(),                      // switch the main view to the doc graph
-  post(method, payload, options),     // app JSON helper (returns value or throws MruApiError-like)
-  streamChat(request, handlers),      // app NDJSON helper: handlers {onFrame(frame), signal}
-  onExportConversation(markdown, filename), // Blob download; returns false when the download failed
-  onNotify(text, kind),               // toast helper (the panel owns export toasts)
+
+Streaming methods answer raw NDJSON: `Content-Type: application/x-ndjson`, one JSON frame per
+line, `cache-control: no-store`, `x-accel-buffering: no`. A request close aborts the turn; the
+server never throws after headers — it emits an `error` frame instead.
+
+### 5.1 JSON methods
+
+| Method | Request | Response |
+|---|---|---|
+| `chat.history` | `{ documentId }` | `{ messages: ChatMessage[] }` |
+| `chat.clear` | `{ documentId }` | `{ cleared: true }` |
+| `graph.doc` | `{ documentId }` | `{ graph: KnowledgeGraph }` |
+| `graph.update` | `{ documentId } & GraphPatch` | `{ graph: KnowledgeGraph }` |
+| `graph.library` | `{}` | `{ graph: KnowledgeGraph }` |
+
+`graph.update` carries the curation patch (§2.5); it returns the persisted graph, which the client
+adopts as its new state. `chat.history` returns the normalized persisted conversation; client AI
+annotations are read through the normal `library.get` / annotations refresh path, not here.
+
+### 5.2 Streaming methods and frames
+
+```ts
+interface StreamMethods {
+  chat: { request: ChatRequest; frame: ChatFrame }
+  'graph.build': { request: { documentId: string; force?: boolean }; frame: GraphBuildFrame }
+  'graph.library.rebuild': { request: Record<string, never>; frame: LibraryGraphFrame }
+}
+
+type ChatFrame =
+  | { type: 'start'; messageId: string; model: { provider: string; model: string } }
+  | { type: 'delta'; text: string }
+  | { type: 'phase'; phase: 'entailment' }
+  | { type: 'answer'; messageId: string; markdown: string; citations: Citation[];
+      unverified: Citation[]; followups: string[]; annotationIds: string[];
+      entailment: EntailmentSummary }
+  | { type: 'graph'; delta: KnowledgeDelta }
+  | { type: 'usage'; usage: { inputTokens?: number; outputTokens?: number } }
+  | { type: 'done' }
+  | { type: 'error'; code: string; message: string }
+
+type GraphBuildFrame =
+  | { type: 'progress'; phase: 'reading' | 'extracting' | 'merging' | 'done';
+      done: number; total: number; chunk: number }
+  | { type: 'graph'; graph: KnowledgeGraph }
+  | { type: 'error'; code: string; message: string }
+
+type LibraryGraphFrame =
+  | { type: 'progress'; phase: string; done: number; total: number }
+  | { type: 'graph'; graph: KnowledgeGraph }
+  | { type: 'error'; code: string; message: string }
+```
+
+`chat` example (one grounded turn with the entailment pass enabled):
+
+```jsonc
+{"type":"start","messageId":"5f0c…","model":{"provider":"deepseek","model":"deepseek-chat"}}
+{"type":"delta","text":"The paper proposes block-sparse attention [1]."}
+{"type":"phase","phase":"entailment"}
+{"type":"answer","messageId":"5f0c…","markdown":"The paper proposes block-sparse attention [1].",
+ "citations":[{"index":1,"blockKey":"b12:ab12cd34","quote":"We propose block-sparse attention",
+   "start":34,"end":73,"page":3,"aspect":"method","note":"the core method",
+   "verified":true,"entailment":"supported","entailmentReason":"The quote states the method."}],
+ "unverified":[],"followups":["What is the routing network?"],"annotationIds":["a1…"],
+ "entailment":{"checked":true,"supported":1,"partial":0,"unsupported":0}}
+{"type":"graph","delta":{"nodes":[{"type":"method","label":"block-sparse attention",
+  "summary":"Sparse attention with learned routing.","blockKeys":["b12:ab12cd34"],
+  "aspect":"method","source":"qa"}],"edges":[]}}
+{"type":"usage","usage":{"inputTokens":4200,"outputTokens":180}}
+{"type":"done"}
+```
+
+With the entailment pass disabled there is no `phase` frame and citations carry no entailment
+fields; with the pass failing open the `phase` frame is still emitted once and citations are
+`unchecked`. A failure before the first delta yields `start` then `error`; a failure mid-stream
+yields the already-streamed deltas then `error` (no `answer`, nothing persisted).
+
+`graph.build` example:
+
+```jsonc
+{"type":"progress","phase":"reading","done":0,"total":1,"chunk":0}
+{"type":"progress","phase":"reading","done":1,"total":1,"chunk":0}
+{"type":"progress","phase":"extracting","done":1,"total":3,"chunk":1}
+{"type":"progress","phase":"extracting","done":2,"total":3,"chunk":2}
+{"type":"progress","phase":"extracting","done":3,"total":3,"chunk":3}
+{"type":"progress","phase":"merging","done":0,"total":1,"chunk":0}
+{"type":"progress","phase":"done","done":1,"total":1,"chunk":0}
+{"type":"graph","graph":{"version":1,"scope":"document","documentId":"…","generatedAt":"…",
+ "model":{"provider":"…","model":"…"},"overview":"…","tldr":"- …","glossary":[],
+ "nodes":[],"edges":[],"stats":{"nodes":0,"edges":0,"builtAtSeq":null}}}
+```
+
+A cached (non-forced) build emits reading(0) → reading(1) → done(1) → graph. Cancellation or a
+build failure emits one `error` frame and writes nothing.
+
+`graph.library.rebuild` example:
+
+```jsonc
+{"type":"progress","phase":"reading","done":0,"total":0}
+{"type":"progress","phase":"reading","done":1,"total":2}
+{"type":"progress","phase":"reading","done":2,"total":2}
+{"type":"progress","phase":"merging","done":0,"total":1}
+{"type":"progress","phase":"done","done":1,"total":1}
+{"type":"graph","graph":{"version":1,"scope":"library","generatedAt":"…","model":null,
+ "overview":"…","tldr":"- …","glossary":[],"nodes":[],"edges":[],
+ "clusters":[],"stats":{"nodes":0,"edges":0,"builtAtSeq":null}}}
+```
+
+### 5.3 Status
+
+`status` includes an AI availability snapshot:
+
+```ts
+interface AiStatus {
+  available: boolean                 // model route + Host llm service present
+  graph: boolean                     // graph engine part of the bundle
+  route: ModelSelection | null       // resolved { provider, model, reasoningEffort? }
+  retriever: boolean
+  reason?: string                    // wire error code when unavailable
 }
 ```
-Component responsibilities: load history via `post('chat.history',{documentId})`; render messages
-(user question, assistant markdown through `MruRichText`, inline `[n]` citation chips with hover
-preview + click `onJump`), streaming answer with stop button, regenerate, suggested follow-ups,
-context chips (visible block / selection) with clear buttons, composer (Cmd/Ctrl+Enter send,
-Shift+Enter newline), empty state with quick prompts (总结全文 / 这篇论文解决了什么 / 方法是什么 /
-有什么局限 / 解释这个概念), error states, "N 条引用未通过校验" notice, annotations-created toast via
-`props.onNotify?`. Trust UI: `entailment:"partial"` citations get a quiet warning chip/card line;
-`unverified` entries with `reason:"entailment-unsupported"` say the quote does not support the
-claim (and are never jumpable); a `phase:"entailment"` frame shows 「正在核对引文与论点…」 in the
-streaming status row beneath the already-streamed answer (unknown phase values are ignored; the
-`answer` frame clears it). Notices never double-count: `ai.entailmentNotice` totals only the
-entailment-unsupported entries, while the generic `ai.unverifiedNotice` totals the remaining
-reasons. Export: a header action buttons serializes the persisted conversation to
-Markdown (`mruAiExportMarkdown(messages, meta)` → `{filename, markdown} | null`, localized with
-`t`; filename = sanitized `<title>.md`, fallback `ai-conversation.md`), calls
-`onExportConversation` (or falls back to the clipboard) and toasts `ai.exported` /
-`ai.exportFailed`. The Markdown is one `# title — AI 对话` heading, model/time front matter, and
-per turn `## 问题 n` / `## 回答 n` plus a `### 引用` list (`[n] · p.page · aspect · quote · note`,
-unverified marked). It must never write to `document.body`; fixed overlays are rendered inside the
-component tree. All classes `.mru-ai-*` per §8.
 
-### ui/graph.js
-```js
-function MruGraphView(props) // doc or library knowledge graph
-```
-Props: `{ t, mode: 'doc'|'library', graph, building, progress, available, loading, error, onJump(documentId?, blockKey), onAsk(node), onBuild(), onRefresh(), onUpdateGraph(patch)? }`.
-
-`onUpdateGraph(patch)` is called only in `mode:"doc"` and resolves the updated KG:
-`patch = { nodes?: object[], edges?: object[], merge?: [{from, into}] }` (contract §4 / §2
-curation), or rejects when the host refuses the edit. The component owns the curation UX:
-inline rename in the details card, 2-step merge (choose target → confirm), pin/unpin persisted as
-`{pinned, position}` (drag-release also persists a pin), stored pinned positions seed the seeded
-layout on load, and pending/error states stay inside the card. Without the prop the graph is
-read-only (library mode always is).
-Responsibilities: layout computation (deterministic seeded force simulation, SVG), **unbounded
-pan/zoom on an infinite canvas** (measured screen-space viewBox, cursor-anchored wheel zoom,
-fit-to-content view, no clipping window), drag node pinning — persisted when curation is
-available and allowed to leave the seeded layout sheet —, node type filter chips + legend, search
-box, cluster collapse at library scale, details card on click (label/summary/sources/edges,
-重命名 / 合并到… / 固定位置, 跳转到原文, 问 AI 关于此概念), build/refresh buttons with progress,
-empty state (AI 精读全文生成图谱). Pure SVG + React, no canvas, no deps.
-Classes `.mru-graph-*` per §8.
-
-### app.js integration (client-ui owns app.js)
-- Margin tabs become `大纲 | 批注 | AI`; AI tab renders `MruAiPanel` (keep graph entry point as a
-  runhead toggle instead of a fourth tab to save width). The 批注 tab renders notes with the
-  AI-origin spark/aspect badge plus the origin/aspect filter bar described in §2.
-- Auto-build switch: the host-persisted preference `graphAutoBuild` + an AI settings section
-  toggle; when on, a successful parse transition (and, as a recovery path, opening a parsed
-  paper whose graph is still empty) triggers one background build per document per client
-  session, with a toast. There is no separate host config key.
-- Paper runhead segmented control gains a document view switch `阅读 | 图谱`; in graph mode the
-  main column renders `MruGraphView mode="doc"` for the selected parsed document (with a build
-  CTA when the graph is empty).
-- Library topbar gains a view switch `文献库 | 全景图谱`; library graph mode renders
-  `MruGraphView mode="library"`.
-- Selection toolbar gains `问 AI` (send selection as context, switch to AI tab); block tools gain
-  a sparkle `问 AI` action (ask about this paragraph).
-- Streaming plumbing: `mruStreamNdjson(path, payload, onFrame, {signal})` helper next to `mruPost`.
-- Citation jump uses the existing scroll/flash helpers (`mruScrollToElement`, `flashAnnotation`).
-- Conversation export: `aiPanelProps.onExportConversation` downloads the panel's Markdown through
-  the shared `mruDownloadText(filename, text)` helper (sanitized name); the menu's paper export
-  reuses the same helper.
-- AI annotations refresh via existing annotations loader; graph state fetched via `post('graph.doc')`
-  /`post('graph.library')` lazily when a graph view opens; `graph.build` streams progress.
-- Contract markers: app.js must expose the following top-level functions for ui/chat.js and
-  ui/graph.js (function declarations, hoisted across the concatenated bundle):
-  `mruScrollToElement`, `mruFormatCount`, `mruDisplayText`, `mruErrorText`, `MruRichText`,
-  `MruFormula`, `MruGlyph`, `MruSpinner`, `mruOverlayPos`.
+The client uses `status.ai.available` to swap the composer for a model-setup hint and
+`status.ai.route.model` for the model label in the margin header.
 
 ---
 
-## 7. DSH agent tools (multiple, focused)
+## 6. Client AI contract (brief)
 
-Names are global; each returns citation-ready identifiers (`documentId`, `blockKey`, `page`,
-`quote`) so the agent can point the user at exact text. Full tool definitions live in
-`lib/ai/tools.js` (Lead-owned) with descriptions written per the agent-experience skill.
+The AI surface is "the margin voice": conversation, notes and citations form one stream in the
+reading margin, ordered by where they belong in the text. Visual detail (tokens, tethers,
+typography, motion) is specified in `.agents/plan/DESIGN-V2.md` §2 ("the margin voice") and §5
+("component / class contract"); this section pins only the data/prop contracts.
 
-| tool | purpose | core params |
-|---|---|---|
-| `library_search` | search titles, parsed text, annotations, translations and graph nodes | `query`, `documentId?`, `scope?: 'library'|'document'`, `limit?` |
-| `library_read` | read a document: metadata, markdown slice by offset/block/page, or summary | `documentId`, `offset?`/`blockKey?`/`page?`, `maxChars?`, `view?: 'text'|'tldr'` |
-| `library_annotate` | list/create/update/delete annotations | `action`, `documentId`, `annotation?`, `annotationId?`, `aspect?` |
-| `library_translate` | translate text or blocks into the user's target language | `documentId`, `text?`/`blockKeys?`, `targetLanguage?` |
-| `library_graph` | read/query/update per-paper or library knowledge graphs; build with AI; curation via node patches/merges | `action: 'get'|'search'|'build'|'update'|'library'`, `documentId?`, `query?`, `nodes?` (incl. `pinned`/`position`), `edges?`, `merge?` (`[{from,into}]`) |
-| `library_ask` | ask the grounded reading AI about one paper; returns answer + citations + created annotations | `documentId`, `question`, `focusBlockKey?` |
-| `library_manage` | list/import/parse/cancel/repair/delete/status | `action`, `documentId?`, `url?`, `parse?` |
-
-Tool surface stays at 7 focused tools; descriptions must teach the workflow: search → read →
-ask/annotate/graph → manage. Existing `mineru` tool is replaced by these tools (no alias).
-
----
-
-## 8. CSS class contract (design owns styles; names are stable)
-
-Chat (`.mru-ai-*`): root/panel `.mru-ai`, `.mru-ai__head`, `.mru-ai__title`, `.mru-ai__model`,
-`.mru-ai__messages`, `.mru-ai__empty`, `.mru-ai__empty-title`, `.mru-ai__empty-text`,
-`.mru-ai__prompts`, `.mru-ai__prompt`, `.mru-ai__msg`, `.mru-ai__msg--user`,
-`.mru-ai__msg--assistant`, `.mru-ai__bubble`, `.mru-ai__question`, `.mru-ai__answer`,
-`.mru-ai__citations`, `.mru-ai__citation`, `.mru-ai__citation--unverified`,
-`.mru-ai__citation-card`, `.mru-ai__actions`, `.mru-ai__action`, `.mru-ai__followups`,
-`.mru-ai__followup`, `.mru-ai__context`, `.mru-ai__chip`, `.mru-ai__chip-label`,
-`.mru-ai__composer`, `.mru-ai__input`, `.mru-ai__send`, `.mru-ai__stop`, `.mru-ai__hint`,
-`.mru-ai__error`, `.mru-ai__notice`, `.mru-ai__streaming`, `.mru-ai__spark`.
-Trust/export hooks (this round): `.mru-ai__citation--partial` (partial entailment chip),
-`.mru-ai__claim` (+`--partial`/`--unsupported`), `.mru-ai__notice--entailment`; the header export
-action reuses `.mru-ai__action` (no new control language).
-
-Graph (`.mru-graph-*`): `.mru-graph`, `.mru-graph__head`, `.mru-graph__title`,
-`.mru-graph__actions`, `.mru-graph__canvas` (SVG), `.mru-graph__edge`, `.mru-graph__edge-label`,
-`.mru-graph__node`, `.mru-graph__node--concept|--method|--finding|--definition|--limitation|--section|--question|--insight|--paper|--topic`,
-`.mru-graph__node--active`, `.mru-graph__node-label`, `.mru-graph__legend`, `.mru-graph__legend-item`,
-`.mru-graph__filters`, `.mru-graph__search`, `.mru-graph__progress`, `.mru-graph__card`,
-`.mru-graph__card-title`, `.mru-graph__card-summary`, `.mru-graph__card-meta`, `.mru-graph__empty`,
-`.mru-graph__toolbar`, `.mru-graph__status`.
-
-Curation hooks (this round): `.mru-graph__card-actions`, `.mru-graph__card-action`
-(+`--active`/`:disabled`), `.mru-graph__card-pending`, `.mru-graph__card-error`,
-`.mru-graph__card-notice`, `.mru-graph__rename`, `.mru-graph__rename-input`,
-`.mru-graph__merge-bar` (+`--hint`/`--confirm`), `.mru-graph__merge-hint`,
-`.mru-graph__merge-title`, `.mru-graph__merge-labels`, `.mru-graph__merge-node`,
-`.mru-graph__merge-arrow`, `.mru-graph__node--pinned`, `.mru-graph__node-pin`,
-`.mru-graph__node-pin-group`, `.mru-graph__node--merge-source`,
-`.mru-graph__node--merge-candidate`.
-Data hooks: root `data-merge-mode`; card `data-pending`/`data-merging`; nodes
-`data-pinned`/`data-merge-source`/`data-merge-candidate`; action buttons carry
-`data-action="graph-rename|graph-rename-editor|graph-rename-input|graph-rename-save|graph-rename-cancel|graph-merge|graph-merge-bar|graph-merge-confirm-bar|graph-merge-confirm|graph-merge-cancel|graph-pin|graph-unpin"`.
-`edit`/`pin`/`merge`/`export` glyphs join the shared `MruGlyph` set.
-
-Margin-note hooks (this round, `.mru-note*` family): `.mru-note-filter`,
-`.mru-note-filter__chips`, `.mru-note-filter__chip` (+`--active`), `.mru-note-filter__count`,
-`.mru-note-filter__status`, `.mru-note-filter__clear`, `.mru-note--ai`, `.mru-note__origin`,
-`.mru-margin__empty--filtered`, `.mru-noteeditor__head` / `__origin` / `__aspect` /
-`__aspect-dot`. The aspect filter reuses the legend: `.mru-margin__legend-hint`,
-`.mru-margin__legend--filtering`, `.mru-aspect-legend--interactive`,
-`.mru-aspect-legend__item--button` (+`[aria-pressed="true"]`). Settings:
-`.mru-switch--disabled`, `.mru-toggle-row--disabled`.
-
-States are expressed with modifier classes and `data-*` attributes; all chrome must stay on
-`--dsw-alias-*` / existing `.mru-*` tokens. Motion is limited to node/edge fades on layout change
-(reduced-motion aware) and the streaming caret.
+- **Entry point.** `AiMarginEntries` is rendered by the reader inside the margin column:
+  ```ts
+  interface AiMarginEntriesProps {
+    documentId: string
+    orderOf: (blockKey: string) => number | null   // document order, unknown → null (sorts last)
+    onJump: (blockKey: string) => void             // scroll + flash the cited block
+    onAnnotationsChanged: () => void | Promise<void> // reload after an answer adopted annotations
+    showEntailment?: boolean                       // gate the entailment notice row (default true)
+  }
+  ```
+  Each turn root carries `data-anchor-block="<blockKey>"` (first citation block) and
+  `data-created-at="<ISO>"` so the reader's tether layer can position it; turns are sorted by
+  `orderOf(anchorBlockKey)` (unknown/unanchored turns last, in creation order).
+- **Conversation data.** The component renders normalized entries from the AI store
+  (`ChatEntry`/`ChatTurn` in `src/client/ai/chat.ts`): question/answer, citations, unverified,
+  follow-ups, model, usage, annotationIds, knowledge ids, entailment summary, streaming phase.
+  History loads from `chat.history`; `chat.clear` empties it; sending streams `chat` frames
+  through the client's NDJSON helper and adopts the `answer` frame (including replacing an entry
+  for `regenerateOf`).
+- **Composer.** Fixed bottom of the stage, width = margin: textarea plus send/stop; `⌘/Ctrl+Enter`
+  sends, `Shift+Enter` inserts a newline, `Escape` stops; the selection context (`focus`) is a
+  removable chip. Unavailable model → setup hint instead of an input.
+- **Citation chip behavior.** Each `[n]` marker renders as a chip with one of three states:
+  verified (signal styling, hover preview card with page/aspect/quote/claim, `跳到原文` enabled),
+  `partial` entailment (warning mark + `ln-ai__cite--partial`; still jumpable), or
+  entailment-unsupported (`ln-ai__cite--unsupported`; never jumpable — the quote is real but does
+  not support the claim, so the card explains the verdict instead). Other unverified citations
+  render dimmed and are not jumpable. The answer footer separates the two notices
+  (`unverifiedBreakdown`): entailment-unsupported entries get the entailment notice,
+  every other failure reason gets the generic unverified notice; the two never double-count.
+  A `phase: 'entailment'` frame shows the "checking claims" row beneath the streamed answer; the
+  `answer` frame clears it.
+- **Anchoring and refresh.** Citation clicks call `onJump(blockKey)`; after an `answer` frame
+  adopts AI annotations the store calls the injected `onAnnotationsChanged`, which makes the
+  reader reload annotations (the reader bridge also exposes per-block AI annotation counts used
+  by the margin header and tether layer). AI annotations arrive through the normal annotations
+  channel, not through chat frames.
+- **Filter seam.** Transient UI state `marginFilter: 'all' | 'chat' | 'ai' | 'user'` and
+  `activeAspect: Aspect | null` live in `src/client/state/ui.ts`; the AI filter chips and the
+  notes filter read/write the same state (origin × aspect are AND-combined), and
+  `marginFilter` persists as the `notesFilter` preference (the persisted values are
+  `all | ai | user`; `chat` is session-only). The aspect legend is the single aspect-filter
+  surface.
+- **Export.** The margin offers a conversation export to Markdown (Blob download), built by
+  `src/client/ai/download.ts`; it is client-local and never writes to the Host.
 
 ---
 
-## 9. Config additions (raw row config, defaults in lib/config.js)
+## 7. Configuration and agent integration
 
-```yaml
-ai:
-  provider: ""            # empty = agent default model
-  model: ""
-  maxContextChars: 9000
-  historyTurns: 6
-  answerMaxTokens: 4096
-  graphMaxTokens: 4096
-  maxGraphChunks: 12
-  maxGraphSourceChars: 160000
-  entailmentCheck: true    # second, model-based citation–claim pass (§5)
-  entailmentMaxTokens: 600 # output budget for that one call
-```
+### 7.1 Configuration
 
-Preferences additions (client-owned, persisted host-side): `aiPanelOpen`, `libraryView`,
-`docView`, `graphAutoBuild`, `notesFilter` (`all|ai|user`). The auto-build switch is exactly the
-`graphAutoBuild` preference — there is no duplicate host config key (the earlier
-`ai.autoBuildGraph` row was a documented no-op and has been removed).
+The plugin row config accepts an `ai:` block; `config.ts` validates and clamps it into
+`ResolvedConfig.ai` (`AiConfig`):
 
----
+| Key | Default | Clamp | Meaning |
+|---|---|---|---|
+| `provider` | `""` | — | model route override; empty = agent default model |
+| `model` | `""` | — | model route override; both `provider` and `model` required |
+| `maxContextChars` | `9000` | 1000–32000 | retrieval context character budget |
+| `historyTurns` | `6` | 0–20 | conversation turns injected into the prompt |
+| `answerMaxTokens` | `4096` | 256–16384 | output budget of one grounded answer |
+| `graphMaxTokens` | `4096` | 256–16384 | output budget of graph extraction/summary calls |
+| `graphSummaryChars` | `4000` | 500–20000 | max characters of graph rendered to the summary prompt |
+| `maxAnnotationsPerAnswer` | `5` | 1–20 | AI annotations created per answer |
+| `reasoningEffort` | `low` | off/low/high/max | pinned reasoning effort for reading/utility calls |
+| `maxGraphChunks` | `12` | 1–40 | extraction calls per document build |
+| `maxGraphSourceChars` | `160000` | 10000–1000000 | document source characters sent to extraction |
+| `entailmentCheck` | `true` | boolean | enable the citation–claim second pass |
+| `entailmentMaxTokens` | `600` | 64–4096 | output budget of the entailment call |
 
-## 10. Testing & gates
+Request-level `reasoningEffort` on the gateway wins over the config; invalid values fall back to
+`low`. The Host `llm`, `agentDefaultModel`, `tokenMeter` and `systemPrompt` services are optional:
+without `llm`/route the AI status reports unavailable and the client shows the setup hint;
+without `tokenMeter` the char heuristic is used; without `systemPrompt` the agent hint is
+skipped. Preferences related to this layer (`libraryView`, `docView`, `graphAutoBuild`,
+`notesFilter`, margin/rail widths) are client-owned and persisted by the Host preferences store.
 
-- Engines are unit-tested with an injected fake LLM (async generator emitting scripted JSON) and
-  a fake llm gateway: retrieval ranking, citation validation/dedupe, annotation creation, chat
-  persistence, graph build/merge/dedupe, library aggregation, streaming frame sequence. The fake
-  LLM exports entailment helpers (`ENTAILMENT_FENCE`, `entailmentText(results)`,
-  `callsMatching`/`lastCallMatching`) and the e2e harness exports
-  `scriptEntailment(harness, results)` so tests script both model calls of a turn.
-- Routes/streaming get e2e tests with fake services (NDJSON splitting, abort, error frame before
-  headers vs after).
-- Client modules: build + `node --check`; client-ui maintains its fake-React render harness under
-  `test/client/` (not shipped) to smoke the chat/graph components against fake props.
-- Concurrency: interleaved store writers (client `baseIds` save vs AI `mutateAnnotations`; two
-  concurrent chat turns vs `mutateAux`) must lose nothing; the merge is unit-tested.
-- Entailment: supported / partial / unsupported / malformed / model-error (fail-open) / disabled
-  (`ai.entailmentCheck:false`) branches, the `phase`+`answer` frame shape and the persisted
-  ChatMessage summary are unit- and e2e-tested.
-- Curation: `graph.update` rename/pin/merge semantics (source preserved, provenance union, edge
-  rewiring/dedupe, self-loop removal, curated survives forced rebuild) are unit- and route-tested;
-  the client curation helpers (`mruGraphCurationPatch`, `mruGraphCurationLabel`,
-  `mruGraphCurationPosition`, `mruGraphNodeIsPinned`, `mruGraphStoredPins`,
-  `mruGraphMergeCandidates`) are unit-tested; the fake-React app harness drives one rename/merge/pin
-  patch and adopts the returned KG.
-- Export & filters: `mruAiExportMarkdown` format/empty/localization, the margin AI spark + origin/
-  aspect filter (extension harness), and the app dictionary key coverage for both modules.
-- `node scripts/check.mjs` remains the gate: manifest, syntax, build, all tests.
-- Live verification: after install/reload, diagnostics ping, slot inspection, agent tool calls
-  (search/read/ask/graph) against the real library, and one real AI answer with citations on the
-  BEE paper (user has a valid MinerU token; LLM is the profile's default model).
+### 7.2 Agent integration
+
+DeepSeek Harness chat reaches the library through seven focused tools (`src/host/agent-tools.ts`),
+all returning `documentId`, `blockKey`, `page` and `quote` where meaningful:
+
+| Tool | Purpose |
+|---|---|
+| `library_search` | search titles and parsed passages (library or one document), bounded snippets |
+| `library_read` | read metadata/outline, a markdown slice by offset, one block by key or one page |
+| `library_ask` | grounded Q&A about one paper: answer + citations + created annotation ids |
+| `library_annotate` | list/create/update/delete highlights and notes (aspect-colored) |
+| `library_translate` | translate text or blocks into the reader's target language |
+| `library_graph` | read/search/build/curate per-paper graphs and read the library graph |
+| `library_manage` | list, import, parse, cancel, repair, delete and inspect parse status |
+
+The tools share the same `ServiceApi` operations layer as the browser UI (one operation, two
+callers). The static agent system-prompt section from §3.6 tells the model the library exists,
+which tool families to use and that results are citation-ready; the full tool-by-tool workflow
+contract lives in `docs/AGENT.md`.
 
 ---
 
-## 11. Non-goals for this iteration
+## 8. Testing and non-goals
 
-- Embeddings/vector DB: lexical retrieval only (no new npm dependencies, offline-friendly).
-- Library-wide conversational RAG (cross-paper Q&A) — later; graph view + search cover the first
-  needs. `mode:"library"` is reserved in the chat request.
-- Audio overview, mobile apps, collaboration, external citation-network import (Semantic Scholar).
-- Multi-document comparison UI; agent tools can approximate it via search/read.
-- Library-graph curation: the library map is deterministic aggregation and is rebuilt from the
-  papers, so rename/merge/pin apply to the per-paper graph only (manual edges remain agent-only).
-- Edit-and-rerun of a past question is still out of scope; regenerate reuses the original question.
+### 8.1 Test coverage
+
+The Host engines are unit-tested in Node with an injected fake Host `llm`
+(`test/helpers/fake-llm.ts` supports scripted text/chunks/errors/delays/usage, prompt matching and
+persistent answer/entailment rules) and in-memory stores:
+
+- `llm` gateway: route/default-model resolution, chunk normalization and clamping, reasoning
+  effort pinning, bounded `completeText`, token-meter context budget, abort and error mapping.
+- `retrieval`: cache signatures/invalidation/LRU, ranking determinism, head/focus/selection
+  inclusion, neighbour expansion, character budget, page marks from the MinerU content list,
+  snippet search, CJK queries, empty documents, bad-request errors.
+- `prompts`: fence constants, exact context-block/history/focus rendering, graph/summary/library
+  builders, entailment prompt bounds and tolerant parsing.
+- `chat`: frame order (start → deltas → [phase] → answer → [graph] → [usage] → done), fence
+  hold-back across chunk boundaries, citation validation branches (unknown block, duplicate /
+  missing / malformed index, quote-not-found, whitespace drift, ≥20-char prefix fallback),
+  annotation creation/dedupe/cap/colors, history trimming and clear, knowledge-delta evidence
+  rule, usage, regeneration, error frames before/after deltas, aborts (including during the
+  entailment pass), entailment supported/partial/unsupported/malformed/model-error/disabled
+  branches, persistence merges and concurrent-writer safety (`mutateAux`, `mutateAnnotations`
+  interleaved with a whole-list save), annotation-save failure tolerance.
+- `graph`: section chunking/sampling/source truncation, progress frame order, cross-chunk merge
+  and caps, malformed/exception tolerance, empty documents, cancellation before/during,
+  force rebuild vs cache, Q&A merge and label resolution, curation patch/pin/position/merge
+  semantics, curated-survives-rebuild with preserved Q&A knowledge, library aggregation
+  (paper/topic nodes, typed relations, shares edges, alias merging, topic caps and per-paper
+  diversity, clusters, deterministic rebuild, heading/annotation fallback), optional LLM polish
+  and its failure fallback, empty/corrupt library reads and cancellation.
+- `prompt-section`: one static section with the documented name/order/text, disposal/idempotency,
+  absent service tolerance, static text independent of library state.
+- `index`: `ensure`/`peek` lifecycle, contract surface, lazy service getters, token-meter
+  injection and degraded-graph fallback.
+- Library data compatibility: the frozen on-disk formats (`chat.json`, `graph.json`,
+  `library-graph.json`) are read without migration and written with the same field names; the
+  shared markdown/anchors modules are covered by the shared suite (block model, page marks,
+  quote location, overlap/dedupe).
+
+The pre-install gate (`node scripts/check.ts`) runs TypeScript strict type-checking, the bundle
+build, the wire/bundle contracts and the whole vitest suite.
+
+### 8.2 Non-goals
+
+- **No embeddings or vector database.** Retrieval is lexical (MiniSearch BM25+ over tokenized
+  block text), offline-friendly and dependency-light.
+- **No cross-paper conversational RAG.** `chat` is document-scoped; the library is explored via
+  search, reading and the library graph. `mode: 'library'` is reserved.
+- **No library-graph curation.** The library map is deterministic aggregation, rebuilt from the
+  papers; rename/merge/pin apply to the per-paper graph only (manual edges remain agent-only).
+- **No client-side model calls or AI data storage.** All model access and persistence stay Host-
+  side.
+- **No auto-build of graphs for unparsed or empty documents**, and no background cost without a
+  user or preference trigger (`graphAutoBuild` is a client preference).
+- **No edit-and-rerun of a past question** — `regenerateOf` reuses the original question.
+- **No multi-document comparison UI.** The agent tools can approximate it via search/read.
+- **No external citation-network import**, audio overview or collaboration features.

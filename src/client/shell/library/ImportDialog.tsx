@@ -56,6 +56,7 @@ export function ImportDialog(): ReactElement {
   const close = useUiStore((state) => state.closeDialog)
   const openDialog = useUiStore((state) => state.openDialog)
   const takeImportFiles = useUiStore((state) => state.takeImportFiles)
+  const pendingImportFiles = useUiStore((state) => state.pendingImportFiles)
   const preferences = useSettingsStore((state) => state.preferences)
   const patchPreferences = useSettingsStore((state) => state.patch)
   const tokenConfigured = useSettingsStore((state) => state.tokenConfigured)
@@ -70,21 +71,32 @@ export function ImportDialog(): ReactElement {
   const [busy, setBusy] = useState(false)
   const [urlError, setUrlError] = useState<ImportFailure | { message: string; hint: string | null } | null>(null)
 
-  // Opening the dialog: adopt dropped files and the remembered parse choices.
+  // Opening the dialog: reset the draft and adopt any files dropped while closed.
   useEffect(() => {
     if (dialog !== 'import') return
-    const queued = takeImportFiles()
-    const picked = queued === null ? { supported: [], skipped: [] } : partitionFiles(queued)
-    if (queued !== null) {
-      setFiles((previous) => [...previous, ...picked.supported])
-      if (picked.skipped.length > 0) setSkipped((previous) => [...previous, ...picked.skipped])
-    }
+    setFiles([])
+    setSkipped([])
+    setUrl('')
     setOptions(defaultParseOptions(useSettingsStore.getState().preferences))
     setUrlError(null)
     setBusy(false)
-    // `takeImportFiles` is stable and the dialog is a singleton; the effect is
-    // the open transition only.
+    const queued = takeImportFiles()
+    if (queued !== null) {
+      const picked = partitionFiles(queued)
+      setFiles(picked.supported)
+      setSkipped(picked.skipped)
+    }
   }, [dialog, takeImportFiles])
+
+  // Dropping files while the dialog is already open appends to the selection.
+  useEffect(() => {
+    if (dialog !== 'import' || pendingImportFiles === null) return
+    const queued = takeImportFiles()
+    if (queued === null) return
+    const picked = partitionFiles(queued)
+    if (picked.supported.length > 0) setFiles((previous) => [...previous, ...picked.supported])
+    if (picked.skipped.length > 0) setSkipped((previous) => [...previous, ...picked.skipped])
+  }, [dialog, pendingImportFiles, takeImportFiles])
 
   useEffect(() => {
     if (dialog === 'import') setOptions(defaultParseOptions(preferences))

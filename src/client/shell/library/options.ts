@@ -48,6 +48,9 @@ export function localSupportFor(
 ): LocalSupport {
   if (local === null || !local.enabled) return { supported: false, reason: t('parse.engine.localMissing') }
   if (!local.available) return { supported: false, reason: t('parse.engine.localMissing') }
+  // No file context (settings defaults): local is offered whenever the engine
+  // is enabled; the per-file check runs in the import/reparse dialogs.
+  if (ext === '') return { supported: true, reason: null }
   const capabilities = local.capabilities
   if (ext === '.pdf') {
     return capabilities.textLayerPdf

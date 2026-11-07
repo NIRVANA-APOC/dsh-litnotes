@@ -257,17 +257,6 @@ function TableBlockView({ block, ctx }: { block: TableBlock; ctx: BlockRenderCon
   )
 }
 
-/** Whether the current mode hides the source body of a paragraph-like block. */
-function hidingSource(
-  ctx: BlockRenderContext,
-  blockKey: string,
-): boolean {
-  if (ctx.mode !== 'translated') return false
-  const translation = ctx.translations.entries[blockKey]
-  const hasTranslation = typeof translation === 'string' && translation !== ''
-  return hasTranslation || ctx.translationJobs[blockKey] !== undefined
-}
-
 /** Tools + translation slot wrapper shared by the text block kinds. */
 function TextBlockChrome({
   ctx,
@@ -345,21 +334,22 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockRenderContex
       )
     }
     case 'paragraph': {
-      const hideSource = hidingSource(ctx, block.key)
+      const translatedMode = ctx.mode === 'translated'
+      const showSourceFallback = translatedMode && !hasTranslation && job === undefined
       return (
         <div
           className={blockClass(
             block,
             ctx,
             'ln-block--p',
-            ctx.mode === 'translated' && hasTranslation ? 'has-translation' : undefined,
+            translatedMode && hasTranslation ? 'has-translation' : undefined,
           )}
           data-block-key={block.key}
           data-kind="para"
           data-plain-length={block.plainText.length}
         >
-          {hideSource ? null : <p className="ln-para__text">{inline()}</p>}
-          {hideSource ? (
+          {translatedMode ? null : <p className="ln-para__text">{inline()}</p>}
+          {showSourceFallback ? (
             <div className="ln-para__translation is-source-fallback">{inline()}</div>
           ) : (
             <BlockTranslation ctx={ctx} block={block} />
@@ -377,7 +367,8 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockRenderContex
       )
     }
     case 'quote': {
-      const hideSource = hidingSource(ctx, block.key)
+      const translatedMode = ctx.mode === 'translated'
+      const showSourceFallback = translatedMode && !hasTranslation && job === undefined
       return (
         <blockquote
           className={blockClass(block, ctx, 'ln-block--quote')}
@@ -385,8 +376,8 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockRenderContex
           data-kind="quote"
           data-plain-length={block.plainText.length}
         >
-          {hideSource ? null : <p className="ln-para__text">{inline()}</p>}
-          {hideSource ? (
+          {translatedMode ? null : <p className="ln-para__text">{inline()}</p>}
+          {showSourceFallback ? (
             <div className="ln-para__translation is-source-fallback">{inline()}</div>
           ) : (
             <BlockTranslation ctx={ctx} block={block} />
@@ -549,12 +540,14 @@ export const MemoBlockView = memo(BlockView, blockPropsEqual)
  */
 export function computeHeadingNumbers(
   blocks: readonly Block[],
+  skipKey: string | null = null,
 ): Map<string, string> {
   const counters: number[] = [0, 0, 0, 0]
   const numbers = new Map<string, string>()
   for (const block of blocks) {
     if (block.kind === 'page' || block.kind === 'rule') continue
     if (block.kind !== 'heading') continue
+    if (skipKey !== null && block.key === skipKey) continue
     const level = Math.min(4, Math.max(1, block.level))
     counters[level - 1] = (counters[level - 1] ?? 0) + 1
     for (let deeper = level; deeper < counters.length; deeper += 1) counters[deeper] = 0

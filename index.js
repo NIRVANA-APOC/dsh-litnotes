@@ -12733,6 +12733,8 @@ function graphSummaryUserPrompt(meta = {}) {
   if (nodes.length === 0) {
     lines.push("(none)");
   } else {
+    const budget = typeof meta?.maxChars === "number" && Number.isFinite(meta.maxChars) && meta.maxChars > 0 ? Math.floor(meta.maxChars) : Number.POSITIVE_INFINITY;
+    let rendered = 0;
     for (const node of nodes) {
       if (!isRecord(node)) continue;
       const type = boundedText(node.type, 40);
@@ -12740,8 +12742,12 @@ function graphSummaryUserPrompt(meta = {}) {
       const summary = boundedText(node.summary, 300);
       const keys = Array.isArray(node.blockKeys) ? node.blockKeys.filter((key) => typeof key === "string").slice(0, 4).join(" ") : "";
       if (label === "") continue;
-      lines.push(`- [${type}] ${label}: ${summary}${keys !== "" ? ` (${keys})` : ""}`);
+      const line = `- [${type}] ${label}: ${summary}${keys !== "" ? ` (${keys})` : ""}`;
+      if (rendered + line.length + 1 > budget) break;
+      lines.push(line);
+      rendered += line.length + 1;
     }
+    if (rendered === 0 && nodes.length > 0) lines.push("(graph too large to render; see the graph JSON)");
   }
   lines.push("", "Write the document summary as the fenced litnotes-summary JSON block.");
   const prompt = lines.join("\n");
@@ -12777,7 +12783,8 @@ function libraryConsolidationUserPrompt(aggregate = {}) {
   }
   lines.push("", "Write the Markdown library overview.");
   const prompt = lines.join("\n");
-  return prompt.length > 4e4 ? `${prompt.slice(0, 4e4)}
+  const budget = typeof aggregate?.maxChars === "number" && Number.isFinite(aggregate.maxChars) && aggregate.maxChars > 0 ? Math.min(4e4, Math.floor(aggregate.maxChars)) : 4e4;
+  return prompt.length > budget ? `${prompt.slice(0, budget)}
 \u2026\uFF08\u5DF2\u622A\u65AD / truncated\uFF09` : prompt;
 }
 
@@ -14497,7 +14504,7 @@ function extractionPrompt(chunk, meta) {
     { title: meta.title, sectionTitle: chunk.section, index: chunk.index, total: chunk.total }
   );
 }
-function summaryPrompt(graph, meta) {
+function summaryPrompt(graph, meta, config2) {
   return graphSummaryUserPrompt({
     title: meta.title,
     outline: meta.outline.map((entry) => ({ key: entry.key, level: entry.level, text: entry.text })),
@@ -14506,12 +14513,14 @@ function summaryPrompt(graph, meta) {
       label: node.label,
       summary: node.summary,
       blockKeys: node.blockKeys
-    }))
+    })),
+    maxChars: config2.graphSummaryChars
   });
 }
-function libraryPolishPrompt(graph) {
+function libraryPolishPrompt(graph, config2) {
   return libraryConsolidationUserPrompt({
     overview: graph.overview,
+    maxChars: config2.graphSummaryChars,
     papers: graph.nodes.filter((node) => node.type === "paper").slice(0, 120).map((paper) => ({ title: paper.label })),
     topics: rankNodes(graph.nodes.filter((node) => node.type === "topic")).slice(0, 60)
   });
@@ -15639,7 +15648,7 @@ function createGraphService(deps) {
             messages: [
               {
                 role: "user",
-                content: [{ type: "text", text: summaryPrompt(graph, { title, outline: chunked.outline }) }]
+                content: [{ type: "text", text: summaryPrompt(graph, { title, outline: chunked.outline }, graphConfig) }]
               }
             ],
             signal,
@@ -15875,7 +15884,7 @@ function createGraphService(deps) {
         try {
           const text3 = await completeViaGateway(llm, {
             system: LIBRARY_CONSOLIDATION_PROMPT,
-            messages: [{ role: "user", content: [{ type: "text", text: libraryPolishPrompt(graph) }] }],
+            messages: [{ role: "user", content: [{ type: "text", text: libraryPolishPrompt(graph, graphConfig) }] }],
             signal,
             maxTokens: Math.min(graphConfig.graphMaxTokens, 1200),
             temperature: 0.2,

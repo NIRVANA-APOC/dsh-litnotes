@@ -140,6 +140,9 @@
 
 /* Document rows (frame.css owns the base row; these are the additions). */
 
+.ln-doc {
+  flex-wrap: wrap;
+}
 .ln-doc__metaSep {
   color: var(--ln-ink-faint);
 }
@@ -154,9 +157,10 @@
 }
 .ln-doc__progressRow {
   display: flex;
+  flex: 1 0 100%;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  padding: 0 10px 7px;
 }
 .ln-doc__progressText {
   flex: 0 1 auto;
@@ -405,6 +409,13 @@
   align-items: flex-start;
   gap: 9px;
   cursor: pointer;
+}
+.ln-parseform__switch input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--ln-signal);
 }
 .ln-parseform__switch .ln-switch {
   flex: 0 0 auto;

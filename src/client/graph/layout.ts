@@ -130,7 +130,6 @@ function clusterAnchor(type: GraphNodeType, scope: GraphScope): Point {
 /** Deterministic golden-angle spiral placement with a seeded jitter. */
 function seedPositions(
   nodes: readonly GraphNode[],
-  scope: GraphScope,
   seed: string,
   pinned: PositionMap,
   previous: PositionMap | undefined,
@@ -249,7 +248,7 @@ export function layoutGraph(graph: KnowledgeGraph, options: LayoutOptions = {}):
   const input = layoutInput(graph)
   const pinned = options.pinned ?? storedPins(input.nodes)
   const seed = String(options.seed ?? (graph.documentId ?? graph.scope))
-  const positions = seedPositions(input.nodes, scope, seed, pinned, options.previous)
+  const positions = seedPositions(input.nodes, seed, pinned, options.previous)
   const { nodes, simulation } = buildSimulation(input, scope, positions, pinned)
   const hasPrevious = options.previous !== undefined && Object.keys(options.previous).length > 0
   const ticks = Math.max(0, Math.trunc(options.ticks ?? tickBudget(input.nodes.length, hasPrevious)))

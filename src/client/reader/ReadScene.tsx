@@ -31,7 +31,8 @@ import { useInjectedStyle } from '../design/use-style.ts'
 import { useT } from '../shell/locale-context.ts'
 import { engineLabelKey, formatNumber } from '../shell/format.ts'
 import { useKatexReady } from './katex.ts'
-import { BlockRenderContext, MemoBlockView, computeHeadingNumbers } from './blocks.tsx'
+import { MemoBlockView, computeHeadingNumbers } from './blocks.tsx'
+import type { BlockRenderContext } from './blocks.tsx'
 import { findBlock } from './model-cache.ts'
 import { readSelection, blocksByKey, clearBrowserSelection } from './selection.ts'
 import type { ReaderSelection } from './selection.ts'
@@ -165,7 +166,6 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   }, [showPageMarks])
 
   /* ---- outline numbers + skip the duplicated title heading ----------- */
-  const headingNumbers = useMemo(() => computeHeadingNumbers(model.blocks), [model])
   const skipKey = useMemo(() => {
     const target = title.trim().toLowerCase()
     if (target === '') return null
@@ -178,6 +178,10 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
     }
     return null
   }, [model, title])
+  const headingNumbers = useMemo(
+    () => computeHeadingNumbers(model.blocks, skipKey),
+    [model, skipKey],
+  )
 
   /* ---- scroll: restore the reading position -------------------------- */
   const scrollToBlock = useCallback(

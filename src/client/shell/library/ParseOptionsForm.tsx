@@ -104,10 +104,9 @@ export function ParseOptionsForm({
           <Segmented
             size="sm"
             value={value.modelVersion ?? 'vlm'}
-            options={modelVersionOptions(t)}
+            options={modelVersionOptions(t).map((option) => ({ ...option, disabled: modelUnused }))}
             onChange={(next) => patch({ modelVersion: next })}
             ariaLabel={t('parse.model')}
-            className={modelUnused ? 'is-disabled' : undefined}
           />
           <p className="ln-field__hint">{modelUnused ? t('parse.model.unused') : t('parse.model.hint')}</p>
         </div>

@@ -1002,7 +1002,11 @@ function extractionPrompt(chunk: GraphChunk, meta: { title: string }): string {
 }
 
 /** User prompt for the document overview / TL;DR / glossary pass. */
-function summaryPrompt(graph: GraphState, meta: { title: string; outline: readonly { key: string; level: number; text: string }[] }): string {
+function summaryPrompt(
+  graph: GraphState,
+  meta: { title: string; outline: readonly { key: string; level: number; text: string }[] },
+  config: GraphConfig,
+): string {
   return graphSummaryUserPrompt({
     title: meta.title,
     outline: meta.outline.map((entry) => ({ key: entry.key, level: entry.level, text: entry.text })),
@@ -1012,13 +1016,15 @@ function summaryPrompt(graph: GraphState, meta: { title: string; outline: readon
       summary: node.summary,
       blockKeys: node.blockKeys,
     })),
+    maxChars: config.graphSummaryChars,
   })
 }
 
 /** User prompt for the optional library overview polish. */
-function libraryPolishPrompt(graph: GraphState): string {
+function libraryPolishPrompt(graph: GraphState, config: GraphConfig): string {
   return libraryConsolidationUserPrompt({
     overview: graph.overview,
+    maxChars: config.graphSummaryChars,
     papers: graph.nodes
       .filter((node) => node.type === 'paper')
       .slice(0, 120)
@@ -2472,7 +2478,7 @@ export function createGraphService(deps: GraphServiceDeps): GraphService {
             messages: [
               {
                 role: 'user',
-                content: [{ type: 'text', text: summaryPrompt(graph, { title, outline: chunked.outline }) }],
+                content: [{ type: 'text', text: summaryPrompt(graph, { title, outline: chunked.outline }, graphConfig) }],
               },
             ],
             signal,
@@ -2790,7 +2796,7 @@ export function createGraphService(deps: GraphServiceDeps): GraphService {
         try {
           const text = await completeViaGateway(llm, {
             system: LIBRARY_CONSOLIDATION_PROMPT,
-            messages: [{ role: 'user', content: [{ type: 'text', text: libraryPolishPrompt(graph) }] }],
+            messages: [{ role: 'user', content: [{ type: 'text', text: libraryPolishPrompt(graph, graphConfig) }] }],
             signal,
             maxTokens: Math.min(graphConfig.graphMaxTokens, 1200),
             temperature: 0.2,

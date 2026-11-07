@@ -18,14 +18,7 @@ import {
   type GraphEdgeType,
   type GraphNodeType,
 } from '../../shared/constants.ts'
-import type {
-  GraphEdge,
-  GraphEdgeInput,
-  GraphNode,
-  GraphPatch,
-  GraphSource,
-  KnowledgeGraph,
-} from '../../shared/model.ts'
+import type { GraphEdge, GraphNode, GraphPatch, GraphSource, KnowledgeGraph } from '../../shared/model.ts'
 
 /** The two graph scopes: one paper's map, or the whole library. */
 export type GraphScope = 'doc' | 'library'
@@ -173,7 +166,8 @@ export function curationPatch(action: CurationAction, input: CurationInput): Gra
       const from = nodeIdOf(input.from !== undefined ? input.from : input.node)
       const into = nodeIdOf(input.into !== undefined ? input.into : input.id)
       if (from === '' || into === '' || from === into) return null
-      return { merge: [{ from, into }] }
+      // Shared 2.0 GraphPatch contract: `to` is the surviving node (`into`).
+      return { merge: [{ from, to: into }] }
     }
     default:
       return null
@@ -204,7 +198,6 @@ function normalizeNode(value: unknown): GraphNode | null {
   const id = typeof source.id === 'string' && source.id.trim() !== ''
     ? source.id.trim()
     : `n${fnv1a(`${type}\u0000${label}`)}`
-  if (label === '' && type === '') return null
   const aspect = typeof source.aspect === 'string' && ASPECT_SET.has(source.aspect)
     ? (source.aspect as Aspect)
     : undefined
@@ -484,26 +477,3 @@ export function nodeAspectCounts(nodes: readonly GraphNode[]): Record<string, nu
   }
   return counts
 }
-
-/** Convert host knowledge-delta node inputs into a local upsert patch (unused by graph itself). */
-export function knowledgeNodePatch(nodes: readonly GraphNodeInput[], edges: readonly GraphEdgeInput[]): GraphPatch | null {
-  if (nodes.length === 0 && edges.length === 0) return null
-  const patch: GraphPatch = {}
-  if (nodes.length > 0) {
-    patch.nodes = nodes.filter((node) => typeof node.id === 'string' && node.id !== '').map((node) => ({
-      id: node.id as string,
-      label: node.label,
-      ...(node.summary === undefined ? {} : { summary: node.summary }),
-      ...(node.aspect === undefined ? {} : { aspect: node.aspect }),
-      ...(node.weight === undefined ? {} : { weight: node.weight }),
-      ...(node.pinned === undefined ? {} : { pinned: node.pinned }),
-      ...(node.position === undefined ? {} : { position: node.position }),
-      ...(node.type === undefined ? {} : { type: node.type }),
-    }))
-  }
-  if (edges.length > 0) patch.edges = edges
-  return patch
-}
-
-/** Export used by tests to assert the aspect vocabulary matches the host. */
-export { ASPECTS }

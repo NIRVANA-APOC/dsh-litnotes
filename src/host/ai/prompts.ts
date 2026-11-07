@@ -324,6 +324,8 @@ export interface GraphSummaryMeta {
   outline?: readonly (PromptOutlineEntry | null)[] | undefined
   nodes?: readonly unknown[] | undefined
   sections?: readonly unknown[] | undefined
+  /** Character budget for the rendered graph block (`ai.graphSummaryChars`). */
+  maxChars?: unknown
 }
 
 /** Deterministic library aggregate supplied to the overview polish. */
@@ -332,6 +334,8 @@ export interface LibraryAggregateInput {
   clusters?: readonly unknown[] | undefined
   papers?: readonly unknown[] | undefined
   topics?: readonly unknown[] | undefined
+  /** Character budget for the prompt (`ai.graphSummaryChars`). */
+  maxChars?: unknown
 }
 
 /** Render one context block in the prompt's stable citation format. */
@@ -634,6 +638,12 @@ export function graphSummaryUserPrompt(meta: GraphSummaryMeta = {}): string {
   if (nodes.length === 0) {
     lines.push('(none)')
   } else {
+    // Bound the rendered graph block (`ai.graphSummaryChars`) so a large
+    // document graph cannot blow the summary call's prompt budget.
+    const budget = typeof meta?.maxChars === 'number' && Number.isFinite(meta.maxChars) && meta.maxChars > 0
+      ? Math.floor(meta.maxChars)
+      : Number.POSITIVE_INFINITY
+    let rendered = 0
     for (const node of nodes) {
       if (!isRecord(node)) continue
       const type = boundedText(node.type, 40)
@@ -643,8 +653,12 @@ export function graphSummaryUserPrompt(meta: GraphSummaryMeta = {}): string {
         ? node.blockKeys.filter((key: unknown): key is string => typeof key === 'string').slice(0, 4).join(' ')
         : ''
       if (label === '') continue
-      lines.push(`- [${type}] ${label}: ${summary}${keys !== '' ? ` (${keys})` : ''}`)
+      const line = `- [${type}] ${label}: ${summary}${keys !== '' ? ` (${keys})` : ''}`
+      if (rendered + line.length + 1 > budget) break
+      lines.push(line)
+      rendered += line.length + 1
     }
+    if (rendered === 0 && nodes.length > 0) lines.push('(graph too large to render; see the graph JSON)')
   }
   lines.push('', 'Write the document summary as the fenced litnotes-summary JSON block.')
   const prompt = lines.join('\n')
@@ -686,5 +700,8 @@ export function libraryConsolidationUserPrompt(aggregate: LibraryAggregateInput 
   }
   lines.push('', 'Write the Markdown library overview.')
   const prompt = lines.join('\n')
-  return prompt.length > 40000 ? `${prompt.slice(0, 40000)}\n…（已截断 / truncated）` : prompt
+  const budget = typeof aggregate?.maxChars === 'number' && Number.isFinite(aggregate.maxChars) && aggregate.maxChars > 0
+    ? Math.min(40000, Math.floor(aggregate.maxChars))
+    : 40000
+  return prompt.length > budget ? `${prompt.slice(0, budget)}\n…（已截断 / truncated）` : prompt
 }

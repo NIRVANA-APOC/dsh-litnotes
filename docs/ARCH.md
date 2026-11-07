@@ -1,657 +1,546 @@
-# dsh-litnotes — architecture & implementation contract
+# dsh-litnotes — architecture (2.0)
 
-A DeepSeek Harness (DSH) plugin that gives the Web GUI a left-sidebar entry opening a
-**literature reading desk**: import local papers, parse them with the official MinerU API,
-read the parsed document with bilingual translation, highlights and margin notes, and let the
-agent manage the same library through a Host tool.
+A DeepSeek Harness plugin that turns a local literature library into a reading desk: import and
+parse papers, read them bilingually, ask questions whose evidence is anchored on the page, keep
+per-paper and library knowledge graphs, and let the DSH agent operate the same library through
+seven tools. This document describes the shipped 2.0 implementation; code is the authority
+(`src/shared/**`, `src/host/contracts.ts`, `src/host/**`, `src/client/**`, `scripts/**`).
 
-Primary scenario: **reading English academic papers in Chinese** (对照翻译 / 划词翻译 / 高亮 /
-批注). Secondary: any PDF/DOCX/image/HTML document the user wants MinerU to structure.
+Companion documents: [`PARSING.md`](PARSING.md) (parse engines), [`AGENT.md`](AGENT.md) (agent
+tools), [`AI-SPEC.md`](AI-SPEC.md) (AI contracts), [`UI-SPEC.md`](UI-SPEC.md) (reading desk),
+[`VISION.md`](VISION.md) (product direction).
 
-Runtime target: DSH `0.2.2-rc.1`, Web profile, DSH host + browser client.
+## 1. Overview
 
----
-
-## 1. Topology
-
-The plugin ships as one installable **bundle** (workspace directory, installed through
-`plugin_manager install_bundle`). It has two halves:
-
-- **Host half** — `index.js` + `lib/*.js`, loaded by the Cordis loader in the DSH host process
-  (plain Node ESM, Node >= 20.16, no npm dependencies). Owns the on-disk library, the MinerU API
-  client, the on-device local parsing engine (T0/T0.5, bundled pdf.js + optional DSH
-  `officeToPdf` service), parse polling, HTTP routes on the harness web server, credential
-  storage and the agent tool.
-- **Client half** — `lib/client.js`, a generated browser bundle loaded by the web module
-  loader. Registers a `sidebar.panellist` icon and a keyed `main` panel (`mineru`), renders the
-  reading desk, and talks to the Host over the plugin's own JSON HTTP API.
-
-No iframes, no extra server, no npm dependencies in the browser beyond `react` (provided by the
-harness module table) and vendored KaTeX served by the Host. The Host ships no npm dependencies
-either: the local PDF extractor is vendored as `vendor/pdfjs/**` (pdfjs-dist 5.4.449, Apache-2.0,
-≈1.54 MiB) and imported lazily on the first local parse.
+The package contains **two halves built from one TypeScript tree** and one shipped on-disk data
+model:
 
 ```
-┌ browser ─────────────────────────────────────────────────────────┐
-│ sidebar.panellist: <MineruIcon/>  ──click──▶ ctx.layout.selectPanel('mineru')
-│ main['mineru']: <MineruApp/>                                     │
-│    fetch: relative 'dsh-litnotes/api/<method>' (cookie-authenticated)│
-└──────────────────────────────────────────────────────────────────┘
-┌ host (DSH process) ──────────────────────────────────────────────┐
-│ index.js  → createStore / createLocalEngine / createParseManager │
-│           → createService / registerRoutes / registerAgentTool   │
-│ lib/store.js        $DSH_HOME/litnotes/**  (docs, annotations, …)  │
-│ lib/mineru.js       https://mineru.net/api/v4|v1  (fetch)         │
-│ lib/local-engine.js  pdf.js text layer (vendor/pdfjs) / Office → PDF │
-│ lib/parse-manager.js  async task queue + polling + zip extraction │
-│ vendor/pdfjs/**     vendored pdfjs-dist 5.4.449 legacy min build  │
-└──────────────────────────────────────────────────────────────────┘
+                     ┌──────────────────────── DeepSeek Harness Web UI ───────────────────────┐
+                     │  sidebar.panellist (icon)          main panel (keyed "litnotes")      │
+                     │            │                                  │                       │
+   react (external) ─┼── lib/client.js  (module-loader bundle) ─────────┘                       │
+                     │            │  HTTP JSON · NDJSON · raw upload · asset/source/vendor GET   │
+                     │            ▼                                                              │
+                     │  Host plugin row (cordis.patch.yml)                                       │
+                     │  index.js  (Host ESM bundle) ──► webServer routes                        │
+                     │      │                        ──► tools (7 library tools)                 │
+                     │      ├─ store  ~/.dsh/litnotes/**                                         │
+                     │      ├─ parse  MinerU cloud / local pdf.js / officeToPdf                   │
+                     │      └─ ai     llm · translator · tokenMeter · systemPrompt (DSH services) │
+                     └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Why HTTP routes instead of generated Remote methods
+- **Host** — `index.js`, one ESM file generated by `scripts/build.ts` from `src/host/index.ts`.
+  It bundles every Host module; the shipped plugin has **no runtime npm dependencies**.
+- **Client** — `lib/client.js`, a minified module-loader bundle (`window.__ModuleLoader__.load`)
+  generated from `src/client/index.tsx`. Its **only external module request is `react`**; every
+  other runtime import (d3-force, zustand, markdown renderer, floating-ui helpers) is bundled.
+- **Vendored runtimes** (shipped as files, loaded lazily, never bundled): `vendor/pdfjs/**`
+  (Apache-2.0, pdf.js 5.4.449) for local PDF text extraction and `vendor/katex/**` (MIT) for
+  formula rendering, served through the plugin's vendor asset route.
 
-Generated `ctx.remote` namespaces need Typert code generation at build time; a hand-authored
-plain-JS bundle cannot produce them. The Host instead registers ordinary web routes and the
-client calls them with same-origin `fetch` (the browser session cookie is sent automatically).
-Every request is admitted with `ctx.connection.requestRejection(req)`, which is the same
-Host/Origin + browser-cookie fence other first-party plugins use.
+Responsibilities are split so each half can be built and tested independently. They meet at one
+typed wire contract (`src/shared/protocol.ts`) and one shared paper model
+(`src/shared/markdown/**`, `src/shared/annotate/**`) so block keys and annotation offsets are
+byte-identical on both sides.
 
----
+## 2. Repository layout
 
-## 2. Files & ownership
+| path | contents | built into |
+|---|---|---|
+| `src/shared/**` | constants, data model, HTTP protocol, URL helpers, preferences, paper model, annotation anchoring | Host + Client |
+| `src/host/contracts.ts` | module seams (`StoreApi`, `ServiceApi`, `ParseManagerApi`, `AiServicesApi`, …) | Host |
+| `src/host/host-services.ts` | structural types for the DSH services the Host consumes | Host |
+| `src/host/wire.ts` | JSON envelope, error taxonomy, bounded body readers, uuid guard | Host |
+| `src/host/config.ts` `mime.ts` | row-config resolution, token credential lifecycle, extension/content-type map | Host |
+| `src/host/store/**` | on-disk library: atomic JSON, per-document queues, annotation merge, aux files | Host |
+| `src/host/service.ts` | operations layer shared by HTTP routes and agent tools | Host |
+| `src/host/routes.ts` | HTTP routes, upload streaming, NDJSON helpers, connection fence | Host |
+| `src/host/agent-tools.ts` | the seven model-facing library tools | Host |
+| `src/host/parse/**` | MinerU client + engine policy, local pdf.js/officeToPdf engine, manager, page repair, ZIP | Host |
+| `src/host/ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, prompt section | Host |
+| `src/host/index.ts` | composition root (`apply(ctx, config)`) | Host |
+| `src/client/**` | design system, shell, reader, AI margin, graph scene, state, transport, i18n | Client |
+| `scripts/build.ts` | builds both artifacts (`--check` validates output) | — |
+| `scripts/check.ts` | pre-install gate (`--no-tests`, `--final`) | — |
+| `test/**` | vitest suites: shared model, Host modules, parse flows, component/integration, perf, smoke | — |
+| `locale/*.json` | plugin title/description metadata (en, zh) | shipped |
+| `vendor/**` | pdf.js and KaTeX runtimes (version-locked by the gate) | shipped |
+
+Generated, committed artifacts: `index.js` (Host) and `lib/client.js` (Client). `lib/**` is
+otherwise generated; `ui/` no longer exists.
+
+## 3. Runtime topology
+
+**Host plugin row.** `cordis.patch.yml` inserts exactly one row `{ id: dsh-litnotes, name:
+dsh-litnotes }`. The Host module exports `name = 'dsh-litnotes'`, `inject = ['webServer',
+'connection']`, and `apply(ctx, config)`.
+
+Optional capabilities are read lazily with `ctx.get(name)` so a profile without them still loads
+the library, losing only that capability:
+
+| service | used for | when absent |
+|---|---|---|
+| `webServer`, `connection` | route registration, request trust fence | required (hard inject) |
+| `credentials` | durable MinerU token record | session-only in-memory token; `tokenPersistent:false` |
+| `llm` + `agentDefaultModel` | AI chat/graph/translation fallback | AI features report `llm-unavailable`; library/reader still work |
+| `tokenMeter` | prompt context budgeting | character heuristic fallback |
+| `translator` | anonymous Google/Bing translation | LLM fallback, then `translate-unavailable` |
+| `officeToPdf` | local Office → PDF (T0.5) | Office files fall back to cloud or token guidance |
+| `tools` | agent tool registration | tools disabled; HTTP API unaffected |
+| `systemPrompt` | one static library hint in the agent prompt | hint skipped |
+
+**Client plugin.** `package.json` `dsh.client` declares `platform: web`, `immediately: true`, and
+injects `@deepseek-ai/dsh-client-locale`, `-ui-layout`, `-ui-sidebar`. The bundle's
+`clientMain()` returns `{ inject: ['slots', 'locale', 'layout'], apply }`; `apply` registers the
+locale dictionaries, injects the design-system stylesheet once, and registers the sidebar icon
+(`sidebar.panellist`, id `litnotes`, order 35) and the keyed `main` panel.
+
+## 4. Data on disk
+
+Default data directory: `~/.dsh/litnotes` (respects `$DSH_HOME`; configurable through the row
+config). There is **no index file** — scanning `documents/*/meta.json` is the library index, so
+crash recovery is trivial.
 
 ```
-dsh-litnotes/
-  package.json              # bundle manifest + dsh.bundle / dsh.client      (Lead)
-  cordis.patch.yml          # one inserted row                                (Lead)
-  index.js                  # host entry: wiring, lifecycle                   (Lead)
-  lib/store.js              # on-disk library persistence                     (host-core)
-  lib/mineru.js             # MinerU HTTP client + error mapping              (host-core)
-  lib/unzip.js              # dependency-free ZIP extractor                   (host-core)
-  lib/parse-manager.js      # parse task queue, polling, recovery             (host-core)
-  lib/service.js            # operations shared by HTTP API and agent tool    (host-core)
-  lib/routes.js             # web routes: JSON API, raw upload, assets        (host-core)
-  lib/agent-tool.js         # `mineru` agent tool                             (host-core)
-  lib/config.js             # config defaults, data-dir + token helpers       (host-core)
-  lib/wire.js               # JSON envelopes, body readers, errors            (host-core)
-  lib/mime.js               # extension → content type                        (host-core)
-  lib/local-engine.js       # local parse engine facade, providers, plan      (host-core)
-  lib/local-pdf.js          # vendored pdf.js text-layer extractor            (host-core)
-  lib/local-synth.js        # page blocks → full.md + content_list.json       (host-core)
-  lib/local-office.js       # optional DSH officeToPdf adapter (T0.5)         (host-core)
-  ui/app.js                 # client application (React, factory template)    (client-ui)
-  ui/markdown.js            # pure markdown/parser helpers (ESM, testable)    (client-reader)
-  ui/highlight.js           # pure annotation/offset helpers (ESM, testable)  (client-reader)
-  ui/styles.css             # design system + all component styles            (design)
-  ui/panel-icon.svg         # 24px sidebar icon (inlined at build)            (design)
-  ui/empty-art.svg          # empty-state illustration (inlined at build)     (design)
-  icon.svg                  # 64px plugin/manager icon                        (design)
-  scripts/build-client.mjs  # ui/* → lib/client.js                           (Lead)
-  scripts/check.mjs         # manifest + syntax + unit-test gate             (test-harness)
-  test/**                   # unit, mock-MinerU and end-to-end tests         (test-harness, client-reader)
-  vendor/katex/**           # vendored KaTeX 0.16.x MIT runtime (see LICENSE) (Lead)
-  vendor/pdfjs/**           # vendored pdfjs-dist 5.4.449 Apache-2.0 min build (host-core)
-                            #   (pdf.mjs / pdf.worker.mjs / LICENSE, ≈1.54 MiB)
-  locale/{zh,en}.json       # Plugin Manager title/description                (Lead)
-  docs/**                   # this contract + UI spec                        (Lead)
-  README.md                 # user docs                                      (Lead)
+<dataDir>/
+  documents/<uuid>/meta.json            document metadata (source of truth)
+  documents/<uuid>/source.<ext>         uploaded original
+  documents/<uuid>/parsed/full.md       parsed markdown
+  documents/<uuid>/parsed/content_list.json       (or *_content_list.json) page structure
+  documents/<uuid>/parsed/images/**     extracted images (cloud parses only)
+  documents/<uuid>/annotations.json     highlights/margin notes (envelope v1)
+  documents/<uuid>/translations.json    paragraph translation cache (envelope v1)
+  documents/<uuid>/chat.json            grounded conversation history
+  documents/<uuid>/graph.json           per-paper knowledge graph
+  library-graph.json                    library-wide knowledge graph
+  preferences.json                      reading/AI/view preferences
+  diagnostics/client.log                client diagnostics, newest 200 JSON lines
+  tmp/<id>.part                         in-flight uploads (stale ones cleaned on boot)
 ```
 
-**Write scopes are exclusive.** Never edit a file outside your task's scope; report needed
-changes to the Lead instead.
+Every JSON write is **atomic** (unique tmp file in the destination directory, then rename) and
+serialized per document through a promise queue, so concurrent HTTP calls, AI writers and agent
+tools can never interleave two writes of the same file. Every id-taking API validates the id as
+UUID-shaped before a filesystem path is built; reads bound file sizes and corrupt/missing files
+degrade to empty values instead of failing the library.
 
----
+### 4.1 `meta.json` — document metadata
 
-## 3. Data directory & document model
-
-Root: `<DSH_HOME>/mineru` (override `config.dataDir`; `~` expanded; `$DSH_HOME` defaults to
-`~/.dsh`). Created lazily. Layout:
-
-```
-mineru/
-  documents/
-    <docId>/
-      meta.json              # document metadata (source of truth)
-      source.<ext>           # the uploaded original
-      parsed/
-        full.md              # MinerU markdown, or the locally synthesized markdown
-        content_list.json    # MinerU content list (standard API) or local synthesis
-        images/*             # images extracted from full_zip_url (cloud parses only)
-      annotations.json       # { version:1, items: Annotation[] }
-      translations.json      # { version:1, targetLanguage, entries: { [blockKey]: string } }
-  diagnostics/client.log     # client-reported render/error events (capped 200 lines)
-```
-
-`docId = crypto.randomUUID()`. Directory scan of `documents/*/meta.json` is the library index;
-there is no separate index file (crash-safe by construction).
-
-Local parses (T0/T0.5) write the same two artifacts — `parsed/full.md` and a synthesized,
-MinerU-compatible `parsed/content_list.json` — so the reader, page marks, annotations and
-translations work unchanged; they never write `images/` (the local engine extracts the text
-layer only) and the data-directory layout is otherwise identical. See §5.5.
-
-### meta.json
-
-```json
+```jsonc
 {
   "schemaVersion": 1,
-  "id": "uuid",
-  "title": "Attention Is All You Need",
-  "originalName": "attention.pdf",
-  "ext": ".pdf",
-  "mime": "application/pdf",
-  "size": 2210123,
-  "sha256": "…",
-  "createdAt": "2026-11-06T09:00:00.000Z",
-  "updatedAt": "2026-11-06T09:04:00.000Z",
+  "id": "<uuid>", "title": "…", "originalName": "paper.pdf",
+  "ext": ".pdf", "mime": "application/pdf", "size": 1234, "sha256": "…",
+  "createdAt": "ISO", "updatedAt": "ISO",
   "status": "uploaded | parsing | parsed | failed",
-  "error": null,
-  "parse": {
-    "engine": "standard | agent | local",
-    "provider": "builtin | system:officeToPdf | null",
-    "modelVersion": "vlm",
-    "language": "ch",
-    "options": { "isOcr": false, "enableFormula": true, "enableTable": true, "pageRanges": "" },
-    "phase": "extracting | submitting | uploading | polling",
-    "remoteState": "waiting-file | uploading | pending | running | converting / null",
-    "taskId": "agent task id / null",
-    "batchId": "standard batch id / null",
-    "startedAt": "…",
-    "finishedAt": "…",
-    "pages": 15,
-    "progress": { "extracted": 3, "total": 15 }, // pages really extracted; null until > 0
-    "hasContentList": true,
-    "local": { "pageCount": 15, "textChars": 42871, "extractMs": 812,
-               "toolVersion": "pdfjs-dist/5.4.449", "provider": "builtin",
-               "warnings": ["no-structure"] }
-  }
+  "error": null,                       // human-facing message after a failed parse
+  "parse": null                        // before the first parse attempt
 }
 ```
 
-Rules:
-- All JSON writes are atomic (`write tmp` → `rename`), serialized per document by a promise chain.
-- `status: "parsing"` is persisted before the network work starts, so a host restart can resume
-  or explicitly fail the task (see `parse-manager.resume()`).
-- `title` starts as the filename stem; on successful parse the first `# heading` of the markdown
-  becomes the default title when the user has not renamed the document.
-- Deleting a doc removes its whole directory. IDs are validated as UUID-shaped before any path use.
-- `engine:'local'` parses use `phase:'extracting'`, `modelVersion:null`, all-`false` `options`,
-  and set `provider` + `local` (see §5.5). Cloud parses keep `provider:null`, `local:null` unless
-  a cloud engine also reports them.
+`parse` (once set) is the persisted parse state:
 
----
+| field | meaning |
+|---|---|
+| `engine` | `standard \| agent \| local` |
+| `provider` | local provider id when the local engine ran |
+| `modelVersion`, `language`, `options`, `isOcr` mirror | requested standard-API parameters (`options` holds the raw parse options) |
+| `phase` | `extracting \| submitting \| uploading \| polling` while parsing |
+| `remoteState` | MinerU task state (`waiting-file \| pending \| running \| converting \| null`) |
+| `taskId`, `batchId` | remote handles, used to resume polling after a host restart |
+| `startedAt`, `finishedAt`, `pages`, `progress` | timing and page progress |
+| `hasContentList`, `local` | artifact flags; local-extraction stats |
+| `repairPages`, `repairRestore`, `repairPreviousPages`, `repairError`, `repair` | page-scoped repair bookkeeping (`repair` = `{pages, failedPages}`) |
 
-## 4. Host HTTP API
+The library-list payload uses a trimmed row (`DocumentSummary`) with
+`engine/provider/local/modelVersion/language/phase/remoteState/ocr/pages/progress/hasContentList/startedAt/finishedAt`
+only; the full state is returned by `library.get`.
 
-All routes live under `/dsh-litnotes`. Every request passes the **fence**:
+### 4.2 `annotations.json`
 
-```js
-const fence = (req) => ctx.connection.requestRejection(req) === undefined
+```jsonc
+{ "version": 1, "items": [ {
+  "id": "…", "blockKey": "b12:ab12cd34", "start": 34, "end": 78,
+  "quote": "verbatim sentence", "color": "yellow|sage|sky|rose", "note": "…",
+  "origin": "user|ai", "aspect": "definition|method|result|limitation|context",
+  "chatId": "…", "messageId": "…", "model": { "provider": "…", "model": "…" },
+  "createdAt": "ISO",
+  "stale": true, "staleReason": "quote-not-found", "reanchored": true
+} ] }
 ```
 
-Failures answer `403 {ok:false,error:{code:'forbidden'}}`. The client resolves route URLs
-relative to `document.baseURI` (prefix-safe, like dsh-better-sidebar's `hostRouteUrl`), so a
-reverse-proxied GUI keeps working.
+`blockKey` is the shared reader anchor (`b<block index>:<fnv1a of canonical plain text>`);
+`start`/`end` are code-unit offsets into that block's `plainText`. The store normalizes every
+write (clamps offsets, caps text, drops unknown fields) and caps a document at 5000 annotations.
+`annotations.save` supports an additive merge when the client sends `baseIds` (the ids it had
+loaded): edits and deletions win for those ids, concurrent AI/agent additions are preserved.
 
-### 4.1 JSON API — `POST /dsh-litnotes/api/<method>`
+### 4.3 `translations.json`
 
-Body: one JSON object (≤ 2 MiB). Response envelope:
+```jsonc
+{ "version": 1, "targetLanguage": "zh", "entries": { "b0:deadbeef": "译文", … } }
+```
+
+Capped at 50 000 entries per document. It is a cache: paragraphs absent from `entries` are simply
+not translated yet.
+
+### 4.4 `chat.json` — grounded conversation
+
+```jsonc
+{ "version": 1, "messages": [ {
+  "id": "…", "role": "user|assistant", "question": "…", "answer": "markdown with [1] markers",
+  "citations": [Citation], "unverified": [Citation], "followups": ["…"],
+  "model": { "provider": "…", "model": "…" }, "usage": { "inputTokens": 0, "outputTokens": 0 },
+  "annotationIds": ["…"], "knowledge": { "nodeIds": [], "edgeIds": [] },
+  "entailment": { "checked": true, "supported": 0, "partial": 0, "unsupported": 0 },
+  "promptVersion": 1, "createdAt": "ISO"
+} ] }
+```
+
+A citation carries `index`, `blockKey`, `quote`, `start`, `end`, `page`, `aspect`, `note`,
+`verified` and an entailment verdict. Chat writes go through the store's atomic
+`mutateAux('chat.json')` read-modify-write, so concurrent turns never lose messages.
+
+### 4.5 `graph.json` / `library-graph.json` — knowledge graphs
+
+One `KnowledgeGraph` shape for both scopes:
+
+```jsonc
+{
+  "version": 1, "scope": "document|library", "documentId": "…(document scope)",
+  "generatedAt": "ISO|null", "model": { "provider": "…", "model": "…" } | null,
+  "overview": "markdown summary", "tldr": "…",
+  "glossary": [ { "term": "…", "definition": "…", "blockKeys": ["b1:…"] } ],
+  "nodes": [ { "id": "…", "type": "concept|method|finding|definition|limitation|section|question|insight|paper|topic",
+               "label": "…", "summary": "…", "blockKeys": ["b1:…"], "documentIds": ["…(library)"],
+               "aspect": "…", "source": "ai-summary|qa|user|aggregate", "weight": 1,
+               "curated": true, "pinned": true, "position": { "x": 0, "y": 0 },
+               "createdAt": "ISO", "updatedAt": "ISO" } ],
+  "edges": [ { "id": "…", "from": "n1", "to": "n2",
+               "type": "defines|uses|supports|contradicts|part_of|leads_to|evolves_from|relates|answers|mentions|shares",
+               "label": "…", "source": "…", "weight": 1 } ],
+  "stats": { "nodes": 0, "edges": 0 }
+}
+```
+
+User curation (`graph.update`) marks patched nodes `curated` so they survive a forced rebuild;
+positions and pins are persisted here and reused by the graph scene.
+
+### 4.6 `preferences.json`
+
+Client-owned, host-persisted preferences (normalized on every write; unknown/invalid values fall
+back to defaults):
+
+| group | fields |
+|---|---|
+| reading | `readingMode` (`original\|bilingual\|translated`), `readingScale` (0.9/1/1.12), `showPageMarks`, `readingMeasure`, `docWidth` |
+| translation | `targetLanguage`, `translationProvider` |
+| parse defaults | `defaultEngine`, `autoAllowAgentFallback`, `defaultModelVersion`, `defaultLanguage`, `defaultIsOcr`, `defaultEnableFormula`, `defaultEnableTable` |
+| AI/view state | `aiPanelOpen`, `libraryView`, `docView`, `graphAutoBuild`, `notesFilter`, `lastDocumentId`, `lastBlockKey`, `entailmentNotice` |
+| layout | `railWidth`, `marginWidth`, `railOpen`, `marginOpen` |
+
+Preferences are read/written through the store (`readPreferences` / `writePreferences`) so exactly
+one implementation owns the file.
+
+### 4.7 `diagnostics/client.log`
+
+Newest-first bounded log of client health/event pings (`health.ping`) as one JSON object per line,
+capped at 200 lines and reset when the file exceeds 2 MiB.
+
+## 5. HTTP wire contract
+
+The Client derives every URL from `document.baseURI` (`src/shared/urls.ts`), so a reverse-proxied
+GUI keeps working. Mount points are fixed: API `POST/GET /dsh-litnotes/api/**`, vendor assets
+`GET /dsh-litnotes/assets/**`.
+
+### 5.1 Envelope, bodies, errors
+
+Every JSON answer is one envelope:
 
 ```json
-{ "ok": true, "value": <json> }
-{ "ok": false, "error": { "code": "token-missing", "message": "…" } }
+{ "ok": true, "value": … }        // success
+{ "ok": false, "error": { "code": "…", "message": "…", "meta": { } } } // failure
 ```
 
-HTTP status: 200 on success; 400/401/403/404/405/409/422/500 according to the error. The client
-shows `error.message`; `error.code` also drives UI branches (e.g. `token-missing`).
+Bodies are always bounded: JSON bodies ≤ 2 MiB (`MAX_JSON_BODY`), uploads ≤ the resolved
+`maxUploadBytes`, disk reads capped per file kind. Errors are thrown as `WireError` with a stable
+`code` the Client branches on; messages are bilingual and never leak the MinerU token.
 
-| method | payload | returns |
+| code | HTTP | meaning |
 |---|---|---|
-| `health.ping` | `{ clientVersion, event }` | `{ ok:true, hostVersion, receivedAt }` — appends to diagnostics log |
-| `status` | `{}` | `{ configured:{token, translator, model, dataDir}, counts:{total,parsed,parsing,failed}, dataDirDisplay, preferences, local:LocalCapabilities\|null, version }` |
-| `library.list` | `{}` | `{ documents: DocSummary[] }` newest first; `DocSummary` = meta sans heavy fields |
-| `library.get` | `{ id }` | `{ document: meta, annotations: Annotation[], translations: translations.json }` |
-| `library.update` | `{ id, title? }` | `{ document }` |
-| `library.remove` | `{ id }` | `{ removed:true }` |
-| `library.importUrl` | `{ url, title? }` | `{ document }` — downloads into library (≤ maxUploadBytes) |
-| `parse.start` | `{ id, options }` | `{ document }` — starts async parse; options below |
-| `parse.cancel` | `{ id }` | `{ document }` — stops local polling; keeps source |
-| `document.markdown` | `{ id }` | `{ markdown, contentList: object[]\|null, pages:number\|null }` |
-| `annotations.save` | `{ id, annotations }` | `{ saved:true }` — replaces whole list (client owns merge) |
-| `translations.save` | `{ id, targetLanguage, entries }` | `{ saved:true }` |
-| `translate` | `{ text, targetLanguage?, sourceLanguage?, provider? }` | `{ translation, provider, targetLanguage }` |
-| `settings.get` | `{}` | `{ tokenConfigured, preferences, providers:[…], defaults, local:LocalCapabilities\|null }` |
-| `settings.setToken` | `{ token }` | `{ tokenConfigured:true }` |
-| `settings.clearToken` | `{}` | `{ tokenConfigured:false }` |
-| `settings.update` | `{ preferences }` | `{ preferences }` |
+| `bad-request` | 400 | malformed payload/path/id |
+| `token-missing` | 401 | MinerU token required / cloud fallback disabled |
+| `forbidden` | 403 | connection fence rejection |
+| `not-found` | 404 | unknown document/asset/method |
+| `method-not-allowed` | 405 | wrong HTTP verb (with `Allow`) |
+| `not-parsed` | 409 | document has no parsed markdown yet |
+| `conflict` | 409 | id conflict / no matching state |
+| `too-large` | 413 / `context-too-large` | body/upload/text/annotation limits |
+| `unsupported-type` | 415 | file extension not accepted by the chosen engine |
+| `rate-limited` | 429 | upstream rate limit |
+| `llm-failed` / `ai-failed` | 502 / 500 | model/engine failure |
+| `llm-unavailable` / `translate-unavailable` / `local-missing-tool` | 503 | capability not configured |
+| `local-unsupported` | 415 | local engine cannot handle the file |
+| `local-empty-text` / `local-encrypted` | 422 | text layer empty / encrypted PDF |
+| `local-failed` / `host-error` / `internal` | 500 | unexpected host failure (generic message) |
+| `aborted` | 499 | request/task cancelled |
 
-`parse.start` options (all optional, defaulted host-side):
+### 5.2 JSON methods (`POST /dsh-litnotes/api/<method>`)
 
-```ts
-{
-  engine?: 'auto' | 'standard' | 'agent' | 'local', // default 'auto'
-  localProvider?: 'auto' | 'builtin' | 'system:officeToPdf', // local only
-  modelVersion?: 'pipeline' | 'vlm',        // standard only
-  language?: string,                        // default 'ch'
-  isOcr?: boolean,
-  enableFormula?: boolean,
-  enableTable?: boolean,
-  pageRanges?: string,                      // '2,4-6'
-  extraFormats?: string[]                   // ['docx','html','latex'] optional, standard only
-}
-```
+Request and result payloads are typed in `src/shared/protocol.ts` (`ApiRequests` / `ApiResults`).
 
-`engine` policy (`normalizeParseOptions`, `lib/mineru.js:722-857`):
+| method | request | result |
+|---|---|---|
+| `health.ping` | `{clientVersion?, event?, detail?}` | `{ok:true, hostVersion, receivedAt}` (also appends a diagnostics line) |
+| `status` | `{}` | `StatusValue`: version, dataDir, token/translator/model state, counts, preferences, local capabilities, AI status |
+| `library.list` | `{}` | `{documents: DocumentSummary[]}` newest first |
+| `library.get` | `{id}` | `{document, annotations: Annotation[], translations}` |
+| `library.update` | `{id, title?}` | `{document}` |
+| `library.remove` | `{id}` | `{removed:true}` (cancels a running parse first) |
+| `library.importUrl` | `{url, title?}` | `{document}` (streams the download into the library) |
+| `parse.start` | `{id, options?}` | `{document}` — async; poll `status`/`library.list` for progress |
+| `parse.cancel` | `{id}` | `{document}` |
+| `document.markdown` | `{id}` | `{markdown, contentList, pages}` |
+| `annotations.save` | `{id, annotations, baseIds?}` | `{saved:true, items}` (merged list) |
+| `translations.save` | `{id, targetLanguage, entries}` | `{saved:true}` |
+| `translate` | `{text, targetLanguage?, sourceLanguage?, provider?}` | `{translation, provider, targetLanguage, model?}` |
+| `settings.get` | `{}` | token state, preferences, translator providers, defaults, local capabilities |
+| `settings.setToken` | `{token}` | `{tokenConfigured:true, tokenPersistent}` |
+| `settings.clearToken` | `{}` | `{tokenConfigured:false, tokenPersistent}` |
+| `settings.update` | `{preferences}` | `{preferences}` (normalized) |
+| `chat.history` | `{documentId}` | `{messages: ChatMessage[]}` |
+| `chat.clear` | `{documentId}` | `{cleared:true}` |
+| `graph.doc` | `{documentId}` | `{graph}` |
+| `graph.update` | `{documentId, nodes?, edges?, merge?}` | `{graph}` (curation) |
+| `graph.library` | `{}` | `{graph}` |
 
-- `auto` (default) — a stored MinerU token → `standard`; no token and the local engine
-  `supports()` the file → `local` (on-device, nothing uploaded); otherwise the preference
-  `autoAllowAgentFallback` (default `true`) → `agent` (uploads the file), else reject with
-  `token-missing` and a "configure a token / use a supported file" hint.
-- `standard` — always the precise cloud API; requires a token (`token-missing` otherwise).
-- `agent` — the lightweight cloud API; 10 MB / 20 pages, uploads the file.
-- `local` — on-device text-layer parsing only; **never** falls back to a cloud engine
-  (`local-unsupported` / `local-missing-tool` / `too-large` instead). `localProvider` may force
-  `builtin` or `system:officeToPdf`, but a provider that does not match the file is rejected.
+### 5.3 NDJSON streams (`POST` exact routes)
 
-Limits: standard ≤ 200 MB, ≤ 200 pages, token required; agent ≤ 10 MB, ≤ 20 pages, no token;
-local ≤ 200 MB PDF / ≤ 100 MB Office input / ≤ 500 pages / ≤ 32 MiB extracted text, no token,
-no network. `parse.start` rejects early with `too-large` / `token-missing` / `unsupported-type` /
-`local-unsupported` / `local-missing-tool` instead of starting a doomed task.
+| route | request | frames |
+|---|---|---|
+| `/dsh-litnotes/api/chat` | `ChatRequest` (`documentId`, `question`, `focus?`, `regenerateOf?`) | `ChatFrame`: `start`, `delta`, `phase`, `answer`, `graph`, `usage`, `done`, `error` |
+| `/dsh-litnotes/api/graph.build` | `{documentId, force?}` | `GraphBuildFrame`: `progress`, `graph`, `error` |
+| `/dsh-litnotes/api/graph.library.rebuild` | `{}` | `LibraryGraphFrame`: `progress`, `graph`, `error` |
 
-### 4.2 Raw upload — `POST /dsh-litnotes/api/upload`
+Streams answer `application/x-ndjson; charset=utf-8`, `cache-control: no-store`,
+`x-accel-buffering: no`, and abort the producing task when the client disconnects. A failure after
+headers are sent is emitted as a final `{type:'error', code, message}` frame.
 
-- Body: the file's raw bytes (streamed; no base64, no multipart).
-- Header `x-file-name`: `encodeURIComponent(file.name)`.
-- Header `x-doc-title`: optional `encodeURIComponent(title)`.
-- Returns the same JSON envelope as 4.1 with `{ document }`.
-- Enforced cap: `maxUploadBytes` (default 200 MiB); on overflow, delete the partial file and
-  answer 413 `too-large`.
-- Supported extensions (case-insensitive): `.pdf .doc .docx .ppt .pptx .xls .xlsx .png .jpg
-  .jpeg .jp2 .webp .gif .bmp .html .htm`. Unknown types answer 415 `unsupported-type`.
+### 5.4 Raw upload and file routes
 
-### 4.3 Asset routes (GET, browser `<img>` / download)
+| route | method | contract |
+|---|---|---|
+| `POST /dsh-litnotes/api/upload` | raw body | headers `x-file-name` (required, URL-encoded) and `x-doc-title` (optional); answered with `{document}`. Streamed to `tmp/<id>.part`, capped by `maxUploadBytes`, then moved into `documents/<id>/source.<ext>`. |
+| `GET/HEAD /dsh-litnotes/api/asset?id=<docId>&path=<relative>` | parsed asset (`parsed/**` only) | path-traversal proof (`resolveWithin`), content type by extension, `cache-control: private, max-age=86400` |
+| `GET/HEAD /dsh-litnotes/api/source?id=<docId>&download=0\|1` | original source | inline PDFs/images; `attachment` on `download=1` or dangerous `.html/.htm/.svg` (plus CSP `sandbox`, `nosniff`) |
+| `GET/HEAD /dsh-litnotes/assets/**` | vendored runtime files (`vendor/**`) | immutable cache; traversal rejected |
 
-| route | purpose |
+Every request first passes the Host **connection fence**
+(`ctx.connection.requestRejection(req)`): a rejection becomes `forbidden` (401 preserved) before
+dispatch, on both API and asset routes.
+
+## 6. Host modules
+
+| module | role |
 |---|---|
-| `/dsh-litnotes/api/asset?id=<docId>&path=<parsedRelativePath>` | serves an extracted parsed file image (path confined to `<docDir>/parsed/**`; `..` rejected). `Cache-Control: private, max-age=86400`. |
-| `/dsh-litnotes/api/source?id=<docId>&download=0\|1` | serves the original file; PDF is inline, others `attachment` when `download=1`. |
-| `/dsh-litnotes/assets/<rel>` | serves vendored package assets from `vendor/` (KaTeX): `.js .css .woff2` (+). Immutable cache. |
+| `wire.ts` | envelope writers, bounded body readers, `WireError` taxonomy, `requireUuid`/`requireString`, options clamping |
+| `config.ts` | `resolveConfig` (row config → `ResolvedConfig`, absolute data dir, canonical API base, clamped limits, `ai`/`local` blocks), credential token lifecycle, preferences load/save through the store, package version |
+| `mime.ts` | supported source extensions, image extensions, extension → content type |
+| `store/**` | `StoreApi`: atomic JSON, per-doc queue, metadata index, parsed reads, annotations/translations, aux JSON (`chat.json`, `graph.json`, `library-graph.json`), preferences, diagnostics, stats, dispose |
+| `service.ts` | `ServiceApi`: every operation the HTTP API and the agent tools perform (documents, parse start/cancel, reads, annotations, translation routing, status/settings/tokens/preferences, tool helpers, lexical search, AI bridge) |
+| `routes.ts` | registration and dispatch, upload/file serving, NDJSON plumbing, fence |
+| `agent-tools.ts` | the seven model-facing tools (see `AGENT.md`) |
+| `parse/**` | MinerU client + engine policy, local engine, parse manager, page merge, ZIP safety (see `PARSING.md`) |
+| `ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, prompt section (see `AI-SPEC.md`) |
+| `index.ts` | composition root and lifecycle |
 
-MIME map in `lib/mime.js`. Assets are also fenced.
+Module seams are declared in `src/host/contracts.ts` and never imported across concrete modules:
+`StoreApi`, `ParseManagerApi`, `LocalEngineApi`, `MineruClientApi`, `NormalizeParseOptions`,
+`DescribeMineruError`, `ReanchorHook`, `LlmGatewayApi`, `RetrieverApi`, `ChatServiceApi`,
+`GraphServiceApi`, `AiServicesApi`, `ServiceApi`. Tests and embedders depend on these interfaces,
+not on factory internals.
 
-### 4.4 Diagnostics
+## 7. Boot lifecycle
 
-`health.ping` and client-side render/error reports append one JSON line to
-`<dataDir>/diagnostics/client.log` (capped; rotate by truncating oldest). The Lead uses this file
-to verify the client half really executed in the live page. Client reports:
-`{ at, clientVersion, event: 'active'|'icon-rendered'|'panel-error', detail }`.
+`apply(ctx, config)` in `src/host/index.ts`:
 
----
+1. `resolveConfig(config)` → absolute data directory, limits, `ai`/`local` blocks, version.
+2. Create the store, local parse engine (with lazy `officeToPdf`), parse manager (shared
+   re-anchor hook), AI bundle factory (lazy, memoized), and the operations service (injecting
+   `normalizeParseOptions` / `describeMineruError` from the parse module and `getAi` from the AI
+   bundle).
+3. Register the static library hint as one system-prompt section (`order 55`); a profile without
+   `systemPrompt` is a safe no-op.
+4. `ctx.effect` boot: `store.init()` → `manager.resume()` (restart interrupted parse tasks) →
+   info log; cleanup disposes the manager and awaits pending store writes.
+5. `ctx.effect` routes: `registerRoutes({ctx, service, store, config, logger})`.
+6. `ctx.effect` tools: `registerLibraryTools({tools: ctx.get('tools'), service, config, logger})`.
 
-## 5. Parsing engines (`lib/mineru.js`, `lib/local-engine.js`)
+Routes are registered immediately; store methods await the same initialization promise, so HTTP
+calls that arrive during boot simply wait. Every effect returns a disposer; plugin disposal
+unregisters routes, tools and the prompt section, then flushes parse/disk work.
 
-API docs snapshot: `docs/MINERU.md`. Base `https://mineru.net` (override `config.apiBase` for
-tests/proxies). `fetchImpl` is injectable for unit tests.
+## 8. One operation, two callers
 
-### 5.1 Standard (precise) API — token required
+`ServiceApi` (`src/host/service.ts`) is the **single operations layer**. The HTTP dispatcher
+(`routes.ts`) and the agent tools (`agent-tools.ts`) both call it; neither re-implements business
+logic. The service in turn only uses module contracts:
 
-1. `POST /api/v4/file-urls/batch`
-   `{ files:[{ name, data_id: docId }], model_version, language, is_ocr, enable_formula,
-      enable_table, page_ranges?, extra_formats? }`
-   → `{ data: { batch_id, file_urls: [url] } }`
-2. `PUT <file_url>` with raw bytes, **no Content-Type header**.
-3. Poll `GET /api/v4/extract-results/batch/<batch_id>` until the result matched by `data_id`
-   (fallback `file_name`) is `done` → `full_zip_url`; `failed` → `err_msg`.
-   States: `waiting-file pending running converting done failed`.
-4. Download the zip, extract `full.md`, `*_content_list.json`, `images/**` into `parsed/`.
-   (Pure-JS extractor, see §6.)
+```
+ routes.ts ─┐                     ┌─ StoreApi      (disk)
+            ├─► ServiceApi ───────┼─ ParseManagerApi / LocalEngineApi (parse)
+agent-tools ├                     ├─ NormalizeParseOptions / DescribeMineruError
+            ┘                     └─ getAi() → AiServicesApi (chat/graph/llm/retriever)
+```
 
-### 5.2 Agent lightweight API — no token
+Error codes, limits, payload shapes and the quote/anchor rules are therefore identical for the
+browser and the model. The AI bundle is resolved lazily through `getAi()` and maps to one
+client-branchable `ai-unavailable` error when the profile has no usable model route.
 
-1. `POST /api/v1/agent/parse/file`
-   `{ file_name, language, enable_table, is_ocr, enable_formula, page_range? }`
-   → `{ data: { task_id, file_url } }`
-2. `PUT <file_url>` raw bytes.
-3. Poll `GET /api/v1/agent/parse/<task_id>`; `done` → `markdown_url`; `failed` → `err_msg`.
-4. Download markdown text; save as `full.md`. No content list / local images (remote or missing).
+## 9. Client architecture
 
-### 5.3 Errors
+- **Registration** (`src/client/index.tsx`): `inject = ['slots', 'locale', 'layout']`; registers
+  locale dictionaries (`NS = 'dsh-litnotes'`), injects the compiled stylesheet once, registers the
+  sidebar icon and the keyed main panel. `clientMain()` is the module entry consumed by the
+  generated loader bundle.
+- **Shell** (`src/client/shell/**`): persistent frame (top bar with library title/search, context
+  bar per scene, status bar, collapsible rail), library list + import/reparse/settings dialogs,
+  and the scene switch. View state that must survive a reload is persisted through
+  `settings.update`.
+- **Reader** (`src/client/reader/**`): builds the shared paper model lazily after first paint,
+  caches it per document + markdown hash, renders blocks with page marks, selection bar,
+  translation column, outline, note margin, annotation overlays and the AI tethers. KaTeX is
+  loaded on first formula from the vendored asset route.
+- **AI margin** (`src/client/ai/**`): conversation entries anchored to blocks in the margin,
+  citation chips with hover previews and jump-to-block, composer with quick prompts, streaming
+  answer rendering with the JSON fence held back, entailment/unverified states and Markdown
+  export.
+- **Graph** (`src/client/graph/**`): deterministic d3-force layout (seeded initial placement,
+  persisted pins, fixed tick budget, 600 node / 2000 edge render cap), infinite-canvas camera
+  (`screen = world * k + offset`, zoom 0.6×–2.5× at the cursor), node card and per-paper curation
+  (rename/merge/pin), library graph view.
+- **State** (`src/client/state/**`, `reader/store.ts`, `ai/store.ts`, `graph/store.ts`): zustand
+  stores per domain (ui, settings, library, reader, chat, graph) with `useSyncExternalStore`
+  semantics; no per-keystroke network calls.
+- **Transport** (`src/client/api/client.ts`): one typed JSON client over the envelope contract,
+  NDJSON stream reader, raw upload with header metadata, asset/source/vendor URL builders,
+  timeouts combined with caller aborts.
+- **i18n** (`src/client/i18n/**`): area dictionaries merged into the typed `dsh-litnotes` locale
+  namespace; zh and en are both complete.
+- **Design system** (`src/client/design/**`, `styles/**`): host `--dsw-alias-*` tokens for chrome,
+  plugin-owned `--ln-*` tokens for the reading surface, aspect inks and the signal color; dark
+  theme driven by the host theme attribute. See `UI-SPEC.md` for the full contract.
 
-`class MineruError extends Error { code, httpStatus, detail }`. Map API `code`/`err_code` to
-friendly bilingual messages: `A0202` token wrong, `A0211` token expired, `-60005` too large,
-`-60006` too many pages, `-60009` queue full, `-30001/-30003` lightweight limits, etc. Network
-failures: retry `GET` polls up to 3 consecutive failures; `PUT`/`POST` retry once. Overall task
-timeout 30 min (`config.parseTimeoutMs`). Cancellation via an `AbortController` per task.
+## 10. Parse pipeline (summary)
 
-### 5.4 Parse manager
+`POST parse.start` validates the request against the document and the available engines, persists
+`status:'parsing'` + the parse phase, and queues a task. The manager caps concurrency
+(`maxConcurrentParses`), streams the source to MinerU or extracts it locally, downloads/extracts
+artifacts into `parsed/` (ZIP safety: path-traversal rejection and entry/size caps), then marks
+`status:'parsed'`, persists page counts and runs annotation re-anchoring. Cancellation aborts the
+task and keeps the source; a host restart resumes polling tasks from their persisted remote ids.
+`{merge:true, pages?}` (page-scoped repair) re-parses only the requested pages and splices them
+back, rolling back on failure. Details, limits, options and error mapping: `PARSING.md`.
 
-`createParseManager({ store, config, getToken, logger, fetchImpl, localEngine })`:
+## 11. AI engine (summary)
 
-- `start(id, options)` → validates, persists task phase, enqueues work, returns meta immediately.
-  Serialized concurrency cap `config.maxConcurrentParses` (default 2). `executeTask()` is the
-  single engine fork: `engine:'local'` → `executeLocalTask()` (never touches the network),
-  otherwise the MinerU standard/agent flows below.
-- `cancel(id)` → aborts the task's controller; marks `status:'uploaded'` with `error:null`.
-- `resume()` → on mount: every doc `status:'parsing'` with `parse.phase==='polling'` restarts the
-  poll loop (standard: batchId; agent: taskId). Any other phase — including an interrupted
-  `local` extraction, which cannot be resumed — is marked `failed` with
-  `"解析被中断，请重试"` (an in-flight upload cannot be resumed safely).
-- `dispose()` aborts every task.
-- Upstream state: each poll persists the MinerU task state (`waiting-file` / `pending` /
-  `running` / `converting`) to `parse.remoteState` whenever it changes, so the client can name
-  what MinerU is doing (queued vs parsing vs converting) instead of showing a stagnant bar.
-  `getDocument` returns it directly; `listDocuments` includes a compact `parse.remoteState` +
-  `parse.ocr` + `parse.startedAt` summary for the progress UI.
-- Progress: write `parse.progress` ({extracted,total}) at each poll (throttled to ≥2 s) so the
-  client sees movement. MinerU only reports `extract_progress` while `running`, and pipeline/OCR
-  tasks routinely report `extracted_pages: 0` for the whole queue/warm-up phase — a zero
-  extracted count is treated as "no page progress yet" and is not persisted (the client shows
-  the upstream phase + a ticking elapsed time + an indeterminate bar). The counter is monotonic
-  within a run, and `resume()` re-seeds it from the persisted value so a host restart cannot move
-  it backwards either. A successful parse keeps the final page count (a terminal poll reporting
-  zero pages falls back to the last real value); cancel, page-repair rollback and interrupted-parse
-  recovery clear progress together with the task ids.
-- Local parsing reuses the same progress path: the local engine reports `{extracted,total}`
-  per extracted page through the same throttled `parse.progress` write.
-- Page repair (`merge:true`) is rejected with `repair-unavailable` (409) when
-  `parse.engine==='local'`; local documents must be fully re-parsed (§5.5).
+The AI bundle is built lazily: an `LlmGatewayApi` over the Host `llm` service (config override or
+the agent default route, normalized delta/usage/finish stream, `tokenMeter`-based budgeting), a
+`MiniSearch` lexical retriever over the shared block model (BM25+, ASCII + CJK tokenization,
+deterministic context assembly), a grounded `ChatServiceApi` (citation-first answers with
+provenance and entailment verification, auto-annotations, conversation persistence, graph
+knowledge deltas) and a `GraphServiceApi` (per-paper extraction + deterministic library
+aggregation + curation). Every AI feature degrades independently: reader/library stay usable
+without a model. Frame and payload contracts: `AI-SPEC.md`.
 
-### 5.5 Local parsing engine (T0/T0.5)
+## 12. Configuration
 
-The local engine (`lib/local-engine.js`, `createLocalEngine`) turns files into the same reader
-artifacts without any MinerU request and without uploading anything. It is one more engine
-behind `executeTask()`; `lib/mineru.js` stays cloud-only and the two do not import each other.
+The row config is untyped in Cordis; `resolveConfig` validates and clamps every known key and
+ignores unknown ones.
 
-**Providers** (`meta.parse.provider`):
-
-| provider | how it works | extensions |
+| key | default | range/policy |
 |---|---|---|
-| `builtin` | vendored `pdfjs-dist/5.4.449` legacy min build (`vendor/pdfjs/`), PDF text layer + outline | `.pdf` |
-| `system:officeToPdf` | DSH web-profile `officeToPdf` service (`ctx.get('officeToPdf')`, LibreOffice kit/WASM) converts the Office file to PDF locally, then the same builtin extractor runs | `.doc .docx .ppt .pptx .xls .xlsx` |
+| `dataDir` | `~/.dsh/litnotes` (`$DSH_HOME/litnotes`) | leading `~` / `$DSH_HOME` expanded; relative paths resolved against cwd |
+| `apiBase` | `https://mineru.net` | must parse as http(s); trailing slashes stripped |
+| `maxUploadBytes` | 200 MiB | 64 KiB – 2 GiB |
+| `maxConcurrentParses` | 2 | 1 – 8 |
+| `pollIntervalMs` | 3000 | 10 – 600 000 |
+| `parseTimeoutMs` | 30 min | 1 s – 24 h |
+| `toolMaxChars` | 40 000 | 1 000 – 400 000 (caps tool read slices and rendered results) |
+| `ai.*` | see `AI-SPEC.md` §9 | provider/model override, context chars, history turns, answer/graph tokens, annotation cap, reasoning effort, graph chunk caps, entailment switch |
+| `local.*` | enabled, 500 pages, 200 MiB PDF, 32 MiB text, 120 s timeout, 100 MiB Office | every field clamped; see `PARSING.md` |
 
-`snapshot()` → `{ enabled, available, recommended, providers:[{id,available,version,reason?}],
-capabilities:{textLayerPdf, office, images:false, html:false} }`. `supports(meta)` answers
-"can this file be parsed locally, and by which provider" without throwing; `plan()` applies the
-size caps and maps failures to `local-*` codes. The Office service is optional: when
-`ctx.get('officeToPdf')` is absent (`lib/local-office.js`), Office capability is `false` (reason
-`office-to-pdf service is not mounted in this profile`) and those files fall back to a cloud
-engine (or `local-missing-tool` when `engine:'local'` was explicit).
+**Credentials.** The MinerU token lives in the Host credential store under
+`dsh-litnotes/mineru-token` as an `ApiKeyRecord`; it is never returned to the client or written to
+logs/disk by the plugin. Without a writable credentials service the plugin keeps a
+process-lifetime in-memory token and reports `tokenPersistent:false`.
 
-`lib/local-pdf.js` is lazy — pdf.js (~1.5 MiB) is imported on the first local parse only, never
-at Host startup — and installs inert `DOMMatrix`/`ImageData`/`Path2D` stubs because the legacy
-build expects a DOM and the text path never rasterizes. It builds visual lines from
-`getTextContent()` (`hasEOL` + baseline jumps), drops repeated running heads and page-number
-lines, picks a document title (PDF metadata match or the largest first-page lines), maps
-`getOutline()` titles to heading levels 1–4 and falls back to a numbered/font-size heuristic.
-`lib/local-synth.js` turns the page blocks into `full.md` (`#` title, `##`–`####` headings,
-paragraphs escaped so extracted prose can never be reinterpreted as Markdown) plus the
-MinerU-compatible pure-array `content_list.json` `[{page_idx,type:'text',text,text_level?}]`
-used by the client's page-mark alignment; long paragraphs are split at sentence boundaries.
+**Preferences** are client-owned and host-persisted through the store; both halves normalize with
+the same rules (`src/shared/preferences.ts`).
 
-**Limits** (`config.local`, defaults; `lib/config.js` clamps them):
+## 13. Build, test and gate
 
-| key | default | meaning |
-|---|---|---|
-| `enabled` | `true` | master switch; `false` restores cloud-only behaviour |
-| `maxPages` | `500` | PDFs above this → `too-large` (413) |
-| `maxPdfBytes` | `200 MiB` | local PDF input cap → `too-large` (413) |
-| `maxOfficePdfBytes` | `100 MiB` | Office input cap → `too-large` (413) |
-| `maxTextBytes` | `32 MiB` | extracted-text cap → `too-large` (413) |
-| `minCharsPerPage` | `30` | below `max(200, 30×pages)` chars → `local-empty-text` (422) |
-| `maxParagraphChars` | `4000` | paragraph split bound (hard max 8000; translation API limit 20000) |
-| `keepContentList` | `true` | write synthesized `content_list.json` (page marks) |
-| `timeoutMs` | `120000` | extraction deadline → `local-failed` (500) |
-
-**Errors** (stable `WireError` codes; `lib/wire.js` maps HTTP status):
-
-| code | status | when |
-|---|---|---|
-| `local-unsupported` | 415 (422 from the Office adapter for invalid/unsupported Office content) | extension/provider not supported locally |
-| `local-missing-tool` | 503 | local parsing disabled, vendored pdf.js missing/unloadable, Office service absent/busy |
-| `local-empty-text` | 422 | no usable text layer — typically a scanned PDF |
-| `local-encrypted` | 422 | password/owner-password PDF |
-| `local-failed` | 500 (422 for "not a valid PDF") | corrupt input, timeout, unexpected extractor/converter failure |
-| `too-large` | 413 | page/size/text caps above |
-
-**Quality boundary (do not overstate):** local parsing keeps text, paragraph breaks and page
-numbers well; it does **not** reconstruct formulas (they come out as linear text), table
-structure (text rows), images (not extracted), or scanned pages (→ `local-empty-text`). Office
-files are converted to PDF first, so the layout is kept but the original OOXML structure is not.
-Local documents support whole-document re-parsing only — page-scoped repair is rejected with
-`repair-unavailable` (409). The reader shows a local-parse banner and appends a missing-fonts hint
-when `local.warnings` contains `missing-fonts`. Explicit `engine:'local'` never silently falls
-back to a cloud engine.
-
-**Network:** the extraction path makes no network calls and uploads nothing. In `auto`, the
-cloud fallback to `agent` (which does upload) is controlled by the `autoAllowAgentFallback`
-preference (default `true`); with it disabled, an unsupported file without a token fails with
-`token-missing` guidance instead of uploading.
-
----
-
-## 6. ZIP extractor (`lib/unzip.js`)
-
-Dependency-free, memory-based ZIP reader sufficient for MinerU result archives:
-
-- Parse EOCD, central directory, local headers; support method 0 (stored) and 8 (deflate,
-  `node:zlib.inflateRawSync`).
-- Path safety: reject absolute paths, drive letters, `..` segments, backslashes normalized;
-  skip directories.
-- Caps: `maxEntries` (default 5000), `maxTotalBytes` (default 512 MiB), single entry 128 MiB.
-- API: `unzip(buffer, { filter?, maxEntries?, maxTotalBytes? }) → { entries: [{ name, data }], skipped }`.
-- Reject ZIP64 (`0xFFFFFFFF` sizes) with a clear error (MinerU archives do not need it).
-- The parse manager only keeps: `full.md`, `*_content_list.json`, `images/**` (all extensions);
-  every other entry is skipped to keep disk usage bounded.
-
----
-
-## 7. Agent tool (`mineru`)
-
-Registered globally with `ctx.tools.register`. One tool, `action` parameter (same operations as
-the HTTP API through `lib/service.js` — one implementation, two callers).
-
-```
-mineru({
-  action: 'list' | 'status' | 'get' | 'import_url' | 'parse' | 'read' | 'annotations'
-        | 'annotate' | 'unannotate' | 'translate' | 'delete' | 'update',
-  documentId?, url?, title?, text?, targetLanguage?, query?,
-  offset?, maxChars?,
-  parse?: { engine?, localProvider?, modelVersion?, language?, isOcr?, enableFormula?,
-            enableTable?, pageRanges? },
-  annotation?: { id?, blockKey?, start?, end?, quote?, note?, color? }
-})
+```bash
+pnpm install               # dev dependencies only; the shipped plugin has no runtime deps
+node scripts/build.ts      # write index.js + lib/client.js
+node scripts/build.ts --check   # build and syntax-check both artifacts
+pnpm typecheck             # tsc -p tsconfig.json (strict, no emit)
+pnpm test                  # vitest run
+node scripts/check.ts      # full pre-install gate
+node scripts/check.ts --no-tests   # gate without the test run
+node scripts/check.ts --final      # release gate: transition warnings become failures
 ```
 
-- `list`: compact rows (`id, title, status, pages, engine, createdAt`).
-- `read`: markdown slice with `offset` (chars, default 0) and `maxChars` (default 12000, cap
-  `config.toolMaxChars` 40000), returns `{ text, offset, nextOffset, totalChars, truncated }`.
-- `annotate` without `blockKey` uses `quote`/`text` to locate the unique block containing it
-  (host searches the markdown and stores a `b<index>:<hash>` key matching the client's scheme).
-- Every result is human-readable too: `output.render` returns a `text` content block with a
-  compact JSON/README-style rendering. Errors become tool failures with the message.
+TypeScript rules: `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (`import type`),
+`erasableSyntaxOnly` (no `enum`/`namespace`/parameter properties), no `any`; Host code may use
+`node:` builtins, shared code is environment-neutral, Client code must not import `node:` modules.
+Exported APIs carry explicit return types and JSDoc.
 
-Tool name must not collide: `mineru`.
+**Artifacts.** `index.js` is a single ESM bundle (platform `node`, target node 20.16, no external
+requests; build placeholder `__LITNOTES_VERSION__` substituted) and must export
+`name`/`inject`/`apply`. `lib/client.js` is the minified module-loader bundle; the gate asserts the
+module-loader shell, the bundle id, that no build placeholder survived, and that the only runtime
+module request is `react`. Sizes are budgeted in `scripts/build.ts` (host ≤ 2 MiB; client/CSS
+budgets tighten at the release gate).
 
----
+**Tests** (`vitest`, Node environment; component tests opt into happy-dom per file):
+`test/shared/**` markdown/annotation model and frozen-snapshot parity; `test/host/**` every Host
+module plus offline parse flows with a mock MinerU server and a fake LLM; `test/client/**`
+components, stores and i18n; `test/integration/**` real built Host bundle on a fake Cordis
+context; `test/perf/**` recorded benchmarks; `test/smoke/**` artifact contract.
 
-## 8. Config & credentials
+**Gate** (`scripts/check.ts`) runs, in order: package manifest; `cordis.patch.yml`; locale
+metadata; icon; vendored pdf.js version lock; legacy-identity scan of sources/docs/manifest; `tsc`;
+production build; generated artifact contracts; shipped-file presence; transition hygiene
+(legacy trees/tests/docs); the vitest suite. Transition checks are warnings during development and
+failures under `--final`.
 
-Raw config (no schema export; validated in `lib/config.js`):
+## 14. DSH platform reuse map
 
-```yaml
-- insert:
-    - id: dsh-litnotes
-      name: dsh-litnotes
-      config:
-        # all optional
-        dataDir: ~/.dsh/litnotes
-        apiBase: https://mineru.net
-        maxUploadBytes: 209715200
-        maxConcurrentParses: 2
-        pollIntervalMs: 3000
-        parseTimeoutMs: 1800000
-        toolMaxChars: 40000
-        local:                      # T0/T0.5 local engine (docs/ARCH.md §5.5)
-          enabled: true
-          maxPages: 500
-          maxPdfBytes: 209715200
-          maxOfficePdfBytes: 104857600
-          maxTextBytes: 33554432
-          minCharsPerPage: 30
-          maxParagraphChars: 4000
-          keepContentList: true
-          timeoutMs: 120000
-```
+| plugin need | DSH platform surface |
+|---|---|
+| HTTP + uploads + streaming | `ctx.webServer.register({kind: 'exact'|'prefix', handler})` |
+| browser trust fence | `ctx.connection.requestRejection(req)` |
+| API-key storage | `ctx.get('credentials')` records (`kind:'api-key'`) |
+| model calls + default route | `ctx.get('llm').stream(...)`, `ctx.get('agentDefaultModel').currentSelection()` |
+| context budgeting | `ctx.get('tokenMeter').estimateMessage(...)` (character fallback) |
+| agent tools | `ctx.get('tools').register(ToolDefinition)` |
+| agent system prompt hint | `ctx.get('systemPrompt').section({name, order, text})` |
+| translation | `ctx.get('translator')` (anonymous Google/Bing, paid routes) |
+| Office → PDF | `ctx.get('officeToPdf').convert(...)` |
+| plugin lifecycle | `ctx.effect(callback, label)`, `ctx.get(name)` for optional services |
+| Client shell integration | `ctx.slots.register/inject`, `ctx.locale.register/bind` |
+| Client chrome styling | host `--dsw-alias-*` CSS tokens, host theme attribute, `client.vendor(...)` for static assets |
 
-Token storage: `ctx.get('credentials')` → `modifyRecord('dsh-litnotes/mineru-token', …)` with
-`ApiKeyRecord` `{ kind:'api-key', key }`; `deleteRecord` clears it. The token is never returned
-by any API (only `configured: boolean`). If `credentials` is unavailable, the plugin keeps an
-in-memory token for the session and reports `tokenPersistent:false` in `status`.
+## 15. Performance budgets
 
-Preferences (client-owned JSON, stored host-side to survive reloads) are persisted in
-`<dataDir>/preferences.json`:
-`{ targetLanguage:'zh', translationProvider:'auto', readingMode:'original', readingScale:1,
-   defaultEngine:'auto', defaultModelVersion:'vlm', defaultLanguage:'ch', defaultIsOcr:false,
-   defaultEnableFormula:true, defaultEnableTable:true, showPageMarks:true,
-   autoAllowAgentFallback:true }`.
-`defaultEngine` accepts `auto|standard|agent|local`. `autoAllowAgentFallback:false` forbids the
-`auto` policy's implicit upload fallback to the token-free agent API (§5.5).
-
-Translation: `lib/service.js` `translate()` uses `ctx.get('translator')` when available:
-`resolve({text,targetLanguage,sourceLanguage,provider})` then `translate(spec)`, preferring an
-anonymous provider (`google`, `bing`). If translator is unavailable or fails, fall back to
-`ctx.get('llm')` with the agent default model (`ctx.get('agentDefaultModel').currentSelection()`)
-and a strict "translate only" prompt. Errors surface with code `translate-unavailable`.
-
----
-
-## 9. Client half
-
-### 9.1 Module format
-
-`lib/client.js` is generated by `scripts/build-client.mjs` from `ui/*` and must load as:
-
-```js
-window.__ModuleLoader__.load({
-  id: 'dsh-litnotes',
-  factory(require) {
-    const React = require('react'); const h = React.createElement
-    /* ui/markdown.js body (exports stripped) */
-    /* ui/highlight.js body (exports stripped) */
-    return clientMain(require)            // defined at the end of ui/app.js
-  },
-})
-```
-
-`clientMain` returns `{ inject: ['slots','locale','layout'], apply(ctx) }`.
-
-- `apply` registers locale dictionaries (`ctx.locale.register('dsh-litnotes', { zh, en })`), then
-  `ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name:'sidebar.panellist',
-  id:'mineru', order:35, locale:'dsh-litnotes', label: () => t('panel.label') }, MineruPanelIcon))`
-  and `ctx.slots.inject('main', () => ctx.slots.register({ name:'main', key:'mineru',
-  locale:'dsh-litnotes' }, MineruApp))`.
-- Styles: the generated bundle carries the full `ui/styles.css` as a JS string; a `<style>`
-  React element is rendered inside the app root (removes itself on unmount). The icon SVG comes
-  from `ui/panel-icon.svg`, the empty-state art from `ui/empty-art.svg`, both inlined by the
-  build script and read from placeholder constants in `ui/app.js`:
-  `const CSS = __MINERU_CSS_JSON__;`, `const PANEL_ICON = __MINERU_PANEL_ICON_JSON__;`,
-  `const EMPTY_ART = __MINERU_EMPTY_ART_JSON__;` — **keep these exact statements**.
-- Do not import harness Client packages; only `require('react')` is available.
-- Do not touch `document.body`; all DOM lives in the slot's React tree. The one exception is
-  loading KaTeX assets: create `<link>`/`<script>` elements inside `apply` with `ctx.effect`
-  cleanup (they are inert assets, not app UI).
-- Client global error handling: a React error boundary around the app; both boundaries and a
-  one-shot "active" ping call `health.ping` so the Lead can verify the live page.
-
-### 9.2 Transport
-
-`api/<method>` URLs resolve against `document.baseURI` (strip leading `/`). JSON POST helper +
-raw upload helper + cancellation (`AbortSignal`). Client tolerates a missing Host route
-(404/403) by showing a `尚未就绪` banner and retrying status every 4 s up to ~30 s.
-
-### 9.3 Behaviour
-
-- Load `status` + `library.list` on mount and on `visibilitychange`/window focus.
-- While any document is `status:'parsing'`, poll `library.list` every 2.5 s; stop when none.
-- Import: file input (multiple), drag & drop onto the app, or URL import modal. Upload shows a
-  determinate progress via `XMLHttpRequest` upload events (or a spinner when unavailable).
-- Parse: options form with four engine options — 自动 (`auto`) / 精准解析 (`standard`) / 本地解析
-  (`local`, disabled with a reason hint when unsupported) / 轻量云端解析 (`agent`) — plus
-  model/language/OCR/formula/table/page range and an effective-engine hint (「将使用：本地解析」…).
-  The token callout only opens for engines that need it; inline token warning; progress line;
-  cancel; retry on failure. Reparse opens the same form in a modal; a local parse has no
-  page-scoped repair, only whole-document reparse.
-- Reader: fetch `document.markdown` once per open, `parseMarkdown` client-side into blocks;
-  render headings/paragraphs/lists/quotes/code/tables/figures/formulas; heading list = outline;
-  page marks from `contentList.page_idx` alignment (best effort). A local parse
-  (`parse.engine==='local'`) shows a dismissible quality banner (「本地解析结果」 + formula/table/
-  figure caveat, `missing-fonts` / `scanned` warnings) with 配置 Token 解锁精准解析 / 重新解析 actions.
-- Translation modes: `原文` / `对照` / `译文`; per-block translate + "translate whole document"
-  (batched, sequential, progress, cancellable). Translation cache is per document and persisted
-  through `translations.save` (debounced 1 s).
-- Selection: on `selectionchange` (mouseup + keyboard selection) inside the reader, show a
-  popover with translate / highlight swatches / note / copy. Translation of a selection is
-  cached by text hash in memory for the session.
-- Highlights/notes: offsets relative to the block's plain text (`data-block-key`); colors
-  `yellow|sage|sky|rose`; notes editable; margin column lists them; click scrolls to block and
-  pulses the highlight. Persist via `annotations.save` (debounced 800 ms).
-- Settings modal: token add/clear + reading preferences; a 「本地解析」 section lists the
-  capability snapshot (`内置文字层提取` / `Office 转换（office-to-pdf）` with 可用/不可用 +
-  version) and a 重新检测 action that re-reads `settings.get`. Shows the data directory
-  symbolically (`~/.dsh/litnotes`) and a link-less copy for support.
-- Status bar: engine label (`MinerU 精准解析` / `MinerU 轻量解析` / `本地解析`), plus the local
-  provider (`内置` / `Office 转换`) and page/word/translation counts.
-- Error mapping: `local-unsupported` / `local-missing-tool` / `local-empty-text` /
-  `local-encrypted` / `local-failed` have their own i18n copy (scanned-page guidance included);
-  a failed local parse suggests 换用云端解析或配置 Token.
-- i18n: zh + en dictionaries in `ui/app.js` under `dsh-litnotes` namespace. zh is the default when
-  the harness locale is zh; the plugin must look correct in either. All visible copy goes
-  through `t()`.
-- Accessibility: buttons are `<button>`, icons carry `aria-label`, highlight marks are
-  `<mark role="mark">` with a note, popovers close on Escape, modal traps focus minimally,
-  `prefers-reduced-motion` disables the open animation.
-
----
-
-## 10. Build & checks
-
-- `node scripts/build-client.mjs` → `lib/client.js` (must keep the `window.__ModuleLoader__.load`
-  shell; strip `export ` tokens from the three UI modules; inline CSS/SVG placeholders;
-  fail on missing placeholders or leftover `export`/`import` statements).
-- `node scripts/check.mjs` → validates `package.json` (`dsh.bundle.patch`, `dsh.client`,
-  exports/files), YAML patch shape, JS syntax of every shipped `.js` (`node --check`), the
-  presence of locale metadata + icon, the vendored pdf.js assets (`vendor/pdfjs/**` presence and
-  version match against `lib/local-pdf.js`), the generated client bundle, runs `node --test test/`
-  and prints a compact report.
-- Unit tests: `node --test test/**/*.test.mjs` (Node's built-in runner, no dependencies).
-- End-to-end: `test/mock-mineru.mjs` starts a local fake MinerU; `test/e2e/*.test.mjs` drives
-  `lib/` against it (injected `fetchImpl` and `apiBase`), including a full standard-parse flow,
-  an agent-parse flow, an error flow, and a ZIP fixture.
-- Local engine tests (T0/T0.5): `test/unit/local-{engine,pdf,synth,office}.test.mjs` (synth
-  golden/determinism, the pdf.js adapter against a minimal synthesized PDF, engine/plan/extract
-  branching, Office error mapping), `test/e2e/local-flow.test.mjs` (real Host stack, token-free
-  `auto` → local with zero mock-MinerU requests, scanned file → `local-empty-text`) and
-  `test/reader/local-artifact.test.mjs` (reader artifact contract). The vendored bundle is
-  covered by a real lazy `import()` smoke test in `test/unit/local-pdf.test.mjs` and by the
-  `vendor pdf.js assets` gate in `scripts/check.mjs` (file presence + `PDFJS_VERSION` match
-  against `lib/local-pdf.js`). Last recorded run: `node scripts/check.mjs` 11/11 PASS, 301 tests
-  passed (docs/LOCAL-FALLBACK.md 实现状态).
-
----
-
-## 11. Conventions
-
-- Host code: plain ESM, `node:` builtins only, no TypeScript, no npm imports. JSDoc on exported
-  functions. Never `process.exit()`; log via `ctx.logger` inside `index.js`, pass `logger` down.
-- Local parsing modules follow the same rules and stay independent of `lib/mineru.js`; the
-  vendored pdf.js is data, not a dependency — only `lib/local-pdf.js` imports it, lazily on the
-  first local parse. No native modules (the text path needs no canvas).
-- Errors: throw `SidebarError`-like objects with `{ code, message, status }`; `wire.writeError`
-  maps them. Unknown errors → 500 with a safe message.
-- No hardcoded absolute paths; everything hangs off `dataDir`/`import.meta.dirname`.
-- Client code: plain ES2022 + React 18 `createElement` (no JSX, no build step inside app.js).
-  No network calls except the plugin API. No `localStorage` (preferences live host-side), except
-  a tiny UI-only flag if unavoidable (document why).
-- UTF-8, LF line endings, no trailing whitespace.
-- Security: validate every `id` as UUID, every relative asset path against traversal, cap all
-  bodies, never return the token, never trust client-provided filesystem paths.
+Release targets (acceptance harness, `UI-SPEC.md` §10): library entry interactive < 400 ms after
+data returns; reader first paint < 500 ms for a 10k-word paper (skeleton first); scroll at 60 fps;
+AI stream updates ≤ 1 React commit per frame; graph first layout ≤ 900 ms for 120 nodes; client
+bundle ≤ 620 KiB minified (goal ≤ 450 KiB), CSS ≤ 140 KiB; Host bundle ≤ 2 MiB. Structural
+choices that protect them: one list request per library open, parallel
+`document.markdown`/`library.get` on reader open, model build off the critical path and cached per
+markdown hash, `content-visibility` for long papers, vendored KaTeX/pdf.js loaded on demand,
+graph layout only while the graph scene is open, and an 8 ms rAF slice budget for d3-force.

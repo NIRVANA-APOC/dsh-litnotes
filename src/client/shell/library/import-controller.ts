@@ -81,7 +81,7 @@ async function runUpload(
       onProgress: (ratio: number) => updateUpload(set, key, { progress: Math.max(0, Math.min(1, ratio)) }),
     })
     removeUpload(set, key)
-    useUiStore.getState().toast(t('toast.imported', { name: file.name }), 'success')
+    useUiStore.getState().toast(`${t('toast.imported')} · ${file.name}`, 'success')
     return document
   } catch (error) {
     const failure = describeImportFailure(error, t)
@@ -147,7 +147,7 @@ export const useImportController = create<ImportControllerState>((set, get) => (
     try {
       const { document } = await getHostClient().call('library.importUrl', { url })
       await useLibraryStore.getState().refresh({ quiet: true })
-      useUiStore.getState().toast(t('toast.imported', { name: document.title }), 'success')
+      useUiStore.getState().toast(`${t('toast.imported')} · ${document.title}`, 'success')
       const ui = useUiStore.getState()
       if (ui.currentDocumentId === null) {
         ui.openDocument(document.id)

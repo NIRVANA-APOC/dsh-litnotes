@@ -46,8 +46,8 @@ export interface ShellClientOptions {
 /** The fake client plus its call log. */
 export interface ShellClient extends HostClient {
   calls: RecordedCall[]
-  /** Calls of one method. */
-  callsOf: (method: ApiMethod) => unknown[]
+  /** Calls of one method (JSON methods or `upload`). */
+  callsOf: (method: string) => unknown[]
 }
 
 /** Build a status payload with sensible defaults. */

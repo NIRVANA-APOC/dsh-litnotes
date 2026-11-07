@@ -18,6 +18,7 @@ import {
   makeDocument,
   resetShellStores,
   renderShell,
+  typeInto,
   type ShellRender,
   type ShellClient,
 } from './shell-helpers.tsx'
@@ -102,10 +103,7 @@ describe('library rail', () => {
     const input = container.querySelector<HTMLInputElement>('.ln-rail__search input')
     expect(input).not.toBeNull()
     if (input === null) return
-    act(() => {
-      input.value = 'transformer'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+    act(() => typeInto(input, 'transformer'))
     await flush()
     const titles = [...container.querySelectorAll('.ln-doc__title')].map((node) => node.textContent)
     expect(titles).toEqual(['Transformer Reading'])
@@ -113,7 +111,8 @@ describe('library rail', () => {
 
   it('toggles the status filter chips', async () => {
     const { container } = renderRail()
-    const parsedChip = buttonByText(container.querySelector('.ln-rail__filters'), 'rail.filter.parsed')
+    const chipsRow = container.querySelector('.ln-rail__filters') ?? container
+    const parsedChip = buttonByText(chipsRow, 'rail.filter.parsed')
     click(parsedChip)
     await flush()
     const statuses = [...container.querySelectorAll('.ln-doc')].map((node) => node.getAttribute('data-status'))
@@ -156,7 +155,7 @@ describe('library rail', () => {
     const { container } = renderRail()
     const failedRow = container.querySelector<HTMLElement>('.ln-doc[data-status="failed"]')
     expect(failedRow).not.toBeNull()
-    const menuTrigger = failedRow?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
+    const menuTrigger = failedRow?.querySelector<HTMLButtonElement>('button[aria-haspopup]')
     click(menuTrigger)
     await flush()
     const retryItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>

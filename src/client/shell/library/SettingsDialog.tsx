@@ -231,18 +231,19 @@ export function SettingsDialog(): ReactElement {
               {local !== null && !local.enabled ? <span className="ln-field__hint">{t('set.localDisabled')}</span> : null}
             </div>
           </Field>
-          <Field label={t('set.defaults')} description={t('set.defaultsHint')}>
-            <ParseOptionsForm
-              value={defaults}
-              onChange={(next) => {
-                setDefaults(next)
-                update(rememberParseOptions(next))
-              }}
-              tokenConfigured={tokenConfigured}
-              local={local}
-              ext=".pdf"
-            />
-          </Field>
+          <p className="ln-set__sectionHint">
+            {t('set.defaults')} · {t('set.defaultsHint')}
+          </p>
+          <ParseOptionsForm
+            value={defaults}
+            onChange={(next) => {
+              setDefaults(next)
+              update(rememberParseOptions(next))
+            }}
+            tokenConfigured={tokenConfigured}
+            local={local}
+            ext=""
+          />
         </section>
 
         {/* ---- Translation --------------------------------------------- */}

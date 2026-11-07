@@ -77,9 +77,16 @@ export function Rail(): ReactElement {
   const [filter, setFilter] = useState<RailStatusFilter>('all')
   const [sort, setSort] = useState<LibrarySort>('updated')
 
-  // Focus the search field when the topbar hotkey / wordmark asks for it.
+  // Focus the search field when the topbar hotkey / wordmark asks for it;
+  // expanding first when the rail is collapsed so the field exists.
   useEffect(() => {
-    if (searchFocusTick > 0) inputRef.current?.focus()
+    if (searchFocusTick === 0) return
+    if (useUiStore.getState().railCollapsed) {
+      useUiStore.getState().setRailCollapsed(false)
+      window.setTimeout(() => inputRef.current?.focus(), 0)
+      return
+    }
+    inputRef.current?.focus()
   }, [searchFocusTick])
 
   // Below 820px the rail starts closed (it is a drawer, not a column).

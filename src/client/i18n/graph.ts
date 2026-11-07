@@ -7,6 +7,8 @@
 
 export const zh = {
   'graph.scope.doc': '本文',
+  'graph.selectHint': '选择一个节点查看详情',
+  'graph.selectHintLibrary': '选择一篇论文或主题查看详情',
   'graph.scope.library': '全库',
   'graph.scope.switch': '图谱范围',
   'graph.canvas': '知识图谱画布',
@@ -76,6 +78,8 @@ export const zh = {
 
 export const en: Record<keyof typeof zh, string> = {
   'graph.scope.doc': 'This paper',
+  'graph.selectHint': 'Select a node to see its details',
+  'graph.selectHintLibrary': 'Select a paper or topic to see its details',
   'graph.scope.library': 'Library',
   'graph.scope.switch': 'Graph scope',
   'graph.canvas': 'Knowledge map canvas',

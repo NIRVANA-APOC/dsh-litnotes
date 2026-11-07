@@ -317,7 +317,15 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
           ) : (
             <p className="ln-graph__marginHint">
               <Icon name="graph" size={16} />
-              <span>{scope === 'library' ? t('graph.empty.libraryTitle') : t('graph.empty.title')}</span>
+              <span>
+                {graph !== null && graph.nodes.length > 0
+                  ? scope === 'library'
+                    ? t('graph.selectHintLibrary')
+                    : t('graph.selectHint')
+                  : scope === 'library'
+                    ? t('graph.empty.libraryTitle')
+                    : t('graph.empty.title')}
+              </span>
             </p>
           )}
         </aside>

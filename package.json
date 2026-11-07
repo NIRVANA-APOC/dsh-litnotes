@@ -19,7 +19,8 @@
     "cordis.patch.yml",
     "icon.svg",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs/**/*.md"
   ],
   "engines": {
     "node": ">=20.16"

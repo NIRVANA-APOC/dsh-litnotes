@@ -239,6 +239,16 @@ function mruGraphString(value) {
   return typeof value === 'string' ? value : String(value);
 }
 
+/** Whether the user prefers reduced motion (safe outside a browser/test env). */
+function mruGraphReducedMotion() {
+  try {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Finite number or fallback. */
 function mruGraphNumber(value, fallback) {
   const number = Number(value);
@@ -1400,6 +1410,204 @@ function mruGraphLayoutGraph(graph, options) {
   return { positions, links: outLinks, width, height, seed, iterations };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Interactive force simulation (dragging a node moves its neighbours)        */
+/* -------------------------------------------------------------------------- */
+
+/** Tuning constants for the live drag simulation (velocity units are px/s). */
+const MRU_GRAPH_SIM_REPULSION = 5200;
+const MRU_GRAPH_SIM_DRAG_BOOST = 2.2;
+const MRU_GRAPH_SIM_SPRING = 5.2;
+const MRU_GRAPH_SIM_COLLISION = 26;
+const MRU_GRAPH_SIM_GRAVITY = 0.5;
+const MRU_GRAPH_SIM_DAMPING = 4.2;
+const MRU_GRAPH_SIM_MAX_SPEED = 1100;
+
+/**
+ * Advance one deterministic step of the interactive force simulation.
+ *
+ * While the user drags a node, every other node is subject to:
+ *  - pairwise repulsion that grows as nodes get close (so a dragged node
+ *    pushes nearby nodes away instead of passing through them),
+ *  - spring attraction along graph edges (connected nodes follow the drag),
+ *  - a hard collision floor, a very soft centre pull and velocity damping.
+ *
+ * The dragged node follows its target exactly; pinned nodes never move.
+ * Pure: input positions/velocities are not mutated.
+ *
+ * @param {{
+ *   nodes: object[],
+ *   links: Array<{from: string, to: string, weight?: number}>,
+ *   positions: Record<string, {x: number, y: number}>,
+ *   velocities?: Record<string, {x: number, y: number}>,
+ *   dragged?: {id: string, x: number, y: number} | null,
+ *   pinned?: string[],
+ *   width?: number,
+ *   height?: number,
+ *   padding?: number,
+ *   dt?: number,
+ * }} input
+ * @returns {{
+ *   positions: Record<string, {x: number, y: number}>,
+ *   velocities: Record<string, {x: number, y: number}>,
+ *   maxSpeed: number,
+ * }} next positions, velocities and the fastest node speed.
+ */
+export function mruGraphSimulationStep(input) {
+  const data = input !== null && typeof input === 'object' ? input : {};
+  const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  const links = Array.isArray(data.links) ? data.links : [];
+  const positionsIn = data.positions !== null && typeof data.positions === 'object' ? data.positions : {};
+  const velocitiesIn = data.velocities !== null && typeof data.velocities === 'object' ? data.velocities : {};
+  const count = nodes.length;
+  const width = Math.max(160, mruGraphNumber(data.width, MRU_GRAPH_CANVAS_WIDTH));
+  const height = Math.max(120, mruGraphNumber(data.height, MRU_GRAPH_CANVAS_HEIGHT));
+  const padding = Math.max(0, mruGraphNumber(data.padding, MRU_GRAPH_CANVAS_PADDING));
+  const dt = mruGraphClamp(mruGraphNumber(data.dt, 1 / 60), 1 / 240, 1 / 20);
+  const separation = mruGraphNodeSeparation(width, height, count, padding);
+  const radius = Math.max(170, separation * 3.4);
+  const dragged = data.dragged !== null && typeof data.dragged === 'object'
+    && typeof data.dragged.id === 'string'
+    ? data.dragged
+    : null;
+  const pinned = new Set(Array.isArray(data.pinned) ? data.pinned.filter((id) => typeof id === 'string') : []);
+  const indexById = new Map(nodes.map((node, index) => [node.id, index]));
+  const draggedIndex = dragged !== null ? (indexById.get(dragged.id) ?? -1) : -1;
+
+  const xs = new Float64Array(count);
+  const ys = new Float64Array(count);
+  const vx = new Float64Array(count);
+  const vy = new Float64Array(count);
+  const ax = new Float64Array(count);
+  const ay = new Float64Array(count);
+  const fixed = new Uint8Array(count);
+  const minX = padding;
+  const maxX = Math.max(minX, width - padding);
+  const minY = padding;
+  const maxY = Math.max(minY, height - padding);
+  for (let index = 0; index < count; index += 1) {
+    const node = nodes[index];
+    const point = positionsIn[node.id];
+    xs[index] = mruGraphClamp(mruGraphNumber(point?.x, width / 2), minX, maxX);
+    ys[index] = mruGraphClamp(mruGraphNumber(point?.y, height / 2), minY, maxY);
+    const velocity = velocitiesIn[node.id];
+    vx[index] = mruGraphNumber(velocity?.x, 0);
+    vy[index] = mruGraphNumber(velocity?.y, 0);
+    if (pinned.has(node.id) && index !== draggedIndex) fixed[index] = 1;
+  }
+
+  // Pairwise repulsion (+ hard collision floor) — the core of the dynamic feel.
+  for (let left = 0; left < count; left += 1) {
+    for (let right = left + 1; right < count; right += 1) {
+      let deltaX = xs[right] - xs[left];
+      let deltaY = ys[right] - ys[left];
+      let distance = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
+      if (distance < 1e-3) {
+        const angle = ((left + 1) * 2.399963229728653 + (right + 2) * 0.61803398875) % (Math.PI * 2);
+        deltaX = Math.cos(angle) * 0.01;
+        deltaY = Math.sin(angle) * 0.01;
+        distance = 0.01;
+      }
+      const boost = (left === draggedIndex || right === draggedIndex) ? MRU_GRAPH_SIM_DRAG_BOOST : 1;
+      const ux = deltaX / distance;
+      const uy = deltaY / distance;
+      let force = 0;
+      if (distance < radius) {
+        const falloff = 1 - (distance / radius);
+        const proximity = (separation * 1.1) / (distance + (separation * 0.35));
+        force += MRU_GRAPH_SIM_REPULSION * boost * falloff * proximity * proximity;
+      }
+      if (distance < separation * 0.86) {
+        force += MRU_GRAPH_SIM_COLLISION * (separation - distance);
+      }
+      if (force <= 0) continue;
+      if (fixed[left] === 0) {
+        ax[left] -= ux * force;
+        ay[left] -= uy * force;
+      }
+      if (fixed[right] === 0) {
+        ax[right] += ux * force;
+        ay[right] += uy * force;
+      }
+    }
+  }
+
+  // Springs along edges: connected nodes follow the dragged node.
+  for (const link of links) {
+    const left = indexById.get(link.from);
+    const right = indexById.get(link.to);
+    if (left === undefined || right === undefined || left === right) continue;
+    let deltaX = xs[right] - xs[left];
+    let deltaY = ys[right] - ys[left];
+    let distance = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
+    if (distance < 1e-3) {
+      const angle = ((left + 1) * 2.399963229728653 + (right + 2) * 0.61803398875) % (Math.PI * 2);
+      deltaX = Math.cos(angle) * 0.01;
+      deltaY = Math.sin(angle) * 0.01;
+      distance = 0.01;
+    }
+    const rest = separation * 0.92;
+    const stretch = mruGraphClamp(distance - rest, -separation, separation * 2.4);
+    const weight = Math.max(0.2, mruGraphNumber(link.weight, 1));
+    const force = MRU_GRAPH_SIM_SPRING * stretch * Math.min(1.6, 0.6 + (weight * 0.4));
+    const ux = deltaX / distance;
+    const uy = deltaY / distance;
+    if (fixed[left] === 0) {
+      ax[left] += ux * force;
+      ay[left] += uy * force;
+    }
+    if (fixed[right] === 0) {
+      ax[right] -= ux * force;
+      ay[right] -= uy * force;
+    }
+  }
+
+  // Soft centre tether + integration (semi-implicit Euler with exponential damping).
+  const damping = Math.exp(-MRU_GRAPH_SIM_DAMPING * dt);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  let maxSpeed = 0;
+  const nextPositions = {};
+  const nextVelocities = {};
+  for (let index = 0; index < count; index += 1) {
+    const node = nodes[index];
+    if (index === draggedIndex) {
+      const targetX = mruGraphClamp(mruGraphNumber(dragged.x, xs[index]), minX, maxX);
+      const targetY = mruGraphClamp(mruGraphNumber(dragged.y, ys[index]), minY, maxY);
+      xs[index] = targetX;
+      ys[index] = targetY;
+      vx[index] = 0;
+      vy[index] = 0;
+    } else if (fixed[index] === 0) {
+      vx[index] = (vx[index] + (ax[index] * dt)) * damping;
+      vy[index] = (vy[index] + (ay[index] * dt)) * damping;
+      vx[index] += (centerX - xs[index]) * MRU_GRAPH_SIM_GRAVITY * dt;
+      vy[index] += (centerY - ys[index]) * MRU_GRAPH_SIM_GRAVITY * dt;
+      const speed = Math.sqrt((vx[index] * vx[index]) + (vy[index] * vy[index]));
+      if (speed > MRU_GRAPH_SIM_MAX_SPEED) {
+        const scale = MRU_GRAPH_SIM_MAX_SPEED / speed;
+        vx[index] *= scale;
+        vy[index] *= scale;
+      }
+      if (Number.isFinite(vx[index]) && Number.isFinite(vy[index])) {
+        xs[index] = mruGraphClamp(xs[index] + (vx[index] * dt), minX, maxX);
+        ys[index] = mruGraphClamp(ys[index] + (vy[index] * dt), minY, maxY);
+      } else {
+        vx[index] = 0;
+        vy[index] = 0;
+      }
+    } else {
+      vx[index] = 0;
+      vy[index] = 0;
+    }
+    const speed = Math.sqrt((vx[index] * vx[index]) + (vy[index] * vy[index]));
+    if (speed > maxSpeed) maxSpeed = speed;
+    nextPositions[node.id] = { x: mruGraphRound(xs[index]), y: mruGraphRound(ys[index]) };
+    nextVelocities[node.id] = { x: mruGraphRound(vx[index]), y: mruGraphRound(vy[index]) };
+  }
+  return { positions: nextPositions, velocities: nextVelocities, maxSpeed: mruGraphRound(maxSpeed) };
+}
+
 export function layoutGraph(graph, options) {
   return mruGraphLayoutGraph(graph, options);
 }
@@ -1671,6 +1879,9 @@ export function MruGraphView(props) {
   const layoutCacheRef = React.useRef(null);
   const panRef = React.useRef(null);
   const dragRef = React.useRef(null);
+  const liveRef = React.useRef(null);
+  const rafRef = React.useRef(0);
+  const [livePositions, setLivePositions] = React.useState(null);
 
   pinsRef.current = pins;
 
@@ -1710,27 +1921,170 @@ export function MruGraphView(props) {
     return next;
   }, [layoutSignature, visible]);
 
+  // A filter/collapse change replaces the visible subgraph and its layout:
+  // freeze any running simulation into the previous cache before that happens.
+  React.useEffect(() => {
+    return () => {
+      if (liveRef.current !== null) persistSimulation();
+    };
+  }, [layoutSignature]);
+
   const types = React.useMemo(() => mruGraphOrderedTypes(normalized.nodes), [normalized]);
   const degree = React.useMemo(() => mruGraphDegrees(visible.nodes, visible.edges), [visible]);
 
   const positions = React.useMemo(() => {
     const out = {};
     const base = layout.positions || {};
+    const live = livePositions !== null && typeof livePositions === 'object' ? livePositions : null;
     for (let i = 0; i < visible.nodes.length; i += 1) {
       const node = visible.nodes[i];
-      const point = pins[node.id] || base[node.id];
+      const livePoint = live !== null ? live[node.id] : undefined;
+      const point = livePoint || pins[node.id] || base[node.id];
       out[node.id] = point && Number.isFinite(point.x) && Number.isFinite(point.y)
         ? { x: point.x, y: point.y }
         : mruGraphFallbackPoint(node.id, i);
     }
     return out;
-  }, [visible, layout, pins]);
+  }, [visible, layout, pins, livePositions]);
 
   // Very dense graphs get a focused relation layer; the full edge set still
   // powers neighbour lists and highlights.
   const renderEdges = React.useMemo(() => (
     mruGraphLimitRenderEdges(visible.edges, visible.nodes, selectedId)
   ), [visible, selectedId]);
+
+  /** Cancel the requestAnimationFrame loop (idempotent). */
+  const stopSimulationLoop = () => {
+    if (rafRef.current !== 0 && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = 0;
+  };
+
+  /**
+   * Freeze the live simulation: write the settled coordinates into the layout
+   * cache (so a re-render does not snap nodes back) and pin the dragged node
+   * exactly like a normal drag release.
+   */
+  const persistSimulation = () => {
+    const sim = liveRef.current;
+    if (sim === null) return;
+    const cache = layoutCacheRef.current;
+    if (cache && cache.layout && cache.layout.positions) {
+      for (const [id, point] of Object.entries(sim.positions)) {
+        cache.layout.positions[id] = { x: point.x, y: point.y };
+      }
+    }
+    const draggedPoint = sim.positions[sim.draggedId];
+    if (draggedPoint !== undefined) {
+      const pinned = { x: draggedPoint.x, y: draggedPoint.y };
+      pinsRef.current = { ...pinsRef.current, [sim.draggedId]: pinned };
+      setPins((previous) => ({ ...previous, [sim.draggedId]: pinned }));
+    }
+    liveRef.current = null;
+    stopSimulationLoop();
+    setLivePositions(null);
+  };
+
+  /** Advance the simulation `steps` times and publish positions for render. */
+  const pumpSimulation = (steps) => {
+    const sim = liveRef.current;
+    if (sim === null) return { maxSpeed: 0 };
+    let positions = sim.positions;
+    let velocities = sim.velocities;
+    let maxSpeed = 0;
+    for (let index = 0; index < steps; index += 1) {
+      const next = mruGraphSimulationStep({
+        nodes: sim.nodes,
+        links: sim.links,
+        positions,
+        velocities,
+        dragged: sim.dragged,
+        pinned: sim.pinned,
+        width: MRU_GRAPH_CANVAS_WIDTH,
+        height: MRU_GRAPH_CANVAS_HEIGHT,
+        padding: MRU_GRAPH_CANVAS_PADDING,
+        dt: 1 / 120,
+      });
+      positions = next.positions;
+      velocities = next.velocities;
+      maxSpeed = next.maxSpeed;
+    }
+    sim.positions = positions;
+    sim.velocities = velocities;
+    setLivePositions(positions);
+    return { maxSpeed };
+  };
+
+  /** One animation frame: two physics substeps + settle detection. */
+  const runSimulationFrame = () => {
+    rafRef.current = 0;
+    const sim = liveRef.current;
+    if (sim === null) return;
+    const { maxSpeed } = pumpSimulation(2);
+    sim.frames = (sim.frames ?? 0) + 1;
+    const dragging = dragRef.current !== null && dragRef.current.moved === true;
+    if (dragging) {
+      sim.settle = 0;
+    } else {
+      sim.settle = (sim.settle ?? 0) + 1;
+      // Stop once everything is calm, but never run the tail forever.
+      if ((maxSpeed < 6 && sim.settle > 8) || sim.settle > 160) {
+        persistSimulation();
+        return;
+      }
+    }
+    if (typeof requestAnimationFrame === 'function') {
+      rafRef.current = requestAnimationFrame(runSimulationFrame);
+    } else {
+      persistSimulation();
+    }
+  };
+
+  /** Enter live simulation mode for a drag (positions snapshot, zero velocity). */
+  const startSimulation = (node, target) => {
+    const snapshot = {};
+    for (const item of visible.nodes) {
+      const point = positions[item.id];
+      if (point !== undefined) snapshot[item.id] = { x: point.x, y: point.y };
+    }
+    const velocities = {};
+    for (const id of Object.keys(snapshot)) velocities[id] = { x: 0, y: 0 };
+    liveRef.current = {
+      nodes: visible.nodes.slice(),
+      links: visible.edges.slice(),
+      positions: snapshot,
+      velocities,
+      draggedId: node.id,
+      dragged: { id: node.id, x: target.x, y: target.y },
+      pinned: Object.keys(pinsRef.current),
+      settle: 0,
+      frames: 0,
+    };
+    setLivePositions({ ...snapshot });
+    if (typeof requestAnimationFrame === 'function') {
+      stopSimulationLoop();
+      rafRef.current = requestAnimationFrame(runSimulationFrame);
+    } else {
+      pumpSimulation(1);
+    }
+  };
+
+  /** Point the dragged node at a world-space coordinate. */
+  const moveDraggedNode = (node, target) => {
+    if (liveRef.current !== null) {
+      liveRef.current.dragged = { id: node.id, x: target.x, y: target.y };
+      if (typeof requestAnimationFrame !== 'function') pumpSimulation(1);
+    }
+  };
+
+  // Never leave a physics loop running after unmount / graph replacement.
+  React.useEffect(() => {
+    return () => {
+      stopSimulationLoop();
+      liveRef.current = null;
+    };
+  }, []);
 
   const selected = selectedId ? visible.nodes.find((node) => node.id === selectedId) || null : null;
 
@@ -1868,7 +2222,7 @@ export function MruGraphView(props) {
   // or re-laying out; cardPos in the deps re-measures once the card has size.
   React.useLayoutEffect(() => {
     placeCard();
-  }, [placeCard, view.x, view.y, view.k, layout, visible.nodes.length, cardPos]);
+  }, [placeCard, view.x, view.y, view.k, layout, visible.nodes.length, cardPos, livePositions]);
 
   React.useEffect(() => {
     const root = rootRef.current;
@@ -2040,6 +2394,7 @@ export function MruGraphView(props) {
   const onNodePointerDown = (event, node) => {
     if (event && event.button !== undefined && event.button !== 0) return;
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    if (liveRef.current !== null) persistSimulation();
     setSelectedId(node.id);
     if (node.cluster) return;
     if (!event) return;
@@ -2078,19 +2433,25 @@ export function MruGraphView(props) {
     const deltaY = point.y - drag.start.y;
     if (!drag.moved && Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 2) drag.moved = true;
     if (!drag.moved) return;
-    setPins((previous) => ({
-      ...previous,
-      [node.id]: {
-        x: mruGraphClamp(drag.origin.x + deltaX, MRU_GRAPH_CANVAS_PADDING, MRU_GRAPH_CANVAS_WIDTH - MRU_GRAPH_CANVAS_PADDING),
-        y: mruGraphClamp(drag.origin.y + deltaY, MRU_GRAPH_CANVAS_PADDING, MRU_GRAPH_CANVAS_HEIGHT - MRU_GRAPH_CANVAS_PADDING),
-      },
-    }));
+    const target = {
+      x: mruGraphClamp(drag.origin.x + deltaX, MRU_GRAPH_CANVAS_PADDING, MRU_GRAPH_CANVAS_WIDTH - MRU_GRAPH_CANVAS_PADDING),
+      y: mruGraphClamp(drag.origin.y + deltaY, MRU_GRAPH_CANVAS_PADDING, MRU_GRAPH_CANVAS_HEIGHT - MRU_GRAPH_CANVAS_PADDING),
+    };
+    if (liveRef.current === null) {
+      startSimulation(node, target);
+    } else {
+      moveDraggedNode(node, target);
+    }
+    // Reduced motion: no continuous animation, but the dynamic push still
+    // happens stepwise as the pointer moves.
+    if (mruGraphReducedMotion()) pumpSimulation(3);
   };
 
   const onNodePointerUp = (event, node) => {
     const drag = dragRef.current;
     if (!drag || drag.id !== node.id) return;
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    const wasDragging = drag.moved === true;
     dragRef.current = null;
     try {
       if (event && event.currentTarget && typeof event.currentTarget.releasePointerCapture === 'function') {
@@ -2098,6 +2459,13 @@ export function MruGraphView(props) {
       }
     } catch {
       /* ignore */
+    }
+    if (wasDragging && liveRef.current !== null && (
+      mruGraphReducedMotion() || typeof requestAnimationFrame !== 'function'
+    )) {
+      // Immediate, non-animated response for reduced-motion users.
+      pumpSimulation(6);
+      persistSimulation();
     }
   };
 
@@ -2324,7 +2692,13 @@ export function MruGraphView(props) {
       onPointerUp: (event) => onNodePointerUp(event, node),
       onPointerCancel: (event) => onNodePointerUp(event, node),
       onLostPointerCapture: () => {
-        if (dragRef.current && dragRef.current.id === node.id) dragRef.current = null;
+        if (dragRef.current && dragRef.current.id === node.id) {
+          dragRef.current = null;
+          if (liveRef.current !== null && mruGraphReducedMotion()) {
+            pumpSimulation(6);
+            persistSimulation();
+          }
+        }
       },
       onKeyDown: (event) => onNodeKeyDown(event, node),
     },

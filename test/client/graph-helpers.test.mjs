@@ -14,6 +14,7 @@ import {
   mruGraphAnchoredCardPosition,
   mruGraphNodeSeparation,
   mruGraphLimitRenderEdges,
+  mruGraphSimulationStep,
 } from '../../ui/graph.js'
 
 /** Small representative KG covering all provenance shapes. */
@@ -589,4 +590,122 @@ test('dense layout uses the wide canvas instead of a central blob', () => {
   for (const point of points) {
     assert.ok(point.x >= 0 && point.x <= 1000 && point.y >= 0 && point.y <= 680)
   }
+})
+
+
+// ---------------------------------------------------------------------------
+// Dynamic drag force simulation (dragging pushes neighbours away)
+// ---------------------------------------------------------------------------
+
+function simNodes(count, startX = 200, startY = 300, step = 60) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `s${index}`,
+    type: 'concept',
+    label: `Node ${index}`,
+    weight: 1,
+    x: startX + index * step,
+    y: startY,
+  }))
+}
+
+function simPositions(nodes) {
+  const out = {}
+  for (const node of nodes) out[node.id] = { x: node.x, y: node.y }
+  return out
+}
+
+/** Run n steps of the simulation and return the last result. */
+function simRun({ nodes, links = [], positions, velocities, dragged = null, pinned = [], steps = 1, dt = 1 / 120 }) {
+  let state = { positions, velocities: velocities ?? {}, maxSpeed: 0 }
+  for (let index = 0; index < steps; index += 1) {
+    state = mruGraphSimulationStep({
+      nodes,
+      links,
+      positions: state.positions,
+      velocities: state.velocities,
+      dragged,
+      pinned,
+      width: 1000,
+      height: 680,
+      padding: 56,
+      dt,
+    })
+  }
+  return state
+}
+
+test('simulation repels nearby unlinked nodes', () => {
+  const nodes = simNodes(2, 400, 300, 34)
+  const positions = simPositions(nodes)
+  const before = Math.hypot(
+    positions.s1.x - positions.s0.x,
+    positions.s1.y - positions.s0.y,
+  )
+  const after = simRun({ nodes, positions, steps: 12 })
+  const distance = Math.hypot(
+    after.positions.s1.x - after.positions.s0.x,
+    after.positions.s1.y - after.positions.s0.y,
+  )
+  assert.ok(distance > before + 4, `nodes move apart (${before.toFixed(1)} → ${distance.toFixed(1)})`)
+  for (const point of Object.values(after.positions)) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+    assert.ok(point.x >= 0 && point.x <= 1000 && point.y >= 0 && point.y <= 680)
+  }
+})
+
+test('dragging a node pushes the neighbour it approaches away', () => {
+  const nodes = simNodes(2, 400, 300, 130) // s0 at 400, s1 at 530
+  const positions = simPositions(nodes)
+  const dragged = { id: 's0', x: 486, y: 300 } // move toward s1 without passing it
+  const after = simRun({ nodes, positions, dragged, steps: 14 })
+  assert.ok(after.positions.s0.x > positions.s0.x + 60, 'dragged node follows the target')
+  assert.ok(after.positions.s1.x > positions.s1.x + 2, 'the approached node is pushed further right')
+  assert.ok(Number.isFinite(after.positions.s1.y), 'neighbour stays finite/bounded')
+})
+
+test('edges make connected nodes follow the dragged node', () => {
+  const nodes = simNodes(2, 500, 300, 80)
+  const links = [{ from: 's0', to: 's1', weight: 1 }]
+  const positions = simPositions(nodes)
+  const dragged = { id: 's0', x: 390, y: 300 } // drag away from the linked neighbour
+  const after = simRun({ nodes, links, positions, dragged, steps: 40 })
+  assert.ok(
+    after.positions.s1.x < positions.s1.x - 5,
+    `linked neighbour follows the drag (${positions.s1.x} → ${after.positions.s1.x})`,
+  )
+})
+
+test('simulation is deterministic, keeps pinned nodes fixed and never emits NaN', () => {
+  const nodes = simNodes(4, 300, 300, 44)
+  const links = [{ from: 's0', to: 's1', weight: 1 }, { from: 's2', to: 's3', weight: 1 }]
+  const positions = simPositions(nodes)
+  const dragged = { id: 's0', x: 360, y: 320 }
+  const first = simRun({ nodes, links, positions, dragged, pinned: ['s3'], steps: 8 })
+  const second = simRun({ nodes, links, positions, dragged, pinned: ['s3'], steps: 8 })
+  assert.deepEqual(first.positions, second.positions, 'same input → same positions')
+  assert.deepEqual(first.positions.s3, positions.s3, 'pinned node does not move')
+
+  // Coincident nodes must not produce NaN.
+  const stacked = simNodes(3, 400, 300, 0)
+  const stackedPositions = simPositions(stacked)
+  const result = simRun({ nodes: stacked, positions: stackedPositions, steps: 5 })
+  for (const point of Object.values(result.positions)) {
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y))
+  }
+})
+
+test('simulation damps out after the drag is released', () => {
+  const nodes = simNodes(3, 400, 300, 40)
+  const positions = simPositions(nodes)
+  const dragged = { id: 's0', x: 520, y: 340 }
+  let state = simRun({ nodes, positions, dragged, steps: 6 })
+  const activeSpeed = state.maxSpeed
+  state = simRun({
+    nodes,
+    positions: state.positions,
+    velocities: state.velocities,
+    dragged: null,
+    steps: 90,
+  })
+  assert.ok(state.maxSpeed < Math.max(12, activeSpeed * 0.5), `motion settles (${activeSpeed} → ${state.maxSpeed})`)
 })

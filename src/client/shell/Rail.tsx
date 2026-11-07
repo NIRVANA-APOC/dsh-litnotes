@@ -8,9 +8,10 @@
  * `railCollapsed`) opens and closes it, Escape closes it too.
  */
 
-import type { KeyboardEvent, ReactElement } from 'react'
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent, ReactElement } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocumentSummary, ParseOptions } from '../../shared/model.ts'
+import { DEFAULT_PREFERENCES } from '../../shared/preferences.ts'
 import { useLibraryStore } from '../state/library.ts'
 import { useSettingsStore } from '../state/settings.ts'
 import { useUiStore } from '../state/ui.ts'
@@ -45,6 +46,18 @@ const FILTERS: ReadonlyArray<{
   { value: 'failed', key: 'rail.filter.failed' },
 ]
 
+/** Drag-resize bounds of the rail column, in CSS pixels (DESIGN-V2 §3). */
+const RAIL_MIN_WIDTH = 200
+const RAIL_MAX_WIDTH = 400
+/** Debounce before a keyboard-resized width is written to preferences. */
+const RAIL_SAVE_DELAY_MS = 260
+
+/** Clamp a width into the allowed rail range. */
+function clampRailWidth(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_PREFERENCES.railWidth
+  return Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, Math.round(value)))
+}
+
 /** The rail column. */
 export function Rail(): ReactElement {
   useInjectedStyle('shell-library', SHELL_LIBRARY_CSS)
@@ -72,9 +85,39 @@ export function Rail(): ReactElement {
   const drawer = useMediaQuery('(max-width: 820px)')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const railRef = useRef<HTMLElement | null>(null)
   const drawerDefaultApplied = useRef(false)
   const [filter, setFilter] = useState<RailStatusFilter>('all')
   const [sort, setSort] = useState<LibrarySort>('updated')
+  // Drag-resized width: `null` means "use the stylesheet default" (so the
+  // 1080–1360px breakpoint keeps working until the reader chooses a width).
+  const [railWidth, setRailWidth] = useState<number | null>(() =>
+    preferences.railWidth === DEFAULT_PREFERENCES.railWidth ? null : clampRailWidth(preferences.railWidth),
+  )
+  const [resizing, setResizing] = useState(false)
+  const railWidthRef = useRef<number | null>(railWidth)
+  railWidthRef.current = railWidth
+  const resizingRef = useRef(false)
+  const saveTimerRef = useRef<number | null>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  // A width written elsewhere (another window / settings) wins unless dragging.
+  useEffect(() => {
+    if (resizingRef.current) return
+    setRailWidth(
+      preferences.railWidth === DEFAULT_PREFERENCES.railWidth ? null : clampRailWidth(preferences.railWidth),
+    )
+  }, [preferences.railWidth])
+
+  // Drop the pointer listeners and pending write if the rail unmounts mid-drag.
+  useEffect(
+    () => () => {
+      dragCleanupRef.current?.()
+      dragCleanupRef.current = null
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+    },
+    [],
+  )
 
   // Focus the search field when the topbar hotkey / wordmark asks for it;
   // expanding first when the rail is collapsed so the field exists.
@@ -188,6 +231,93 @@ export function Rail(): ReactElement {
     else if (event.key === 'ArrowDown') next = current < 0 ? 0 : Math.min(buttons.length - 1, current + 1)
     event.preventDefault()
     buttons[next]?.focus()
+  }
+
+  /** Persist one rail width through the settings store (host-persisted). */
+  const saveRailWidth = (width: number): void => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    void useSettingsStore.getState().patch({ railWidth: width })
+  }
+
+  /** Apply one width locally and schedule a preference write (keyboard path). */
+  const applyRailWidth = (width: number): void => {
+    const clamped = clampRailWidth(width)
+    setRailWidth(clamped)
+    railWidthRef.current = clamped
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      saveRailWidth(clamped)
+    }, RAIL_SAVE_DELAY_MS)
+  }
+
+  /** Current rendered width (falls back to the stylesheet default). */
+  const measuredRailWidth = (): number =>
+    railWidthRef.current ?? clampRailWidth(railRef.current?.getBoundingClientRect().width || preferences.railWidth)
+
+  /** Begin a pointer drag on the rail's right edge. */
+  const startResize = (event: ReactPointerEvent<HTMLElement>): void => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = measuredRailWidth()
+    resizingRef.current = true
+    setResizing(true)
+    setRailWidth(startWidth)
+    railWidthRef.current = startWidth
+    const body = document.body
+    const previousUserSelect = body.style.userSelect
+    const previousCursor = body.style.cursor
+    body.style.userSelect = 'none'
+    body.style.cursor = 'col-resize'
+    const cleanup = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      body.style.userSelect = previousUserSelect
+      body.style.cursor = previousCursor
+    }
+    const onMove = (moveEvent: globalThis.PointerEvent): void => {
+      const next = clampRailWidth(startWidth + (moveEvent.clientX - startX))
+      railWidthRef.current = next
+      setRailWidth(next)
+    }
+    const onUp = (): void => {
+      cleanup()
+      dragCleanupRef.current = null
+      resizingRef.current = false
+      setResizing(false)
+      const finalWidth = railWidthRef.current
+      if (finalWidth !== null) saveRailWidth(finalWidth)
+    }
+    dragCleanupRef.current = cleanup
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
+
+  /** Arrow-key resizing of the rail (`Home`/`End` jump to the bounds). */
+  const onResizeKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    const step = event.shiftKey ? 24 : 8
+    const current = measuredRailWidth()
+    let next: number | null = null
+    if (event.key === 'ArrowLeft') next = current - step
+    else if (event.key === 'ArrowRight') next = current + step
+    else if (event.key === 'Home') next = RAIL_MIN_WIDTH
+    else if (event.key === 'End') next = RAIL_MAX_WIDTH
+    if (next === null) return
+    event.preventDefault()
+    applyRailWidth(next)
+  }
+
+  /** Double-clicking the handle restores the default width. */
+  const resetRailWidth = (): void => {
+    setRailWidth(null)
+    railWidthRef.current = null
+    saveRailWidth(DEFAULT_PREFERENCES.railWidth)
   }
 
   const sortItems: MenuItem[] = [
@@ -304,7 +434,14 @@ export function Rail(): ReactElement {
           onClick={() => setCollapsed(true)}
         />
       ) : null}
-      <aside className="ln-rail" data-drawer={drawer || undefined} aria-label={t(drawer ? 'rail.drawer' : 'rail.title')}>
+      <aside
+        ref={railRef}
+        className="ln-rail"
+        data-drawer={drawer || undefined}
+        data-resizing={resizing || undefined}
+        style={railWidth === null ? undefined : { flexBasis: `${railWidth}px` }}
+        aria-label={t(drawer ? 'rail.drawer' : 'rail.title')}
+      >
         <header className="ln-rail__head">
           <span className="ln-rail__title">{t('rail.title')}</span>
           <span className="ln-rail__count ln-tabular">{formatNumber(documents.length)}</span>
@@ -382,6 +519,22 @@ export function Rail(): ReactElement {
             <IconButton icon="chevronLeft" label={t('rail.collapse')} size={14} onClick={() => setCollapsed(true)} />
           )}
         </footer>
+        {drawer ? null : (
+          <button
+            type="button"
+            className="ln-rail__resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('rail.resize')}
+            aria-valuemin={RAIL_MIN_WIDTH}
+            aria-valuemax={RAIL_MAX_WIDTH}
+            aria-valuenow={railWidth === null ? undefined : railWidth}
+            title={t('rail.resize')}
+            onPointerDown={startResize}
+            onKeyDown={onResizeKeyDown}
+            onDoubleClick={resetRailWidth}
+          />
+        )}
       </aside>
     </>
   )

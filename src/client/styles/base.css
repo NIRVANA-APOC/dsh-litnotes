@@ -102,6 +102,7 @@
 }
 
 .ln-desk {
+  position: relative;
   display: flex;
   min-height: 0;
   overflow: hidden;

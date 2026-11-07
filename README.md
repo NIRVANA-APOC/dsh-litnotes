@@ -181,4 +181,5 @@ node scripts/check.ts --final    # release gate: transition warnings become fail
 - Tests live in `test/shared`, `test/host`, `test/client`, `test/integration`, `test/perf`,
   `test/smoke`; parse flows run against an offline mock MinerU server and a fake LLM.
 - Vendored runtimes are version-locked by the gate: `vendor/pdfjs/**` (pdf.js 5.4.449) and
-  `vendor/katex/**`. The Client bundle must keep `react` as its only external module request.
+  `vendor/katex/**`. The client bundle's only external requests are the platform-provided React
+  runtime modules (`react`, `react-dom`, `react-dom/client`); everything else is bundled.

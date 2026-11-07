@@ -48,8 +48,11 @@ function loadClientRow(): LoaderRow {
 async function materializeClient(): Promise<{ inject?: string[]; apply: (ctx: unknown) => void }> {
   const row = loadClientRow()
   const react: unknown = await import('react')
+  const reactDom: unknown = await import('react-dom')
   const plugin = row.factory((id: string) => {
     if (id === 'react') return react
+    if (id === 'react-dom') return reactDom
+    if (id === 'react-dom/client') return (reactDom as { default?: unknown }).default ?? reactDom
     throw new Error(`unexpected module request: ${id}`)
   }) as { inject?: string[]; apply: (ctx: unknown) => void }
   return plugin

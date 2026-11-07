@@ -45,7 +45,9 @@
   z-index: 30;
   padding: 0;
   border: 0;
-  background: transparent;
+  /* Theme-agnostic dim: a neutral ink wash for browsers without
+     backdrop-filter, plus the cheaper brightness filter when supported. */
+  background: color-mix(in srgb, var(--ln-ink) 20%, transparent);
   backdrop-filter: brightness(0.62) saturate(0.9);
   -webkit-backdrop-filter: brightness(0.62) saturate(0.9);
   animation: ln-fade-in 140ms var(--ln-ease);
@@ -58,6 +60,40 @@
   from {
     opacity: 0;
   }
+}
+
+/* Drag-resize handle on the right edge (200–400px, remembered in prefs). */
+
+.ln-rail__resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 5;
+  width: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+.ln-rail__resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 3px;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms var(--ln-ease);
+}
+.ln-rail__resizer:hover::after,
+.ln-rail__resizer:focus-visible::after,
+.ln-rail[data-resizing] .ln-rail__resizer::after {
+  background: var(--ln-signal);
+}
+.ln-rail[data-resizing] {
+  transition: none;
 }
 
 /* Toolbar: status chips + sort, under the search field. */
@@ -576,9 +612,6 @@
  * ====================================================================== */
 
 @media (max-width: 820px) {
-  .ln-root .ln-desk {
-    position: relative;
-  }
   .ln-root .ln-rail {
     position: absolute;
     top: 0;

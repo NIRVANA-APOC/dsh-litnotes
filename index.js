@@ -429,7 +429,7 @@ function normalizePreferences(raw) {
     lastBlockKey: typeof source.lastBlockKey === "string" && source.lastBlockKey.trim() !== "" ? source.lastBlockKey.trim().slice(0, 200) : null,
     readingMeasure: presetOf(source.readingMeasure, READING_MEASURES, d.readingMeasure),
     docWidth: presetOf(source.docWidth, DOC_WIDTHS, d.docWidth),
-    railWidth: clampedInt(source.railWidth, d.railWidth, 220, 460),
+    railWidth: clampedInt(source.railWidth, d.railWidth, 200, 400),
     marginWidth: clampedInt(source.marginWidth, d.marginWidth, 240, 560),
     railOpen: typeof source.railOpen === "boolean" ? source.railOpen : d.railOpen,
     marginOpen: typeof source.marginOpen === "boolean" ? source.marginOpen : d.marginOpen

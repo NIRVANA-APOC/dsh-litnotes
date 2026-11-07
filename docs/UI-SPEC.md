@@ -254,8 +254,10 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 
 ## 9. Performance budget
 
-- Bundle: client JS ≤ 620 KiB minified (goal ≤ 450 KiB), CSS ≤ 160 KiB; `react` is the only
-  external module request; KaTeX loads lazily from vendored assets only when a formula appears.
+- Bundle: client JS ≤ 620 KiB minified, CSS ≤ 160 KiB (enforced by the build); the client
+  bundle's only external requests are the platform-provided React runtime modules (`react`,
+  `react-dom`, `react-dom/client`) — everything else is bundled; KaTeX loads lazily from vendored
+  assets only when a formula appears.
 - Library entry interactive < 400 ms after data returns; reader first paint < 500 ms for a
   10k-word paper (skeleton immediately, model parsed after paint); scroll 60 fps; AI stream
   ≤ 1 React commit per frame; graph first layout ≤ 900 ms for 120 nodes; no simulation while the

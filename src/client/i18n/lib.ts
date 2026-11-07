@@ -181,6 +181,7 @@ export const zh = {
   'rail.rowMeta.pages': '{count} 页',
   'rail.rowMeta.words': '{count} 词',
   'rail.moreActions': '文献操作',
+  'rail.resize': '调整文献列表宽度',
 
   // Errors / toasts -------------------------------------------------------
   'err.tokenMissing': '在设置中配置 MinerU Token，或改用本地解析。',
@@ -386,6 +387,7 @@ export const en: Record<keyof typeof zh, string> = {
   'rail.rowMeta.pages': '{count} pages',
   'rail.rowMeta.words': '{count} words',
   'rail.moreActions': 'Paper actions',
+  'rail.resize': 'Resize the library list',
 
   // Errors / toasts -------------------------------------------------------
   'err.tokenMissing': 'Add a MinerU token in settings, or switch to local parsing.',

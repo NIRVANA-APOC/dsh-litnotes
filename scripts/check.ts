@@ -354,11 +354,16 @@ await check('client bundle contract', () => {
   if (!text.includes('window.__ModuleLoader__.load(')) throw new Error('missing module-loader shell')
   if (!text.includes('id: "dsh-litnotes"')) throw new Error('bundle id is not dsh-litnotes')
   if (/__LITNOTES_[A-Z_]+__/.test(text)) throw new Error('unreplaced build placeholder')
-  const requests = new Set([...text.matchAll(/require\("([^"]+)"\)/g)].map((match) => match[1]))
+  const requests = new Set(
+    [...text.matchAll(/require\("([^"]+)"\)/g)]
+      .map((match) => match[1])
+      .filter((value): value is string => typeof value === 'string'),
+  )
+  const allowed = new Set(['react', 'react-dom', 'react-dom/client'])
   for (const request of requests) {
-    if (request !== 'react') throw new Error(`unexpected runtime module request: ${request}`)
+    if (!allowed.has(request)) throw new Error(`unexpected runtime module request: ${request}`)
   }
-  return `runtime requests: ${[...requests].join(', ') || 'none'}`
+  return `runtime requests: ${[...requests].sort().join(', ') || 'none'}`
 })
 
 await check('host bundle contract', async () => {

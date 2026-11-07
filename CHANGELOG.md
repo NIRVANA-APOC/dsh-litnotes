@@ -16,8 +16,9 @@ on-disk data formats.
   module-loader bundle `lib/client.js`, with size budgets; a 17-check pre-install gate
   (`scripts/check.ts`, `--no-tests`, `--final`) covering manifest, identity, types, build,
   artifacts, vendored runtimes and the vitest suite.
-- Zero runtime npm dependencies in the shipped plugin; `react` remains the Client bundle's only
-  external module request. pdf.js and KaTeX stay vendored and version-locked.
+- Zero runtime npm dependencies in the shipped plugin; the Client bundle's only external requests
+  are the platform-provided React runtime modules (`react`, `react-dom`, `react-dom/client`);
+  everything else is bundled. pdf.js and KaTeX stay vendored and version-locked.
 
 ### Shared paper model
 

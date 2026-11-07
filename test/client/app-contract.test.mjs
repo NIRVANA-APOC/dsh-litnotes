@@ -149,13 +149,28 @@ test('margin notes expose the AI spark and the origin/aspect filter', () => {
   assert.match(app, /updatePrefs\(\{ notesFilter: next \}\)/, 'the origin filter must persist host-side')
   const margin = app.slice(app.indexOf('function MruMargin('), app.indexOf('/** Bottom status bar.'))
   for (const className of [
-    'mru-note-filter', 'mru-note-filter__chip', 'mru-note-filter__aspect',
+    'mru-note-filter', 'mru-note-filter__chip',
     'mru-note-filter__status', 'mru-note__origin', 'mru-note--ai',
   ]) {
     assert.ok(margin.includes(className), `margin filter/spark markup must emit ${className}`)
   }
   assert.match(margin, /notes\.filterAi/, 'the AI filter chip must use the registered copy')
   assert.match(margin, /mru-note__origin[\s\S]{0,160}MruGlyph, \{ name: 'spark'/, 'AI notes must show the spark marker')
+  // The aspect filter is the legend itself: no duplicated dot-only filter row.
+  assert.doesNotMatch(margin, /mru-note-filter__aspect/, 'the separate aspect toggle row must be gone')
+  assert.match(margin, /MruAspectLegend, \{ t, onToggle: toggleAspect, activeAspect: aspectFilter \}/,
+    'the margin legend must double as the aspect filter')
+  assert.match(margin, /mru-margin__legend-hint/, 'the filtering legend states what clicking it does')
+  const legend = app.slice(app.indexOf('function MruAspectLegend('), app.indexOf('/**\n * Draggable panel divider'))
+  assert.match(legend, /mru-aspect-legend__item--button/, 'interactive legend items become toggle buttons')
+  assert.match(legend, /'aria-pressed': active \? 'true' : 'false'/, 'interactive legend items expose aria-pressed')
+  assert.match(legend, /'data-aspect': entry\.aspect/, 'interactive legend items carry data-aspect for the harness')
+  assert.match(legend, /onToggle\(active \? null : entry\.aspect\)/, 'clicking an active aspect clears it')
+  const zh = dictionaryKeys('ZH')
+  const en = dictionaryKeys('EN')
+  for (const key of ['notes.aspectFilterHint', 'notes.filterAspect']) {
+    assert.ok(zh.has(key) && en.has(key), `missing dictionary key ${key}`)
+  }
   assert.match(app, /notesFilter,\n\s*onNotesFilterChange: changeNotesFilter,/, 'MineruApp must pass the filter state into the margin')
   // The note editor carries the AI provenance into the edit surface too.
   assert.match(app, /origin: annotation\.origin \|\| 'user',/, 'the note editor must receive the annotation origin')

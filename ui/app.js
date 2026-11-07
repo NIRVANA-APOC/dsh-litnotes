@@ -547,6 +547,7 @@ const ZH = {
   'notes.filterAi': 'AI 批注',
   'notes.filterUser': '我的批注',
   'notes.filterAspect': '按侧重点',
+  'notes.aspectFilterHint': '点击图例按侧重点筛选，再次点击取消',
   'notes.filterEmpty': '没有符合筛选条件的批注',
   'notes.filterClear': '清除筛选',
   'notes.filteredCount': '显示 {shown} / {total} 条',
@@ -1032,6 +1033,7 @@ const EN = {
   'notes.filterAi': 'AI notes',
   'notes.filterUser': 'My notes',
   'notes.filterAspect': 'By aspect',
+  'notes.aspectFilterHint': 'Click a legend item to filter by aspect; click again to clear',
   'notes.filterEmpty': 'No notes match this filter',
   'notes.filterClear': 'Clear filter',
   'notes.filteredCount': 'Showing {shown} / {total}',
@@ -3408,22 +3410,55 @@ function MruRail(props) {
       t('rail.foot', { count: counts.total || 0, parsed: counts.parsed || 0 })));
 }
 
-/** Aspect colour legend row: dot + always-visible text label (docs/UI-POLISH-SPEC.md §5). */
+/**
+ * Aspect colour legend row: dot + always-visible text label (docs/UI-POLISH-SPEC.md §5).
+ *
+ * When `onToggle` is passed the legend doubles as the aspect filter (margin
+ * notes tab): each item becomes a pressed/unpressed button, so the reader has
+ * one control instead of a duplicated filter legend (this round merged the
+ * former `.mru-note-filter__aspect` dot row into the legend).
+ *
+ * @param {{ t?: Function, onToggle?: (aspect: string|null) => void,
+ *   activeAspect?: string|null, className?: string }} props
+ */
 function MruAspectLegend(props) {
-  const { t } = props;
-  const className = 'mru-aspect-legend' + (props.className ? ` ${props.className}` : '');
-  return h('div', { className, role: 'list' },
-    MRU_ASPECT_LEGEND.map((entry) => h('span', {
-      key: entry.aspect,
-      className: 'mru-aspect-legend__item',
-      role: 'listitem',
-      title: t(entry.labelKey),
-    },
-      h('span', {
+  const { t, onToggle, activeAspect } = props;
+  const interactive = typeof onToggle === 'function';
+  const className = 'mru-aspect-legend'
+    + (interactive ? ' mru-aspect-legend--interactive' : '')
+    + (props.className ? ` ${props.className}` : '');
+  return h('div', {
+    className,
+    role: interactive ? 'group' : 'list',
+    'aria-label': interactive ? t('notes.aspectFilterHint') : undefined,
+  },
+    MRU_ASPECT_LEGEND.map((entry) => {
+      const active = interactive && activeAspect === entry.aspect;
+      const dot = h('span', {
         className: 'mru-aspect-legend__dot mru-aspect-legend__dot--' + entry.aspect,
         'aria-hidden': 'true',
-      }),
-      h('span', { className: 'mru-aspect-legend__label' }, t(entry.labelKey)))));
+      });
+      const label = h('span', { className: 'mru-aspect-legend__label' }, t(entry.labelKey));
+      if (!interactive) {
+        return h('span', {
+          key: entry.aspect,
+          className: 'mru-aspect-legend__item',
+          role: 'listitem',
+          title: t(entry.labelKey),
+        }, dot, label);
+      }
+      return h('button', {
+        key: entry.aspect,
+        type: 'button',
+        className: 'mru-aspect-legend__item mru-aspect-legend__item--button'
+          + (active ? ' mru-aspect-legend__item--active' : ''),
+        'data-aspect': entry.aspect,
+        'aria-pressed': active ? 'true' : 'false',
+        'aria-label': `${t(entry.labelKey)} · ${t('notes.aspectFilterHint')}`,
+        title: t('notes.aspectFilterHint'),
+        onClick: () => onToggle(active ? null : entry.aspect),
+      }, dot, label);
+    }));
 }
 
 /**
@@ -3581,21 +3616,7 @@ function MruMargin(props) {
               }
             },
           }, t(labelKey), h('span', { className: 'mru-note-filter__count' }, String(count)))),
-          h('span', { key: 'aspects', className: 'mru-note-filter__aspects', role: 'group', 'aria-label': t('notes.filterAspect') },
-            MRU_ASPECT_LEGEND.map((entry) => h('button', {
-              key: entry.aspect,
-              type: 'button',
-              className: 'mru-note-filter__aspect mru-note-filter__aspect--' + entry.color
-                + (aspectFilter === entry.aspect ? ' mru-note-filter__aspect--active' : ''),
-              'data-aspect': entry.aspect,
-              'aria-pressed': aspectFilter === entry.aspect ? 'true' : 'false',
-              'aria-label': t(entry.labelKey),
-              title: t(entry.labelKey),
-              onClick: () => setAspectFilter((current) => (current === entry.aspect ? null : entry.aspect)),
-            }, h('span', {
-              className: 'mru-note-filter__dot mru-note-filter__dot--' + entry.aspect,
-              'aria-hidden': 'true',
-            }))))),
+        ),
         filterActive
           ? h('div', { className: 'mru-note-filter__status' },
               h('span', null, t('notes.filteredCount', { shown, total })),
@@ -3605,7 +3626,13 @@ function MruMargin(props) {
                 onClick: clearFilters,
               }, t('notes.filterClear')))
           : null);
-      legendNode = h('div', { className: 'mru-margin__legend' }, h(MruAspectLegend, { t }));
+      const toggleAspect = (aspect) => setAspectFilter((current) => (current === aspect ? null : aspect));
+      legendNode = h('div', {
+        className: 'mru-margin__legend' + (aspectFilter !== null ? ' mru-margin__legend--filtering' : ''),
+        'data-filtering': aspectFilter !== null ? 'true' : undefined,
+      },
+        h('span', { className: 'mru-margin__legend-hint' }, t('notes.filterAspect')),
+        h(MruAspectLegend, { t, onToggle: toggleAspect, activeAspect: aspectFilter }));
     }
     const list = [];
     if (droppedCount > 0) {

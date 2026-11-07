@@ -6137,61 +6137,71 @@ circle.mru-graph__node[data-related="true"] {
   color: var(--mru-ink-soft);
 }
 
-.mru-note-filter__aspects {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: 6px;
-  padding-left: 8px;
-  border-left: 1px solid var(--mru-rule);
+.mru-note-filter__clear:hover {
+  color: var(--mru-ink);
 }
 
-.mru-note-filter__aspect {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
+/* The margin aspect legend IS the aspect filter (this round merged the former
+   separate dot row into the legend): items become quiet toggle buttons while
+   staying a legend — dot + label, ink-neutral until pressed. */
+.mru-aspect-legend--interactive {
+  gap: 3px 6px;
+}
+
+.mru-aspect-legend__item--button {
+  margin: 0;
+  padding: 1px 5px 2px;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: 999px;
   background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
   cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 
-.mru-note-filter__aspect:hover {
-  border-color: var(--mru-rule-strong);
+.mru-aspect-legend__item--button:hover {
+  border-color: var(--mru-rule);
+  background: color-mix(in srgb, var(--mru-ink) 3%, transparent);
+  color: var(--mru-ink);
 }
 
-.mru-note-filter__aspect--active {
-  border-color: color-mix(in srgb, var(--mru-ink) 38%, transparent);
-  background: color-mix(in srgb, var(--mru-ink) 6%, transparent);
+.mru-aspect-legend__item--button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mru-accent) 55%, transparent);
+  outline-offset: 1px;
 }
 
-.mru-note-filter__dot {
+.mru-aspect-legend__item--button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--mru-ink) 34%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 7%, transparent);
+  color: var(--mru-ink);
+  font-weight: 600;
+}
+
+/* the legend gains a tiny "按侧重点" hint only while it acts as a filter */
+.mru-margin__legend-hint {
+  display: inline-flex;
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mru-ink) 14%, transparent);
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--mru-font-ui);
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
-.mru-note-filter__dot--definition,
-.mru-note-filter__dot--context {
-  background: var(--mru-hl-yellow);
+.mru-margin__legend-hint::after {
+  content: "";
+  width: 1px;
+  height: 10px;
+  margin-left: 8px;
+  background: var(--mru-rule);
 }
 
-.mru-note-filter__dot--method {
-  background: var(--mru-hl-sage);
-}
-
-.mru-note-filter__dot--result {
-  background: var(--mru-hl-sky);
-}
-
-.mru-note-filter__dot--limitation {
-  background: var(--mru-hl-rose);
+.mru-margin__legend--filtering {
+  background: color-mix(in srgb, var(--mru-ink) 2%, var(--mru-surface));
 }
 
 .mru-note-filter__status {
@@ -6605,7 +6615,7 @@ circle.mru-graph__node--merge-candidate {
 
 @media (prefers-reduced-motion: reduce) {
   .mru-note-filter__chip,
-  .mru-note-filter__aspect,
+  .mru-aspect-legend__item--button,
   .mru-graph__card-action {
     transition: none;
   }
@@ -6614,11 +6624,6 @@ circle.mru-graph__node--merge-candidate {
 @container mru-desk (max-width: 560px) {
   .mru-note-filter {
     padding-left: 12px;
-  }
-
-  .mru-note-filter__aspects {
-    margin-left: 2px;
-    padding-left: 6px;
   }
 
   .mru-graph__card-actions {
@@ -7398,6 +7403,8 @@ circle.mru-graph__node--merge-candidate {
   border-left: 2px solid color-mix(in srgb, var(--mru-ink-soft) 38%, transparent);
   background: color-mix(in srgb, var(--mru-ink) 3%, transparent);
   color: var(--mru-ink-soft);
+}
+
 /* --------------------------------------------------------------------------
    14. Local parsing (T0/T0.5) — engine choice, quality banner, capability list
    -------------------------------------------------------------------------- */

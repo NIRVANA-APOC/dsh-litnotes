@@ -42,8 +42,9 @@ Every feature below addresses one of these three.
   colors (definition=yellow, method=sage, result=sky, limitation=rose) make the paper's margin
   history legible: after ten questions you can see which parts were discussed and why.
 - **Aspect legend + AI filter** in the margin: filter notes to "AI 批注" / "我的批注" / by aspect
-  (implemented: origin chips with counts + per-aspect toggles; AI notes carry the sparkle and their
-  aspect label, and the filter is remembered host-side).
+  (implemented: origin chips with counts + the aspect legend itself acts as the aspect filter;
+  AI notes carry the sparkle and their aspect label, and the origin filter is remembered
+  host-side).
 - **Reading memory**: the app returns to the last paper, scroll offset, reading mode, margin tab
   and AI conversation — switching to a chat with the agent no longer loses the place.
 - **Streaming with control**: tokens stream in; stop, regenerate, edit-and-rerun; suggested

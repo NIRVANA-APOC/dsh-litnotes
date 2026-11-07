@@ -906,10 +906,13 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     const status = first('mru-note-filter__status')
     assert.ok(status, 'an active filter shows the shown/total status')
     assert.match(textOf(status), /notes\.filteredCount/, 'status copy comes from the dictionary')
-    // Aspect toggles AND with the origin filter; result is empty here.
-    const aspectButtons = findAll('mru-note-filter__aspect')
-    const resultAspect = aspectButtons.find((button) => button.attrs && button.attrs['data-aspect'] === 'result')
-    assert.ok(resultAspect, 'the aspect toggle row renders one button per aspect')
+    // The aspect legend itself is the filter (no duplicated dot row) and ANDs
+    // with the origin filter; the result is empty here.
+    assert.equal(findAll('mru-note-filter__aspect').length, 0, 'no duplicated aspect filter row')
+    const legendFilterItems = findAll('mru-aspect-legend__item--button')
+    assert.equal(legendFilterItems.length, 5, 'the margin legend renders five toggle buttons')
+    const resultAspect = legendFilterItems.find((button) => button.attrs && button.attrs['data-aspect'] === 'result')
+    assert.ok(resultAspect, 'the interactive legend exposes the aspect toggles')
     click(resultAspect)
     await settle(4)
     assert.ok(first('mru-margin__empty--filtered'), 'an empty filtered result renders the empty state')

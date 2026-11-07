@@ -119,9 +119,12 @@ normalizer preserve `stale`/`staleReason`/`reanchored`, so a stale annotation is
 margin as “位置已变化” and is never erased by a whole-list save.
 The client keeps rendering existing annotations unchanged; AI annotations get a small sparkle
 marker in the margin list and in the note editor (`origin:"ai"`), and the notes tab carries an
-origin/aspect filter: chips `全部 / AI 批注 / 我的批注` (counts) plus one aspect toggle per
-reader aspect, AND-combined. The origin filter is the host-persisted preference `notesFilter`
-(`all|ai|user`); the aspect selection is session-local. Deduping rule: a new AI annotation is
+origin/aspect filter: chips `全部 / AI 批注 / 我的批注` (counts) for the origin, and the aspect
+legend beneath the tabs doubles as the aspect filter — clicking a legend item (dot + label) filters
+to that aspect (pressed state), clicking it again clears; origin × aspect are AND-combined and the
+active-filter line shows shown/total plus 清除筛选. The origin filter is the host-persisted
+preference `notesFilter` (`all|ai|user`); the aspect selection is session-local. There is exactly
+one aspect-control surface: no separate dot-only filter row is rendered next to the legend. Deduping rule: a new AI annotation is
 skipped (and reported) when an existing annotation on the same block covers an overlapping range
 with the same aspect.
 
@@ -576,10 +579,12 @@ Data hooks: root `data-merge-mode`; card `data-pending`/`data-merging`; nodes
 
 Margin-note hooks (this round, `.mru-note*` family): `.mru-note-filter`,
 `.mru-note-filter__chips`, `.mru-note-filter__chip` (+`--active`), `.mru-note-filter__count`,
-`.mru-note-filter__aspects` / `__aspect` (+`--active`) / `__dot` (+`--<aspect>`),
 `.mru-note-filter__status`, `.mru-note-filter__clear`, `.mru-note--ai`, `.mru-note__origin`,
 `.mru-margin__empty--filtered`, `.mru-noteeditor__head` / `__origin` / `__aspect` /
-`__aspect-dot`. Settings: `.mru-switch--disabled`, `.mru-toggle-row--disabled`.
+`__aspect-dot`. The aspect filter reuses the legend: `.mru-margin__legend-hint`,
+`.mru-margin__legend--filtering`, `.mru-aspect-legend--interactive`,
+`.mru-aspect-legend__item--button` (+`[aria-pressed="true"]`). Settings:
+`.mru-switch--disabled`, `.mru-toggle-row--disabled`.
 
 States are expressed with modifier classes and `data-*` attributes; all chrome must stay on
 `--dsw-alias-*` / existing `.mru-*` tokens. Motion is limited to node/edge fades on layout change

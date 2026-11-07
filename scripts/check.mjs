@@ -288,6 +288,15 @@ function shippedScripts() {
     .sort()
 }
 
+check('ui/styles.css integrity', () => {
+  const css = read('ui/styles.css')
+  const opens = (css.match(/\{/g) ?? []).length
+  const closes = (css.match(/\}/g) ?? []).length
+  if (opens !== closes) throw new Error(`unbalanced braces: ${opens} "{" vs ${closes} "}"`)
+  if (/^(?:<{7}|={7}|>{7})/m.test(css)) throw new Error('merge conflict markers found in ui/styles.css')
+  return `${opens} blocks, braces balanced, no conflict markers`
+})
+
 check('node --check (shipped JS)', () => {
   const files = shippedScripts()
   if (files.length === 0) throw new Error('no shipped .js/.mjs files found')

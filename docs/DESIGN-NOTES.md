@@ -595,10 +595,14 @@ the four annotation inks (no new palette, no new external assets).
 
 ### 12c.1 Margin AI filter and spark
 
-- `.mru-note-filter` sits between the 大纲/批注/AI tabs and the note list (it is a sibling of the
-  aspect legend, so the legend keeps its place). Two rows: origin chips `全部 / AI 批注 / 我的批注`
-  with tabular counts, and a compact per-aspect toggle row (18px round dot buttons, `aria-pressed`,
-  `title` = aspect label). Origin × aspect is an AND filter; the active state shows
+- `.mru-note-filter` sits between the 大纲/批注/AI tabs and the aspect legend. One row of origin
+  chips `全部 / AI 批注 / 我的批注` with tabular counts; the **aspect legend itself is the aspect
+  filter** (this round removed a duplicated dot-only filter row): `.mru-margin__legend` gains a
+  quiet `.mru-margin__legend-hint`（按侧重点）, the legend renders
+  `.mru-aspect-legend--interactive` items as `.mru-aspect-legend__item--button` buttons with
+  `aria-pressed` (dot + label unchanged, pressed = ink ring + 7% ink wash + 600 weight, hover/focus
+  states), clicking the active aspect again clears it, and `.mru-margin__legend--filtering` marks
+  the filtering state. Origin × aspect is an AND filter; the active state shows
   「显示 {shown} / {total} 条」 plus a dotted-underline 清除筛选 action, and an empty result
   renders `.mru-margin__empty--filtered` with the same clear action.
 - `.mru-note--ai` is a slightly firmer hairline around an AI note; `.mru-note__origin` is a

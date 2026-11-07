@@ -1,9 +1,9 @@
 {
   "name": "dsh-litnotes",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "AI-native literature workspace: local library, MinerU parsing, bilingual reading, grounded AI Q&A with clickable citations that auto-annotate the text, per-paper and library-wide knowledge graphs, and DSH agent tools over the library.",
+  "description": "AI-native literature desk for DeepSeek Harness: a local library, MinerU/local parsing, a bilingual reading desk, grounded AI conversation that marks the page, per-paper and library knowledge graphs, and agent tools over the whole library.",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -15,16 +15,22 @@
     "index.js",
     "lib/**/*.js",
     "vendor/**",
-    "ui/*.js",
-    "ui/*.css",
-    "ui/*.svg",
     "locale/*.json",
     "cordis.patch.yml",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20.16"
+  },
+  "packageManager": "pnpm@12.6.0",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "watch": "node scripts/build.ts --watch",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "check": "node scripts/check.ts"
   },
   "dsh": {
     "bundle": {
@@ -40,5 +46,41 @@
       ]
     }
   },
-  "icon": "./icon.svg"
+  "icon": "./icon.svg",
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-brand": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-shortcuts": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-store": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-theme": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-package-manifest": "0.2.2-rc.1",
+    "@floating-ui/react": "^0.27.20",
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.12",
+    "@types/d3-zoom": "^3.0.9",
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "d3-force": "^3.0.1",
+    "d3-selection": "^3.0.1",
+    "d3-zoom": "^3.0.1",
+    "esbuild": "^0.28.2",
+    "fflate": "^0.8.3",
+    "happy-dom": "^21.0.4",
+    "htmlparser2": "^12.0.0",
+    "markdown-it": "^15.0.3",
+    "minisearch": "^7.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "zustand": "^5.0.16"
+  }
 }

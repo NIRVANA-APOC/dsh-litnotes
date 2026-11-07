@@ -1,14 +1,14 @@
-# dependencies and build output that should not be committed
+# dependencies, build scratch and tool output that should not be committed
 node_modules/
+.build/
 coverage/
 *.log
 *.tmp
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
 
-# local scratch
+# local scratch (agent workspaces, research, acceptance runs)
 /tmp/
-
 .design-harness/
-
 .agents/

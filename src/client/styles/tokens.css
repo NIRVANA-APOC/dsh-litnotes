@@ -1,0 +1,115 @@
+/**
+ * dsh-litnotes 2.0 design tokens — "页边" (the margin voice).
+ *
+ * Chrome inherits the Harness theme; the plugin owns the reading sheet, the
+ * signal color (the machine's voice), the four aspect inks (the reader's
+ * memory) and the shadow. Nothing else uses chroma.
+ *
+ * See `.agents/plan/DESIGN-V2.md`; the shipped contract is `docs/UI-SPEC.md`.
+ */
+
+.ln-root {
+  /* Chrome (host tokens) */
+  --ln-bg: var(--dsw-alias-bg-base);
+  --ln-surface: var(--dsw-alias-bg-layer-1);
+  --ln-surface-2: var(--dsw-alias-bg-layer-2);
+  --ln-overlay: var(--dsw-alias-bg-overlay);
+  --ln-ink: var(--dsw-alias-label-primary);
+  --ln-ink-soft: var(--dsw-alias-label-secondary);
+  --ln-ink-faint: color-mix(in srgb, var(--dsw-alias-label-primary) 45%, transparent);
+  --ln-rule: var(--dsw-alias-border-l1);
+  --ln-rule-strong: var(--dsw-alias-border-l2);
+  --ln-error: var(--dsw-alias-state-error-primary);
+  --ln-warn: var(--dsw-alias-state-warn-primary);
+  --ln-success: var(--dsw-alias-state-success-primary);
+
+  /* The sheet */
+  --ln-paper: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 96%, #d8d2c2 4%);
+  --ln-paper-edge: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+
+  /* The machine's voice */
+  --ln-signal: #2646be;
+  --ln-signal-strong: #1d37a3;
+  --ln-signal-soft: color-mix(in srgb, #2646be 12%, transparent);
+  --ln-on-signal: #ffffff;
+
+  /* The four aspect inks (memory) */
+  --ln-yellow: rgba(226, 178, 58, 0.3);
+  --ln-sage: rgba(104, 156, 112, 0.28);
+  --ln-sky: rgba(84, 132, 190, 0.25);
+  --ln-rose: rgba(194, 106, 124, 0.24);
+  --ln-yellow-ink: #8a6a12;
+  --ln-sage-ink: #3f6b46;
+  --ln-sky-ink: #31557e;
+  --ln-rose-ink: #8a4353;
+  --ln-hl-active: color-mix(in srgb, var(--ln-signal) 55%, transparent);
+
+  /* Floating overlays only */
+  --ln-shadow: 0 1px 2px rgba(16, 18, 20, 0.05), 0 18px 44px -24px rgba(16, 18, 20, 0.28);
+
+  /* Type */
+  --ln-font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --ln-font-read: "Source Serif 4", "Iowan Old Style", "Charter", "Palatino Linotype", Palatino,
+    Georgia, "Noto Serif", "Songti SC", "SimSun", serif;
+  --ln-font-trans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --ln-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Geometry */
+  --ln-topbar-h: 52px;
+  --ln-contextbar-h: 40px;
+  --ln-statusbar-h: 28px;
+  --ln-rail-width: 264px;
+  --ln-margin-width: 336px;
+  --ln-read-scale: 1;
+  --ln-measure: 58ch;
+  --ln-radius-control: 4px;
+  --ln-radius-card: 8px;
+  --ln-radius-sheet: 10px;
+  --ln-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Per-kind aspect ink aliases resolve from data-aspect attributes. */
+  --ln-aspect-ink: var(--ln-yellow);
+}
+
+body[data-ds-dark-theme] .ln-root {
+  --ln-paper: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 94%, #000 6%);
+  --ln-paper-edge: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);
+  --ln-signal: #94a8ff;
+  --ln-signal-strong: #b0bfff;
+  --ln-signal-soft: color-mix(in srgb, #94a8ff 18%, transparent);
+  --ln-on-signal: #10142e;
+  --ln-yellow: rgba(226, 178, 58, 0.18);
+  --ln-sage: rgba(104, 156, 112, 0.17);
+  --ln-sky: rgba(84, 132, 190, 0.16);
+  --ln-rose: rgba(194, 106, 124, 0.15);
+  --ln-yellow-ink: #e0bd6a;
+  --ln-sage-ink: #9cc6a3;
+  --ln-sky-ink: #9dbde0;
+  --ln-rose-ink: #d99cab;
+  --ln-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 44px -24px rgba(0, 0, 0, 0.7);
+}
+
+/* Aspect ink aliases: one attribute, one variable, used by swatches, tethers,
+   margin dots and graph node rings. */
+.ln-root [data-aspect="definition"] {
+  --ln-aspect-ink: var(--ln-yellow);
+  --ln-aspect-strong: var(--ln-yellow-ink);
+}
+.ln-root [data-aspect="method"] {
+  --ln-aspect-ink: var(--ln-sage);
+  --ln-aspect-strong: var(--ln-sage-ink);
+}
+.ln-root [data-aspect="result"] {
+  --ln-aspect-ink: var(--ln-sky);
+  --ln-aspect-strong: var(--ln-sky-ink);
+}
+.ln-root [data-aspect="limitation"] {
+  --ln-aspect-ink: var(--ln-rose);
+  --ln-aspect-strong: var(--ln-rose-ink);
+}
+.ln-root [data-aspect="context"] {
+  --ln-aspect-ink: var(--ln-yellow);
+  --ln-aspect-strong: var(--ln-yellow-ink);
+}

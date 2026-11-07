@@ -1,0 +1,613 @@
+/**
+ * Shell-library area stylesheet (rail, import flow, parse options, settings).
+ *
+ * Injected once through `useInjectedStyle('shell-library', …)`. It extends the
+ * frame styles without moving any control: the topbar/contextbar positions are
+ * frame-owned; this file only styles the rail column, the shell dialogs and the
+ * responsive drawer below 820px.
+ */
+
+/* ====================================================================== *
+ * Rail
+ * ====================================================================== */
+
+.ln-rail {
+  position: relative;
+  background: var(--ln-surface);
+}
+
+.ln-rail--collapsed {
+  flex-basis: 56px;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+}
+
+.ln-rail__strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 0;
+}
+
+.ln-rail__stripCount {
+  margin: 2px 0 0;
+  color: var(--ln-ink-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-rail__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: brightness(0.62) saturate(0.9);
+  -webkit-backdrop-filter: brightness(0.62) saturate(0.9);
+  animation: ln-fade-in 140ms var(--ln-ease);
+}
+.ln-rail__scrim:focus-visible {
+  outline-offset: -3px;
+}
+
+@keyframes ln-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Toolbar: status chips + sort, under the search field. */
+
+.ln-rail__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 6px 10px;
+}
+
+.ln-rail__filters {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.ln-rail__filters::-webkit-scrollbar {
+  display: none;
+}
+.ln-rail__filters .ln-chip {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+/* Rail list states */
+
+.ln-rail__skeleton {
+  height: 46px;
+  margin: 0 2px 2px;
+  border-radius: var(--ln-radius-control);
+  background: linear-gradient(
+    90deg,
+    var(--ln-surface-2) 0%,
+    color-mix(in srgb, var(--ln-surface-2) 55%, var(--ln-surface)) 50%,
+    var(--ln-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: ln-skeleton 1.2s var(--ln-ease) infinite;
+}
+@keyframes ln-skeleton {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.ln-rail__notice {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  margin: 5px 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--ln-rule);
+  border-radius: var(--ln-radius-card);
+  background: var(--ln-surface-2);
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.ln-rail__noticeTitle {
+  margin: 0;
+  color: var(--ln-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.ln-rail__notice--error {
+  border-color: color-mix(in srgb, var(--ln-error) 35%, transparent);
+}
+.ln-rail__notice--error .ln-rail__noticeTitle {
+  color: var(--ln-error);
+}
+
+/* Document rows (frame.css owns the base row; these are the additions). */
+
+.ln-doc__metaSep {
+  color: var(--ln-ink-faint);
+}
+.ln-doc__metaText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln-doc__badge {
+  margin-top: 1px;
+}
+.ln-doc__progressRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.ln-doc__progressText {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln-doc__progress {
+  position: static;
+  flex: 0 0 52px;
+}
+
+/* Upload rows */
+
+.ln-upload {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border-radius: var(--ln-radius-control);
+  background: var(--ln-surface-2);
+}
+.ln-upload__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.ln-upload__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ln-ink);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln-upload__state {
+  flex: 0 0 auto;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+}
+.ln-upload__state[data-failed] {
+  color: var(--ln-error);
+}
+.ln-upload__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ln-upload__guide {
+  margin: 0;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.ln-upload__actions .ln-iconbtn {
+  width: 22px;
+  height: 22px;
+}
+.ln-upload__actions .ln-btn {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+/* ====================================================================== *
+ * Import dialog
+ * ====================================================================== */
+
+.ln-import {
+  display: grid;
+  gap: 16px;
+  padding: 2px 0 8px;
+}
+
+.ln-import__zone {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 18px 16px;
+  border: 1px dashed var(--ln-rule-strong);
+  border-radius: var(--ln-radius-card);
+  background: color-mix(in srgb, var(--ln-surface-2) 55%, transparent);
+  text-align: center;
+}
+.ln-import__zoneTitle {
+  color: var(--ln-ink);
+  font-family: var(--ln-font-read);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ln-import__zoneBody {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.ln-import__zone .ln-btn {
+  margin-top: 4px;
+}
+
+.ln-import__files {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ln-import__file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--ln-rule);
+  border-radius: var(--ln-radius-control);
+  background: var(--ln-bg);
+  font-size: 12px;
+}
+.ln-import__fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln-import__fileSize {
+  flex: 0 0 auto;
+  color: var(--ln-ink-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ln-import__file .ln-iconbtn {
+  width: 22px;
+  height: 22px;
+}
+.ln-import__filesHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+}
+
+.ln-import__separator {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ln-ink-faint);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.ln-import__separator::before,
+.ln-import__separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ln-rule);
+}
+
+.ln-import__urlRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ln-import__urlRow .ln-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ln-import__sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 0;
+}
+.ln-import__sectionTitle {
+  margin: 0;
+  font-family: var(--ln-font-read);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.ln-import__sectionHint {
+  color: var(--ln-ink-faint);
+  font-size: 11px;
+}
+
+/* Callouts (token warning, inline errors, AI hints) */
+
+.ln-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ln-rule);
+  border-radius: var(--ln-radius-control);
+  background: var(--ln-surface-2);
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.ln-callout__text {
+  flex: 1;
+  min-width: 0;
+}
+.ln-callout--warn {
+  border-color: color-mix(in srgb, var(--ln-warn) 42%, transparent);
+  background: color-mix(in srgb, var(--ln-warn) 9%, transparent);
+  color: var(--ln-ink);
+}
+.ln-callout--error {
+  border-color: color-mix(in srgb, var(--ln-error) 42%, transparent);
+  background: color-mix(in srgb, var(--ln-error) 8%, transparent);
+  color: var(--ln-error);
+}
+.ln-callout--info {
+  border-color: color-mix(in srgb, var(--ln-signal) 30%, transparent);
+  background: var(--ln-signal-soft);
+}
+
+/* ====================================================================== *
+ * Parse options form
+ * ====================================================================== */
+
+.ln-parseform {
+  display: grid;
+}
+.ln-parseform .ln-field:first-child {
+  border-top: 1px solid var(--ln-rule);
+}
+.ln-parseform .ln-field + .ln-callout {
+  margin: 8px 0;
+}
+.ln-parseform__switches {
+  display: grid;
+  gap: 9px;
+  padding-top: 2px;
+}
+.ln-parseform__switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+.ln-parseform__switch .ln-switch {
+  flex: 0 0 auto;
+}
+.ln-parseform__switchLabel {
+  display: block;
+  color: var(--ln-ink);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.ln-parseform__switchHint {
+  display: block;
+  color: var(--ln-ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ln-field__hint--warn {
+  color: var(--ln-warn);
+}
+.ln-seg.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.ln-field__control > .ln-seg {
+  margin-bottom: 5px;
+}
+
+/* ====================================================================== *
+ * Settings dialog
+ * ====================================================================== */
+
+.ln-set {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.ln-set__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -4px 8px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--ln-rule);
+  background: var(--ln-overlay);
+}
+
+.ln-set__section {
+  padding-top: 4px;
+}
+.ln-set__section + .ln-set__section {
+  margin-top: 6px;
+  border-top: 1px solid var(--ln-rule);
+}
+.ln-set__sectionTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 14px 0 2px;
+  font-family: var(--ln-font-read);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ln-set__sectionHint {
+  margin: -2px 0 6px;
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.ln-set__inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+.ln-set__inline .ln-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.ln-set__localList {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+}
+.ln-set__localRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--ln-rule);
+  border-radius: var(--ln-radius-control);
+  background: var(--ln-bg);
+  font-size: 11.5px;
+}
+.ln-set__localName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ln-set__localVersion {
+  color: var(--ln-ink-faint);
+  font-family: var(--ln-font-mono);
+  font-size: 10px;
+}
+.ln-set__localReason {
+  color: var(--ln-ink-faint);
+  font-size: 10.5px;
+}
+
+.ln-set__diag {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 4px;
+}
+.ln-set__diagText {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--ln-rule);
+  border-radius: var(--ln-radius-control);
+  background: var(--ln-bg);
+  color: var(--ln-ink-soft);
+  font-family: var(--ln-font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ln-set__theme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ln-ink-soft);
+  font-size: 12px;
+}
+
+.ln-set__aboutBody {
+  margin: 6px 0 0;
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* ====================================================================== *
+ * Responsive: rail as an overlay drawer below 820px (DESIGN-V2 §4)
+ * ====================================================================== */
+
+@media (max-width: 820px) {
+  .ln-root .ln-desk {
+    position: relative;
+  }
+  .ln-root .ln-rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(300px, 86vw);
+    border-right: 1px solid var(--ln-rule);
+    background: var(--ln-surface);
+    box-shadow: var(--ln-shadow);
+    animation: ln-drawer-in 160ms var(--ln-ease);
+  }
+  .ln-root .ln-rail--collapsed {
+    display: none;
+  }
+  .ln-rail__toolbar {
+    padding-left: 12px;
+  }
+}
+
+@keyframes ln-drawer-in {
+  from {
+    transform: translateX(-12px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .ln-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+  .ln-field__label {
+    padding-top: 0;
+  }
+  .ln-field__hint {
+    grid-column: 1;
+  }
+  .ln-set__nav {
+    overflow-x: auto;
+  }
+}

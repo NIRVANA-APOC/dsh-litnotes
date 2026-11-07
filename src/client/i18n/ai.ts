@@ -1,0 +1,233 @@
+/**
+ * AI margin copy — owned by the `client-ai` workstream.
+ *
+ * Every string the margin voice renders lives here in both languages; the merged
+ * dictionary in `./index.ts` stays key-complete at compile time. Keys ported
+ * from the frozen 1.0.0 dictionaries keep their `ai.*` names so the export
+ * markdown and error vocabulary stay byte-compatible; margin-specific keys
+ * (`ai.filter.*`, `ai.clear`, …) are new in 2.0.
+ */
+
+export const zh = {
+  'ai.title': 'AI 阅读助手',
+  'ai.model': '模型 {model}',
+  'ai.modelDefault': '默认模型',
+  'ai.modelUnavailable': '模型未连接',
+
+  /* Margin stream filter chips (全部 / 对话 / AI 批注 / 我的批注). */
+  'ai.filter.label': '页边筛选',
+  'ai.filter.all': '全部',
+  'ai.filter.chat': '对话',
+  'ai.filter.ai': 'AI 批注',
+  'ai.filter.user': '我的批注',
+
+  /* Empty / loading / setup states. */
+  'ai.emptyTitle': '从这一页开始提问',
+  'ai.emptyText': '答案只根据本文内容生成，并标注来源段落。',
+  'ai.loadingHistory': '正在载入对话…',
+  'ai.historyError': '对话载入失败。',
+  'ai.unavailableTitle': 'AI 模型尚未就绪',
+  'ai.unavailableText': '当前 Harness 配置没有可用的语言模型。配置默认模型后即可在页边提问。',
+  'ai.unavailable': 'AI 暂不可用',
+  'ai.noDocument': '先从文献库选一篇已解析的论文。',
+  'ai.retry': '重试',
+  'ai.dismiss': '关闭',
+
+  /* Quick prompts (empty state). */
+  'ai.quickSummary': '总结全文',
+  'ai.quickSolved': '这篇论文解决了什么',
+  'ai.quickMethod': '方法是什么',
+  'ai.quickLimits': '有什么局限',
+  'ai.quickConcept': '解释这个概念',
+
+  /* Composer. */
+  'ai.placeholder': '问点关于这篇论文的问题…',
+  'ai.send': '发送',
+  'ai.stop': '停止',
+  'ai.hint': '⌘/Ctrl + Enter 发送 · Shift + Enter 换行',
+  'ai.busyHint': '正在回答，可先写下一条问题…',
+  'ai.selection': '选中文本',
+  'ai.visible': '当前段落',
+  'ai.clearContext': '清除上下文',
+  'ai.clearSelection': '清除选中',
+  'ai.clearParagraph': '清除段落',
+  'ai.askBlock': '问 AI（这段）',
+  'ai.askAbout': '问 AI 关于「{label}」',
+
+  /* Entry actions. */
+  'ai.copy': '复制答案',
+  'ai.copied': '已复制',
+  'ai.copyFailed': '复制失败',
+  'ai.regenerate': '重新生成',
+  'ai.jump': '跳到原文',
+  'ai.expand': '展开',
+  'ai.collapse': '收起',
+  'ai.clear': '清空对话',
+  'ai.cleared': '对话已清空',
+  'ai.clearFailed': '清空对话失败',
+  'ai.export': '导出对话',
+  'ai.exported': '对话已导出',
+  'ai.exportFailed': '导出对话失败',
+
+  /* Streaming status. */
+  'ai.thinking': '正在阅读…',
+  'ai.stopped': '已停止生成',
+  'ai.answerEmpty': '没有收到回答，重试一次。',
+  'ai.generating': '正在生成回答',
+  'ai.checkingClaims': '正在核对引文与论点…',
+  'ai.followups': '继续追问',
+  'ai.followup': '继续追问',
+
+  /* Evidence, entailment and annotations. */
+  'ai.citations': '引用',
+  'ai.citationsCount': '共 {count} 条引用',
+  'ai.citationLabel': '引用 {index}',
+  'ai.citationLabelPage': '引用 {index}，第 {page} 页',
+  'ai.missingCitation': '引用 {index}（数据缺失）',
+  'ai.citationJump': '跳转到原文',
+  'ai.unverifiedShort': '未通过校验',
+  'ai.unverifiedNotice': '{count} 条引用未通过校验，已置灰且不会写入批注。',
+  'ai.unverified': '{count} 条引用未通过校验',
+  'ai.claimCheck': '论点核对',
+  'ai.entailmentPartial': '引文仅部分支持该论点',
+  'ai.entailmentPartialShort': '部分支持',
+  'ai.entailmentUnsupported': '引文未支持该论点',
+  'ai.entailmentUnsupportedShort': '论点未获支持',
+  'ai.entailmentNotice': '{count} 条引文与论点不符，已置灰且不写入批注',
+  'ai.annotationsNotice': '已在原文标注 {count} 处引用',
+  'ai.annotationsCreated': 'AI 新增 {count} 条高亮',
+  'ai.openGraph': '查看知识图谱',
+
+  /* Question navigator. */
+  'ai.navLabel': '问题导航',
+  'ai.navJump': '跳到第 {index} 个问题',
+  'ai.navQuestion': '问题 {index}',
+  'ai.toLatest': '回到最新',
+
+  /* Errors. */
+  'ai.errHost': 'AI 服务还未就绪，稍后重试。',
+  'ai.errModel': '模型不可用，检查 DSH 的默认模型配置。',
+  'ai.errFailed': '模型调用失败，重试一次。',
+  'ai.errContext': '检索到的上下文过长，缩小提问范围。',
+  'ai.errAborted': '生成已中断。',
+  'ai.errNetwork': '网络请求失败，重试一次。',
+  'ai.errGeneric': '这次提问没有完成。',
+  'ai.error': 'AI 生成失败：{message}',
+  'ai.insufficient': '现有内容不足以回答这个问题。换个问法，或先精读全文生成图谱。',
+
+  /* Conversation export framing (frozen 1.0.0 format). */
+  'ai.exportTitle': 'AI 对话',
+  'ai.exportModel': '模型',
+  'ai.exportTime': '导出时间',
+  'ai.exportQuestion': '问题 {index}',
+  'ai.exportAnswer': '回答 {index}',
+  'ai.exportCitation': '引用',
+  'ai.exportUnverified': '未通过校验',
+} as const
+
+export const en: Record<keyof typeof zh, string> = {
+  'ai.title': 'AI reading assistant',
+  'ai.model': 'Model {model}',
+  'ai.modelDefault': 'Default model',
+  'ai.modelUnavailable': 'Model unavailable',
+
+  'ai.filter.label': 'Margin filter',
+  'ai.filter.all': 'All',
+  'ai.filter.chat': 'Chat',
+  'ai.filter.ai': 'AI notes',
+  'ai.filter.user': 'My notes',
+
+  'ai.emptyTitle': 'Start from this page',
+  'ai.emptyText': 'Answers are generated from this paper only, with source paragraphs cited.',
+  'ai.loadingHistory': 'Loading conversation…',
+  'ai.historyError': 'Could not load the conversation.',
+  'ai.unavailableTitle': 'AI model not ready',
+  'ai.unavailableText': 'No language-model route is configured in Harness. Set a default model to ask in the margin.',
+  'ai.unavailable': 'AI is unavailable',
+  'ai.noDocument': 'Select a parsed paper first.',
+  'ai.retry': 'Retry',
+  'ai.dismiss': 'Dismiss',
+
+  'ai.quickSummary': 'Summarize the paper',
+  'ai.quickSolved': 'What problem does this paper solve?',
+  'ai.quickMethod': 'What is the method?',
+  'ai.quickLimits': 'What are the limitations?',
+  'ai.quickConcept': 'Explain this concept',
+
+  'ai.placeholder': 'Ask something about this paper…',
+  'ai.send': 'Send',
+  'ai.stop': 'Stop',
+  'ai.hint': '⌘/Ctrl + Enter to send · Shift + Enter for a new line',
+  'ai.busyHint': 'Answering… you can draft the next question',
+  'ai.selection': 'Selection',
+  'ai.visible': 'Current paragraph',
+  'ai.clearContext': 'Clear context',
+  'ai.clearSelection': 'Clear selection',
+  'ai.clearParagraph': 'Clear paragraph',
+  'ai.askBlock': 'Ask AI (this paragraph)',
+  'ai.askAbout': 'Ask AI about "{label}"',
+
+  'ai.copy': 'Copy answer',
+  'ai.copied': 'Copied',
+  'ai.copyFailed': 'Copy failed',
+  'ai.regenerate': 'Regenerate',
+  'ai.jump': 'Jump to source',
+  'ai.expand': 'Expand',
+  'ai.collapse': 'Collapse',
+  'ai.clear': 'Clear conversation',
+  'ai.cleared': 'Conversation cleared',
+  'ai.clearFailed': 'Could not clear the conversation',
+  'ai.export': 'Export conversation',
+  'ai.exported': 'Conversation exported',
+  'ai.exportFailed': 'Could not export the conversation',
+
+  'ai.thinking': 'Reading…',
+  'ai.stopped': 'Generation stopped',
+  'ai.answerEmpty': 'No answer arrived. Try again.',
+  'ai.generating': 'Generating answer',
+  'ai.checkingClaims': 'Checking citations against claims…',
+  'ai.followups': 'Follow up',
+  'ai.followup': 'Follow up',
+
+  'ai.citations': 'Citations',
+  'ai.citationsCount': '{count} citations',
+  'ai.citationLabel': 'Citation {index}',
+  'ai.citationLabelPage': 'Citation {index}, page {page}',
+  'ai.missingCitation': 'Citation {index} (data missing)',
+  'ai.citationJump': 'Jump to citation',
+  'ai.unverifiedShort': 'Unverified',
+  'ai.unverifiedNotice': '{count} citations failed verification. They are dimmed and are not saved as annotations.',
+  'ai.unverified': '{count} citations failed verification',
+  'ai.claimCheck': 'Claim check',
+  'ai.entailmentPartial': 'The quote only partly supports this claim',
+  'ai.entailmentPartialShort': 'Partly supported',
+  'ai.entailmentUnsupported': 'The quote does not support this claim',
+  'ai.entailmentUnsupportedShort': 'Claim unsupported',
+  'ai.entailmentNotice': '{count} citations do not support their claims; dimmed and not annotated',
+  'ai.annotationsNotice': 'Marked {count} citations in the paper',
+  'ai.annotationsCreated': 'AI added {count} highlights',
+  'ai.openGraph': 'Open knowledge graph',
+
+  'ai.navLabel': 'Question navigator',
+  'ai.navJump': 'Jump to question {index}',
+  'ai.navQuestion': 'Question {index}',
+  'ai.toLatest': 'Back to latest',
+
+  'ai.errHost': 'The AI service is not ready yet. Try again shortly.',
+  'ai.errModel': 'The model is unavailable. Check the default model in DSH.',
+  'ai.errFailed': 'The model call failed. Try again.',
+  'ai.errContext': 'The retrieved context is too long. Narrow the question.',
+  'ai.errAborted': 'Generation was interrupted.',
+  'ai.errNetwork': 'The request failed. Try again.',
+  'ai.errGeneric': 'This question did not finish.',
+  'ai.error': 'AI failed: {message}',
+  'ai.insufficient': 'The available content is not enough to answer. Rephrase the question, or build the paper graph first.',
+
+  'ai.exportTitle': 'AI conversation',
+  'ai.exportModel': 'Model',
+  'ai.exportTime': 'Exported',
+  'ai.exportQuestion': 'Question {index}',
+  'ai.exportAnswer': 'Answer {index}',
+  'ai.exportCitation': 'Citation',
+  'ai.exportUnverified': 'Unverified',
+}

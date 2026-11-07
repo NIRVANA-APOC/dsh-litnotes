@@ -6,34 +6,21 @@
  * wording is used by the rail, the dialogs and the status bar.
  */
 
-import type { DocumentStatus, DocumentSummary } from '../../../shared/model.ts'
+import type { DocumentSummary } from '../../../shared/model.ts'
 import type { LitnotesTranslate } from '../locale-context.ts'
 import type { ParseEngine } from '../../../shared/constants.ts'
 
 /** Locale key of a parse-engine label. */
-export function engineLabelKey(engine: string | null | undefined): 'status.engine.standard' | 'status.engine.agent' | 'status.engine.local' | 'status.engine.none' {
+function engineLabelKey(engine: string | null | undefined): 'status.engine.standard' | 'status.engine.agent' | 'status.engine.local' | 'status.engine.none' {
   if (engine === 'standard') return 'status.engine.standard'
   if (engine === 'agent') return 'status.engine.agent'
   if (engine === 'local') return 'status.engine.local'
   return 'status.engine.none'
 }
 
-/** Locale key of a document status label. */
-export function statusLabelKey(status: DocumentStatus | null | undefined): 'rail.status.parsed' | 'rail.status.parsing' | 'rail.status.failed' | 'rail.status.uploaded' {
-  if (status === 'parsed') return 'rail.status.parsed'
-  if (status === 'parsing') return 'rail.status.parsing'
-  if (status === 'failed') return 'rail.status.failed'
-  return 'rail.status.uploaded'
-}
-
 /** Human label of one parse engine. */
-export function engineLabel(t: LitnotesTranslate, engine: string | null | undefined): string {
+function engineLabel(t: LitnotesTranslate, engine: string | null | undefined): string {
   return t(engineLabelKey(engine))
-}
-
-/** Human label of one document status. */
-export function statusLabel(t: LitnotesTranslate, status: DocumentStatus | null | undefined): string {
-  return t(statusLabelKey(status))
 }
 
 /** Format an integer with locale grouping; `null` becomes an em dash. */
@@ -53,14 +40,6 @@ export function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.')
   if (dot <= 0 || dot === name.length - 1) return ''
   return name.slice(dot).toLowerCase()
-}
-
-/** Compact date for a rail meta line (`9月3日` / `Sep 3`). */
-export function formatShortDate(value: string | null | undefined): string {
-  if (typeof value !== 'string' || value === '') return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
 }
 
 /** Total parsed pages recorded on a document, when known. */
@@ -100,11 +79,6 @@ export function documentMetaParts(document: DocumentSummary, t: LitnotesTranslat
   const engine = document.parse?.engine
   if (engine !== undefined && engine !== null) parts.push(engineLabel(t, engine))
   return parts
-}
-
-/** Whether a parsed document is currently being parsed again. */
-export function isBusy(document: DocumentSummary): boolean {
-  return document.status === 'parsing'
 }
 
 /** Compose a human label for an engine selection. */

@@ -126,6 +126,7 @@ function resetStores(): void {
     busy: false,
     input: '',
     composerContext: null,
+    autoFocusBlockKey: null,
     composerFocusTick: 0,
     streamError: null,
     lastKnowledgeDelta: null,
@@ -265,6 +266,21 @@ describe('streaming ask', () => {
     const answer = useAiStore.getState().messages[1]?.answer ?? ''
     expect(answer).toBe('Answer [1].')
     expect(answer).not.toContain('litnotes-json')
+  })
+
+  it('trims trailing blank lines from the streamed answer (fence withholding parity)', async () => {
+    setHostClient(
+      createFakeHost({
+        stream: async (run) => {
+          run.handlers.onFrame({ type: 'start', messageId: 'srv-trim', model: { provider: 'p', model: 'm' } })
+          run.handlers.onFrame({ type: 'delta', text: 'Answer [1].\n\n' })
+          run.handlers.onFrame({ type: 'done' })
+        },
+      }),
+    )
+    await useAiStore.getState().load('doc-1')
+    await useAiStore.getState().ask('Q')
+    expect(useAiStore.getState().messages[1]?.answer).toBe('Answer [1].')
   })
 
   it('stop finalizes the run without an error and keeps the partial text', async () => {
@@ -442,6 +458,27 @@ describe('composer context', () => {
     expect(state.composerFocusTick).toBe(before + 1)
     useAiStore.getState().clearComposerContext()
     expect(useAiStore.getState().composerContext).toBeNull()
+  })
+
+  it('falls back to the visible-paragraph block when no selection exists', async () => {
+    let request: StreamScript['request'] | undefined
+    setHostClient(
+      createFakeHost({
+        stream: async (run) => {
+          request = run.request
+          run.handlers.onFrame({ type: 'done' })
+        },
+      }),
+    )
+    await useAiStore.getState().load('doc-1')
+    useAiStore.getState().setAutoFocus('b7:visible')
+    await useAiStore.getState().ask('Q')
+    expect(request?.focus).toEqual({ blockKey: 'b7:visible' })
+
+    // An explicit selection context wins over the visible paragraph.
+    useAiStore.getState().focusComposer({ blockKey: 'b9:sel', quote: 'quoted', text: '' })
+    await useAiStore.getState().ask('Q2')
+    expect(request?.focus).toEqual({ blockKey: 'b9:sel', selectionQuote: 'quoted' })
   })
 
   it('sends the composer context as the chat focus', async () => {

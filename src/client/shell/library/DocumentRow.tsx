@@ -41,6 +41,13 @@ export function DocumentRow({
 
   const items: MenuItem[] = []
   items.push({ type: 'item', id: 'open', label: t('rail.open'), icon: 'book', onSelect: onOpen })
+  items.push({
+    type: 'item',
+    id: 'rename',
+    label: t('rail.rename'),
+    icon: 'edit',
+    onSelect: () => onOpenDialog('rename', document.id),
+  })
   if (uploaded) {
     items.push({
       type: 'item',
@@ -77,14 +84,6 @@ export function DocumentRow({
       onSelect: onRepair,
     })
   }
-  items.push({ type: 'separator', id: 'sep-actions' })
-  items.push({
-    type: 'item',
-    id: 'rename',
-    label: t('rail.rename'),
-    icon: 'edit',
-    onSelect: () => onOpenDialog('rename', document.id),
-  })
   items.push({ type: 'separator', id: 'sep-danger' })
   items.push({
     type: 'item',
@@ -127,7 +126,7 @@ export function DocumentRow({
           </span>
         </span>
       </button>
-      <div className="ln-doc__trail">
+      <div className="ln-doc__trail ln-doc__menu">
         {parsing ? (
           <button
             type="button"

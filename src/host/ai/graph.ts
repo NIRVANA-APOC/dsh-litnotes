@@ -1,5 +1,6 @@
 /**
- * Knowledge-graph engine for dsh-litnotes (`docs/AI-SPEC.md` §2, §3, §5).
+ * Knowledge-graph engine for dsh-litnotes (`docs/AI-SPEC.md` §2 data model,
+ * §3.5 engine behaviour, §4 fenced model-output contracts).
  *
  * Two scopes share one KG shape:
  *
@@ -54,6 +55,7 @@ import type {
   GraphBuildFrame,
   GraphEdge,
   GraphNode,
+  GraphCluster,
   GraphPatch,
   KnowledgeGraph,
   LibraryGraphFrame,
@@ -109,7 +111,7 @@ const MAX_GLOSSARY_ITEMS = 40
 const MAX_OUTLINE_HEADINGS = 60
 const MAX_OUTLINE_CHARS = 3000
 
-/** Fence tags (`docs/AI-SPEC.md` §5). */
+/** Fence tags (`docs/AI-SPEC.md` §4). */
 const GRAPH_FENCE = GRAPH_FENCE_TAG
 const SUMMARY_FENCE = SUMMARY_FENCE_TAG
 
@@ -151,15 +153,6 @@ interface GlossaryEntry {
   term: string
   definition: string
   blockKeys: string[]
-}
-
-/** One library-graph cluster (connected component of the topic relation graph). */
-interface GraphCluster {
-  id: string
-  label: string
-  nodeIds: string[]
-  size: number
-  weight: number
 }
 
 /** A normalized graph written to disk / emitted in a frame. */
@@ -380,13 +373,12 @@ function emptyLibraryGraph(): GraphState {
 /**
  * Present an internal graph as the frozen `KnowledgeGraph` wire shape.
  *
- * The frozen on-disk format allows `generatedAt: null` (never built) and
- * `model: null` (no model route), which the shared model types model as
- * optionals; this boundary cast keeps the runtime format byte-compatible with
- * 1.0.0 without duplicating the type in the shared model.
+ * `GraphState` is structurally the shared type: nullable `generatedAt`/`model`
+ * for never-built placeholder graphs and the library-only `clusters` array are
+ * part of `KnowledgeGraph` now, so this is a plain identity boundary.
  */
 function toKnowledgeGraph(graph: GraphState): KnowledgeGraph {
-  return graph as unknown as KnowledgeGraph
+  return graph
 }
 
 /** Sanitize a stored/generated `model` field. */
@@ -2207,7 +2199,7 @@ export interface GraphService extends GraphServiceApi {
 }
 
 /**
- * Create the knowledge-graph service (`docs/AI-SPEC.md` §3).
+ * Create the knowledge-graph service (`docs/AI-SPEC.md` §3.5).
  *
  * @param deps - injected host dependencies. The LLM gateway is optional:
  *   without it reads/updates still work and builds fail with an
@@ -2567,7 +2559,8 @@ export function createGraphService(deps: GraphServiceDeps): GraphService {
   }
 
   /**
-   * Apply user/AI edits to one document graph (`docs/AI-SPEC.md` §4 graph.update):
+   * Apply user/AI edits to one document graph (`docs/AI-SPEC.md` §2.5 curation,
+   * §5.1 graph.update):
    *
    * - nodes upsert by id (or by normalized label + type) inside the document's
    *   atomic queue; existing ids are kept and only the provided fields are

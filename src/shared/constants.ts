@@ -191,6 +191,8 @@ export const WIRE_ERROR_CODES = [
   'local-empty-text',
   'local-encrypted',
   'local-failed',
+  'repair-unavailable',
+  'ai-unavailable',
   'translate-unavailable',
   'llm-unavailable',
   'llm-failed',

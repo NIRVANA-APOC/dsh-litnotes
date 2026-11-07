@@ -1105,3 +1105,89 @@ test('updateDocGraph upserts manual edges by id and keeps the rest of the graph 
   expect(edge?.source).toBe('user')
   expect(updated.nodes.length).toBe(2)
 })
+
+test('buildDocGraph bounds the summary prompt by ai.graphSummaryChars', async () => {
+  const documentId = 'doc-summary-budget'
+  const env = createFakeStore({
+    docs: [{ id: documentId, title: 'Budget Paper' }],
+    markdown: { [documentId]: '## B\n\nBody text for the summary budget. '.repeat(20) },
+  })
+  const longSummary = `Component ${'alpha '.repeat(40)}`
+  const nodes = Array.from({ length: 40 }, (_, index) => ({
+    type: 'concept',
+    label: `Component ${index}`,
+    summary: longSummary,
+    blockKeys: [],
+  }))
+  let summaryPrompt: string | undefined
+  const gateway = createFakeGateway({
+    extract() {
+      return graphFence(nodes, [])
+    },
+    summary({ prompt, request }) {
+      const message = Array.isArray(request.messages) ? request.messages[0] : undefined
+      const content = message !== undefined && message !== null && typeof message === 'object' ? message.content : undefined
+      summaryPrompt = typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content.map((part) => (part !== null && typeof part === 'object' && typeof part.text === 'string' ? part.text : '')).join('')
+          : prompt
+      return summaryFence({ overview: 'bounded', tldr: ['bounded'], glossary: [] })
+    },
+  })
+  const service = makeService(env, gateway, { graphSummaryChars: 600 })
+  await collect(service.buildDocGraph(documentId))
+  expect(summaryPrompt).toBeDefined()
+  // Node rendering stops inside the budget; header/closing lines add a bound.
+  expect((summaryPrompt ?? '').length).toBeLessThan(1000)
+  // Sanity: without the cap the 40 long summaries would be far larger.
+  const unbounded = 40 * longSummary.length
+  expect(unbounded).toBeGreaterThan(6000)
+})
+
+test('updateDocGraph creates nodes from id-less patches and resolves adversarial id cases', async () => {
+  const documentId = 'doc-curation-idless'
+  const { env, service } = curationService(documentId)
+  seedGraph(env, documentId, [
+    seedNode({ id: 'n-existing', type: 'concept', label: 'Existing Node', summary: 'keep me' }),
+  ])
+
+  // 1) Two id-less patches with the same label+type in one call: one node is
+  // created and the second patch updates it (no duplicate).
+  const first = await service.updateDocGraph(documentId, {
+    nodes: [
+      { type: 'insight', label: 'Fresh Insight', summary: 'first write' },
+      { type: 'insight', label: 'fresh insight!', summary: 'second write' },
+    ],
+    edges: [{ from: 'Fresh Insight', to: 'Existing Node', type: 'relates' }],
+  })
+  const fresh = first.nodes.filter((node) => /fresh insight/i.test(node.label))
+  expect(fresh.length).toBe(1)
+  expect(fresh[0]?.summary).toBe('second write')
+  expect(fresh[0]?.curated).toBe(true)
+  expect(first.edges.some((edge) => edge.from === fresh[0]?.id && edge.to === 'n-existing')).toBe(true)
+
+  // 2) An id-less patch matching an existing node's label+type updates it.
+  const matched = await service.updateDocGraph(documentId, {
+    nodes: [{ type: 'concept', label: 'Existing Node', summary: 'patched by label' }],
+  })
+  expect(matched.nodes.length).toBe(first.nodes.length)
+  const existing = matched.nodes.find((node) => node.id === 'n-existing')
+  expect(existing?.summary).toBe('patched by label')
+
+  // 3) A caller-supplied free node id is kept when it is unused and well shaped.
+  const supplied = await service.updateDocGraph(documentId, {
+    nodes: [{ id: 'n-agent-made', type: 'method', label: 'Agent Node', summary: '' }],
+  })
+  expect(supplied.nodes.find((node) => node.label === 'Agent Node')?.id).toBe('n-agent-made')
+
+  // 4) A supplied id that already exists patches the existing node instead of
+  // creating a duplicate with the same id.
+  const collision = await service.updateDocGraph(documentId, {
+    nodes: [{ id: 'n-existing', type: 'concept', label: 'Existing Node', summary: 'collision patch' }],
+  })
+  const collisions = collision.nodes.filter((node) => node.id === 'n-existing')
+  expect(collisions.length).toBe(1)
+  expect(collisions[0]?.summary).toBe('collision patch')
+  expect(collision.nodes.filter((node) => /fresh insight/i.test(node.label)).length).toBe(1)
+})

@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
+import { useMediaQuery } from '../design/primitives.tsx'
 
 /** One rendered tether line in viewport coordinates. */
 interface TetherLine {
@@ -93,12 +94,17 @@ export function Tethers({
 }: TethersProps): ReactElement | null {
   const [lines, setLines] = useState<TetherLine[]>([])
   const frameRef = useRef<number | null>(null)
+  // Tethers are content, but the task's accessibility floor asks for a
+  // non-motion fallback: under reduced motion the slips still show the aspect
+  // dot + quote, so the provenance hairline is not drawn.
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const active = enabled && !reducedMotion
 
   const update = useCallback((): void => {
     frameRef.current = null
     const paper = paperRef.current
     const margin = marginRef.current
-    if (!enabled || paper === null || margin === null) {
+    if (!active || paper === null || margin === null) {
       setLines((previous) => (previous.length === 0 ? previous : []))
       return
     }
@@ -165,8 +171,8 @@ export function Tethers({
       return next
     })
   }, [
+    active,
     activeAnnotationId,
-    enabled,
     hoveredAnnotationId,
     hoveredBlockKey,
     marginRef,
@@ -220,7 +226,7 @@ export function Tethers({
     }
   }, [marginRef, paperRef, schedule, scrollRef])
 
-  if (!enabled || lines.length === 0) return null
+  if (!active || lines.length === 0) return null
   return (
     <svg className="ln-tether-layer" aria-hidden="true">
       {lines.map((line) => (

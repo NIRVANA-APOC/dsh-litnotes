@@ -39,7 +39,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Closest `[data-block-key]` ancestor of a DOM node. */
-export function blockElementOf(node: Node | null): HTMLElement | null {
+function blockElementOf(node: Node | null): HTMLElement | null {
   if (node === null) return null
   const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element)
   if (element === null || typeof element.closest !== 'function') return null

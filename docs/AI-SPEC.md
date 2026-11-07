@@ -264,10 +264,10 @@ interface GraphEdge {
   paper/topic ids are content-derived (`n-paper-<sha1>`, `n-topic-<sha1>`) so rebuilding does not
   reshuffle the graph. Edge ids are deterministic hashes of `from|to|type`.
 - **Caps.** Document graph: 120 nodes / 400 edges. Library graph: 600 nodes / 2000 edges.
-- **Library-only runtime field.** The library graph written to `library-graph.json` and streamed
-  in `graph` frames additionally carries `clusters`: `Array<{ id, label, nodeIds, size, weight }>`
-  (connected components of the topic-relation graph). This is an additive field on top of the
-  shared type and is preserved by the library reader.
+- **Clusters (library scope only).** The library graph written to `library-graph.json` and
+  streamed in library `graph` frames carries `clusters?: GraphCluster[]` — connected components
+  of the topic-relation graph, each `{ id, label, nodeIds, size, weight }`, sorted by size then
+  label. The field is optional in the shared type and is preserved by the library reader.
 - `generatedAt`/`model` are `null` for a placeholder graph read before the first build; this is
   the frozen on-disk shape and is emitted as-is.
 
@@ -276,7 +276,7 @@ interface GraphEdge {
 ```ts
 interface GraphPatch {
   nodes?: Array<{
-    id: string
+    id?: string                      // omitted when the patch creates a new node
     label?: string
     summary?: string
     aspect?: Aspect
@@ -296,8 +296,10 @@ bumps `updatedAt`; pin/position are validated (finite, ±100000, rounded to 0.1 
 `merge` folds `from` into `to` — evidence (`blockKeys`, `documentIds`) is unioned, the target
 keeps its label/summary/aspect and gains the higher weight, pinned/position are inherited when
 missing, both edge directions are rewired onto the target, self-loops are dropped and duplicate
-edges keep the highest weight. Unknown ids and malformed pairs are ignored, never an error. The
-engine also accepts creation of new nodes through the same payload (a node without `id`).
+edges keep the highest weight. Unknown ids and malformed pairs are ignored, never an error.
+A node patch without `id` creates a node (and a later patch with the same normalized label +
+type updates that same node); a supplied but unused node id is kept when it matches the engine's
+id shape, which keeps agent/manual graph edits stable across calls.
 
 ### 2.6 ChatRequest
 
@@ -666,9 +668,11 @@ chunk), weights and provenance, and tolerates fences with any tag/loose JSON.
 }
 ```
 
-Host rules: overview ≤ `ai.graphSummaryChars`; `tldr` normalized to Markdown bullets (≤5);
-glossary bounded (≤40 entries, block keys validated); an empty/unparsable payload falls back to
-the deterministic summary derived from the graph.
+Host rules: the graph rendered into the summary prompt is bounded by `ai.graphSummaryChars`
+(the prompt stops adding node lines at the budget); `tldr` is normalized to Markdown bullets
+(≤5); the glossary is bounded (≤40 entries, block keys validated against the document); an
+empty/unparsable payload falls back to the deterministic summary derived from the graph. The
+library consolidation prompt uses the same character budget.
 
 ### 4.4 Citation–claim entailment — ```litnotes-entailment
 

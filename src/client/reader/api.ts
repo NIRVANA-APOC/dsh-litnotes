@@ -15,7 +15,6 @@
  * Import functions from here rather than reaching into store internals.
  */
 
-import type { ReactElement } from 'react'
 import { useReaderStore } from './store.ts'
 import { useUiStore } from '../state/ui.ts'
 import type { ReaderSelectionContext } from './store.ts'
@@ -26,22 +25,15 @@ import type { ReaderSelectionContext } from './store.ts'
 
 /**
  * Props of `AiMarginEntries` — the AI conversation stream rendered inside the
- * reader's margin column (`src/client/ai/AiMarginEntries.tsx`, owned by
- * `client-ai`).
+ * reader's margin column. Single definition lives in
+ * `src/client/ai/AiMarginEntries.tsx`; re-exported here so the reader seam has
+ * one import surface.
  *
  * Each AI entry root exposes `data-anchor-block="<blockKey>"` (and
  * `data-created-at`) so the reader's tether layer can draw the provenance
  * hairline to the sentence exactly like it does for notes.
  */
-export interface AiMarginEntriesProps {
-  documentId: string
-  /** Document order of a block key, used to sort entries by anchor (`null` → end). */
-  orderOf: (blockKey: string) => number | null
-  /** Scroll+flash one block in the paper (citation click). */
-  onJump: (blockKey: string) => void
-  /** Called after an answer adopted new annotations: reload them into the margin. */
-  onAnnotationsChanged: () => void | Promise<void>
-}
+export type { AiMarginEntriesProps } from '../ai/AiMarginEntries.tsx'
 
 /** Selection context handed from the reader to the AI composer. */
 export type AskAIContext = ReaderSelectionContext
@@ -132,10 +124,3 @@ export function jumpToBlock(blockKey: string, options: ReaderBlockJumpOptions = 
 
 /** Document order of a block key (`null` when it does not resolve). */
 export { orderOf } from './store.ts'
-
-/* -------------------------------------------------------------------------- */
-/* Renderer type (kept here so the reader scene can type its seat)            */
-/* -------------------------------------------------------------------------- */
-
-/** The component type of the AI margin stream (avoids a runtime import). */
-export type AiMarginEntriesComponent = (props: AiMarginEntriesProps) => ReactElement

@@ -32,9 +32,6 @@ export interface AnnotationSearchHit {
   excerpt: string
 }
 
-/** Libraries at or below this size are indexed synchronously on change. */
-export const SEARCH_INDEX_LIMIT = 5000
-
 /** Split text into lowercase ASCII terms plus CJK word segments. */
 export function searchTokens(text: string): string[] {
   if (typeof text !== 'string' || text === '') return []

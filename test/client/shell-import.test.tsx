@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ShellDialogs } from '../../src/client/shell/Dialogs.tsx'
 import { useImportController } from '../../src/client/shell/library/import-controller.ts'
 import { useUiStore } from '../../src/client/state/ui.ts'
+import { ApiError } from '../../src/client/api/client.ts'
+import { describeImportFailure } from '../../src/client/shell/library/import-errors.ts'
 import {
   buttonByText,
   click,
@@ -104,6 +106,21 @@ describe('import dialog', () => {
     click(standard)
     await flush()
     expect(container.textContent).toContain('dlg.import.tokenWarn')
+  })
+})
+
+describe('import error guidance', () => {
+  it('maps wire codes to a concrete next step', () => {
+    const token = describeImportFailure(new ApiError('token-missing', 'hidden'), tIdentity)
+    expect(token.hint).toBe('err.tokenMissing')
+    expect(token.retryable).toBe(false)
+    const local = describeImportFailure(new ApiError('local-unsupported', 'hidden'), tIdentity)
+    expect(local.hint).toBe('err.localUnsupported')
+    const large = describeImportFailure(new ApiError('too-large', 'hidden'), tIdentity)
+    expect(large.hint).toBe('err.tooLarge')
+    const network = describeImportFailure(new ApiError('network', 'hidden'), tIdentity)
+    expect(network.message).toBe('err.network')
+    expect(network.retryable).toBe(true)
   })
 })
 

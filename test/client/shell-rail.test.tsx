@@ -109,6 +109,18 @@ describe('library rail', () => {
     expect(titles).toEqual(['Transformer Reading'])
   })
 
+  it('finds CJK titles through the custom search tokenizer', async () => {
+    const chinese = makeDocument('zh', { title: '局部冗余与注意力机制' })
+    resetShellStores([chinese])
+    const { container } = renderRail()
+    const input = container.querySelector<HTMLInputElement>('.ln-rail__search input')
+    if (input === null) return
+    act(() => typeInto(input, '冗余'))
+    await flush()
+    const titles = [...container.querySelectorAll('.ln-doc__title')].map((node) => node.textContent)
+    expect(titles).toEqual(['局部冗余与注意力机制'])
+  })
+
   it('toggles the status filter chips', async () => {
     const { container } = renderRail()
     const chipsRow = container.querySelector('.ln-rail__filters') ?? container

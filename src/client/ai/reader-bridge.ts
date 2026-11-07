@@ -15,6 +15,7 @@
  * unmounted the bridge is inert and the component still renders from props.
  */
 
+import { plainTextOfBlock } from '../../shared/markdown/model.ts'
 import { useReaderStore } from '../reader/store.ts'
 import { clearAskAI, registerAskAI } from '../reader/api.ts'
 import { useMemo } from 'react'
@@ -51,6 +52,34 @@ export function clearReaderSelection(): void {
     /* the reader seam is optional */
   }
   useAiStore.getState().clearComposerContext()
+}
+
+/**
+ * The block currently under the reader's reading line (live IntersectionObserver
+ * signal, reset when the paper closes). Used for the composer's 本段 chip.
+ *
+ * @returns the visible block anchor, or null when the reader is not ready.
+ */
+export function useVisibleBlockKey(): string | null {
+  return useReaderStore((state) => state.visibleBlockKey)
+}
+
+/**
+ * Plain text of one block of the open paper, for the composer's 本段 chip.
+ *
+ * The reader owns the paper model; the AI margin only needs the excerpt of the
+ * paragraph currently in view (the reader records it as `lastBlockKey`).
+ *
+ * @param blockKey - block anchor from the reading position (null when unknown).
+ * @returns the block's plain text, or '' when it cannot be resolved.
+ */
+export function useBlockExcerpt(blockKey: string | null): string {
+  const model = useReaderStore((state) => state.model)
+  return useMemo(() => {
+    if (blockKey === null || blockKey === '') return ''
+    const block = model.blocks.find((candidate) => candidate.key === blockKey)
+    return block === undefined ? '' : plainTextOfBlock(block)
+  }, [model, blockKey])
 }
 
 /** Annotation counts shown on the margin filter chips. */

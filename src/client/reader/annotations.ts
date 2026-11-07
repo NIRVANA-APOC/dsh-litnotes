@@ -124,28 +124,3 @@ export function normalizeStaleAnnotation(annotation: unknown): StaleAnnotation |
   }
   return out
 }
-
-/** Origin counts used by the margin filter chips and the margin head. */
-export interface AnnotationCounts {
-  all: number
-  ai: number
-  user: number
-}
-
-/**
- * Count annotations by origin (`ai` carries provenance, everything else is the
- * reader's own). Stale annotations count too: they are still the reader's data.
- */
-export function countAnnotationOrigins(
-  annotations: readonly (Annotation | null | undefined)[] | null | undefined,
-): AnnotationCounts {
-  const counts: AnnotationCounts = { all: 0, ai: 0, user: 0 }
-  if (!Array.isArray(annotations)) return counts
-  for (const annotation of annotations) {
-    if (annotation === null || typeof annotation !== 'object') continue
-    counts.all += 1
-    if (annotation.origin === 'ai') counts.ai += 1
-    else counts.user += 1
-  }
-  return counts
-}

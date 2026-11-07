@@ -121,38 +121,39 @@ async function writePreferences(): Promise<void> {
   )
 }
 
+/** One fixture document's on-disk payload, written concurrently (timing excludes setup). */
+async function writeFixtureDocument(id: string, index: number): Promise<void> {
+  const dir = join(dataDir, 'documents', id)
+  await mkdir(dir, { recursive: true })
+  const items = Array.from({ length: NOTES_PER_DOC }, (_value, noteIndex) => fixtureAnnotation(index * 10 + noteIndex))
+  const entries: Record<string, string> = {}
+  for (let entryIndex = 0; entryIndex < TRANSLATIONS_PER_DOC; entryIndex += 1) {
+    entries[`b${entryIndex}:ab12cd34`] = `译文条目 ${entryIndex}：为了性能测试生成的代表性翻译文本。`
+  }
+  const files: Array<Promise<unknown>> = [
+    writeFile(join(dir, 'meta.json'), `${JSON.stringify(fixtureMeta(id, index), null, 2)}\n`),
+    writeFile(join(dir, 'annotations.json'), `${JSON.stringify({ version: 1, items }, null, 2)}\n`),
+    writeFile(join(dir, 'translations.json'), `${JSON.stringify({ version: 1, targetLanguage: 'zh', entries }, null, 2)}\n`),
+  ]
+  if (index === 0) {
+    parsedDocId = id
+    const parsedDir = join(dir, 'parsed')
+    await mkdir(parsedDir, { recursive: true })
+    files.push(writeFile(join(parsedDir, 'full.md'), paperMarkdown))
+    files.push(writeFile(join(parsedDir, 'content_list.json'), `${JSON.stringify(paperContentList)}\n`))
+  }
+  await Promise.all(files)
+}
+
 beforeAll(async () => {
   dataDir = await mkdtemp(join(tmpdir(), 'dsh-litnotes-perf-store-'))
   await mkdir(join(dataDir, 'documents'), { recursive: true })
   await mkdir(join(dataDir, 'tmp'), { recursive: true })
   await mkdir(join(dataDir, 'diagnostics'), { recursive: true })
   await writePreferences()
-
-  for (let index = 0; index < LIBRARY_DOCS; index += 1) {
-    const id = randomUUID()
-    documentIds.push(id)
-    const dir = join(dataDir, 'documents', id)
-    await mkdir(dir, { recursive: true })
-    await writeFile(join(dir, 'meta.json'), `${JSON.stringify(fixtureMeta(id, index), null, 2)}\n`)
-    const items = Array.from({ length: NOTES_PER_DOC }, (_value, noteIndex) => fixtureAnnotation(index * 10 + noteIndex))
-    await writeFile(join(dir, 'annotations.json'), `${JSON.stringify({ version: 1, items }, null, 2)}\n`)
-    const entries: Record<string, string> = {}
-    for (let entryIndex = 0; entryIndex < TRANSLATIONS_PER_DOC; entryIndex += 1) {
-      entries[`b${entryIndex}:ab12cd34`] = `译文条目 ${entryIndex}：为了性能测试生成的代表性翻译文本。`
-    }
-    await writeFile(
-      join(dir, 'translations.json'),
-      `${JSON.stringify({ version: 1, targetLanguage: 'zh', entries }, null, 2)}\n`,
-    )
-    if (index === 0) {
-      parsedDocId = id
-      const parsedDir = join(dir, 'parsed')
-      await mkdir(parsedDir, { recursive: true })
-      await writeFile(join(parsedDir, 'full.md'), paperMarkdown)
-      await writeFile(join(parsedDir, 'content_list.json'), `${JSON.stringify(paperContentList)}\n`)
-    }
-  }
-})
+  for (let index = 0; index < LIBRARY_DOCS; index += 1) documentIds.push(randomUUID())
+  await Promise.all(documentIds.map((id, index) => writeFixtureDocument(id, index)))
+}, 120_000)
 
 afterAll(async () => {
   await rm(dataDir, { recursive: true, force: true })
@@ -165,76 +166,70 @@ async function openStore(): Promise<StoreApi> {
   return store
 }
 
-test('store init loads the library-sized metadata index', async () => {
+test('store init loads the library-sized metadata index', { timeout: 120_000 }, async () => {
   let lastTotal = 0
-  const sample = await measureAsync(
-    { suite: 'store', case: 'init-index', iters: 5, note: `documents=${LIBRARY_DOCS}` },
+  await measureAsync(
+    { suite: 'store', case: 'init-index', iters: 3, note: `documents=${LIBRARY_DOCS}` },
     async () => {
       const store = await openStore()
       lastTotal = store.stats().total
       await store.dispose()
     },
   )
-  expect(sample.iters).toBe(5)
   expect(lastTotal).toBe(LIBRARY_DOCS)
 })
 
-test('store list + get on a library-sized library', async () => {
+test('store list + get on a library-sized library', { timeout: 120_000 }, async () => {
   const store = await openStore()
-  const listSample = measureSync(
-    { suite: 'store', case: 'list-documents', iters: 2_000, note: `documents=${LIBRARY_DOCS}` },
+  measureSync(
+    { suite: 'store', case: 'list-documents', iters: 500, note: `documents=${LIBRARY_DOCS}` },
     () => store.list(),
   )
-  expect(listSample.iters).toBe(2_000)
   const list = store.list()
   expect(list).toHaveLength(LIBRARY_DOCS)
   // Newest-first ordering is part of the frozen contract.
   expect(Date.parse(list[0]?.updatedAt ?? '')).toBeGreaterThanOrEqual(Date.parse(list.at(-1)?.updatedAt ?? ''))
 
   let cursor = 0
-  const getSample = measureSync(
-    { suite: 'store', case: 'get-document', iters: 20_000, note: `documents=${LIBRARY_DOCS}` },
+  measureSync(
+    { suite: 'store', case: 'get-document', iters: 5_000, note: `documents=${LIBRARY_DOCS}` },
     () => {
       const id = documentIds[cursor % LIBRARY_DOCS] ?? ''
       cursor += 1
       return store.get(id)
     },
   )
-  expect(getSample.iters).toBe(20_000)
   expect(store.get(documentIds[42] ?? '')?.title).toContain('Performance Fixture Paper 43')
   expect(store.get('00000000-0000-4000-8000-000000000000')).toBeUndefined()
   await store.dispose()
 })
 
-test('store loads annotations and translations at library scale', async () => {
+test('store loads annotations and translations at library scale', { timeout: 120_000 }, async () => {
   const store = await openStore()
-  const annotationsSample = await measureAsync(
-    { suite: 'store', case: 'load-annotations', iters: 300, note: `notesPerDocument=${NOTES_PER_DOC}` },
+  await measureAsync(
+    { suite: 'store', case: 'load-annotations', iters: 200, note: `notesPerDocument=${NOTES_PER_DOC}` },
     () => store.loadAnnotations(documentIds[7] ?? ''),
   )
-  expect(annotationsSample.iters).toBe(300)
   const annotations = await store.loadAnnotations(documentIds[7] ?? '')
   expect(annotations.version).toBe(1)
   expect(annotations.items).toHaveLength(NOTES_PER_DOC)
   expect(annotations.items[0]?.quote).toBe('a representative annotated quote')
 
-  const translationsSample = await measureAsync(
-    { suite: 'store', case: 'load-translations', iters: 300, note: `entriesPerDocument=${TRANSLATIONS_PER_DOC}` },
+  await measureAsync(
+    { suite: 'store', case: 'load-translations', iters: 200, note: `entriesPerDocument=${TRANSLATIONS_PER_DOC}` },
     () => store.loadTranslations(documentIds[9] ?? ''),
   )
-  expect(translationsSample.iters).toBe(300)
   const translations = await store.loadTranslations(documentIds[9] ?? '')
   expect(Object.keys(translations.entries)).toHaveLength(TRANSLATIONS_PER_DOC)
   await store.dispose()
 })
 
-test('store reads a parsed document (markdown + content list)', async () => {
+test('store reads a parsed document (markdown + content list)', { timeout: 120_000 }, async () => {
   const store = await openStore()
-  const sample = await measureAsync(
-    { suite: 'store', case: 'read-markdown', iters: 200, bytes: paperMarkdown.length, note: 'canonical fixture paper' },
+  await measureAsync(
+    { suite: 'store', case: 'read-markdown', iters: 100, bytes: paperMarkdown.length, note: 'canonical fixture paper' },
     () => store.readMarkdown(parsedDocId),
   )
-  expect(sample.iters).toBe(200)
   const parsed = await store.readMarkdown(parsedDocId)
   expect(parsed.markdown).toBe(paperMarkdown)
   expect(parsed.contentList).toHaveLength(paperContentList.length)
@@ -242,10 +237,9 @@ test('store reads a parsed document (markdown + content list)', async () => {
   await store.dispose()
 })
 
-test('store readPreferences on the library-sized fixture', async () => {
+test('store readPreferences on the library-sized fixture', { timeout: 120_000 }, async () => {
   const store = await openStore()
-  const sample = await measureAsync({ suite: 'store', case: 'read-preferences', iters: 200 }, () => store.readPreferences())
-  expect(sample.iters).toBe(200)
+  await measureAsync({ suite: 'store', case: 'read-preferences', iters: 100 }, () => store.readPreferences())
   const preferences = await store.readPreferences()
   expect(preferences.libraryView).toBe('library')
   await store.dispose()

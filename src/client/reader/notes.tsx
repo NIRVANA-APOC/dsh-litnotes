@@ -76,6 +76,7 @@ export interface NoteEntryProps {
   t: LitnotesTranslate
   annotation: NormalizedAnnotation
   active: boolean
+  hovered: boolean
   onHover: (annotationId: string | null, blockKey: string | null) => void
   onActivate: (annotation: NormalizedAnnotation) => void
   onEdit: (annotation: NormalizedAnnotation) => void
@@ -87,6 +88,7 @@ export function NoteEntry({
   t,
   annotation,
   active,
+  hovered,
   onHover,
   onActivate,
   onEdit,
@@ -97,7 +99,7 @@ export function NoteEntry({
   const aspectLabel = aspect === null ? '' : t(`aspect.${aspect}` as 'aspect.method')
   return (
     <article
-      className={cx('ln-margin__entry', 'ln-note', active && 'is-active', ai && 'is-ai')}
+      className={cx('ln-margin__entry', 'ln-note', active && 'is-active', hovered && 'is-hover', ai && 'is-ai')}
       data-kind="note"
       data-aspect={aspect ?? undefined}
       data-color={annotation.color}
@@ -206,6 +208,7 @@ export interface MarginNotesProps {
   marginFilter: MarginFilter
   activeAspect: string | null
   activeAnnotationId: string | null
+  hoveredAnnotationId: string | null
   orderOf: (blockKey: string) => number | null
   onHover: (annotationId: string | null, blockKey: string | null) => void
   onActivate: (annotation: NormalizedAnnotation) => void
@@ -237,6 +240,7 @@ export function MarginNotes({
   marginFilter,
   activeAspect,
   activeAnnotationId,
+  hoveredAnnotationId,
   orderOf,
   onHover,
   onActivate,
@@ -281,6 +285,7 @@ export function MarginNotes({
               t={t}
               annotation={annotation}
               active={activeAnnotationId === annotation.id}
+              hovered={hoveredAnnotationId === annotation.id}
               onHover={onHover}
               onActivate={onActivate}
               onEdit={onEdit}

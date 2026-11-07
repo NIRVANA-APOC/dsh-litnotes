@@ -9,11 +9,11 @@
  */
 
 import type { ReactElement } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, IconButton, Kbd } from '../design/primitives.tsx'
 import { useT } from '../shell/locale-context.ts'
 import { excerpt } from './chat.ts'
-import { clearReaderSelection } from './reader-bridge.ts'
+import { clearReaderSelection, useBlockExcerpt, useVisibleBlockKey } from './reader-bridge.ts'
 import { useAiStore } from './store.ts'
 
 /** Props of {@link AiComposer}. */
@@ -45,7 +45,22 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
   const historyState = useAiStore((state) => state.historyState)
   const context = useAiStore((state) => state.composerContext)
   const focusTick = useAiStore((state) => state.composerFocusTick)
+  const setAutoFocus = useAiStore((state) => state.setAutoFocus)
+  const visibleBlockKey = useVisibleBlockKey()
+  const autoFocusText = useBlockExcerpt(visibleBlockKey)
+  const [autoCleared, setAutoCleared] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // The reader publishes the block under the reading line (`visibleBlockKey`);
+  // mirror it as the composer's 本段 context unless the reader clears it or a
+  // text selection takes precedence.
+  useEffect(() => {
+    setAutoFocus(autoCleared ? null : visibleBlockKey)
+  }, [visibleBlockKey, autoCleared, setAutoFocus])
+
+  useEffect(() => {
+    setAutoCleared(false)
+  }, [visibleBlockKey])
 
   useEffect(() => {
     if (focusTick === 0) return
@@ -103,7 +118,29 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
             />
           </div>
         </div>
-      ) : null}
+      ) : autoCleared || visibleBlockKey === null || visibleBlockKey === '' ? null : (
+        <div className="ln-ai__context" role="group" aria-label={t('ai.visible')}>
+          <div className="ln-ai__chip" data-kind="visible">
+            <button
+              type="button"
+              className="ln-ai__chip-label"
+              title={visibleBlockKey}
+              onClick={() => {
+                if (onJump !== undefined) onJump(visibleBlockKey)
+              }}
+            >
+              <span className="ln-ai__chip-kind">{t('ai.visible')}</span>
+              <span className="ln-ai__chip-quote">{excerpt(autoFocusText !== '' ? autoFocusText : visibleBlockKey, 32)}</span>
+            </button>
+            <IconButton
+              icon="close"
+              size={12}
+              label={t('ai.clearParagraph')}
+              onClick={() => setAutoCleared(true)}
+            />
+          </div>
+        </div>
+      )}
       <div className="ln-ai__inputrow">
         <textarea
           ref={textareaRef}

@@ -27,6 +27,7 @@ import { Icon } from '../design/icons.tsx'
 import { IconButton, Menu, Spinner, type MenuItem } from '../design/primitives.tsx'
 import { useInjectedStyle } from '../design/use-style.ts'
 import { useLibraryStore } from '../state/library.ts'
+import { useSettingsStore } from '../state/settings.ts'
 import { useUiStore } from '../state/ui.ts'
 import { useT } from '../shell/locale-context.ts'
 import {
@@ -40,7 +41,6 @@ import {
   navAwayFromLatest,
   navCurrentMark,
   navTargetScrollTop,
-  questionMarks,
   sortTurns,
   turnHasAspect,
   unverifiedBreakdown,
@@ -68,7 +68,7 @@ export interface AiMarginEntriesProps {
   onJump: (blockKey: string) => void
   /** Reload annotations after an answer adopted new ones. */
   onAnnotationsChanged: () => void | Promise<void>
-  /** Gate the entailment notice row (Settings → AI; defaults to true). */
+  /** Gate the entailment notice row; defaults to the `entailmentNotice` preference. */
   showEntailment?: boolean
 }
 
@@ -114,7 +114,7 @@ function rectReference(rect: DOMRect): { getBoundingClientRect: () => DOMRect } 
  * @returns the margin column content owned by the AI workstream.
  */
 export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
-  const { documentId, orderOf, onJump, onAnnotationsChanged, showEntailment = true } = props
+  const { documentId, orderOf, onJump, onAnnotationsChanged, showEntailment } = props
   const t = useT()
   const tr = useMemo(() => adaptTranslate(t), [t])
   const messages = useAiStore((state) => state.messages)
@@ -127,6 +127,8 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const activeAspect = useUiStore((state) => state.activeAspect)
   const status = useLibraryStore((state) => state.status)
   const document = useLibraryStore((state) => state.documents.find((entry) => entry.id === documentId))
+  const preferenceEntailmentNotice = useSettingsStore((state) => state.preferences.entailmentNotice)
+  const showEntailmentEnabled = showEntailment ?? preferenceEntailmentNotice
   const annotationCounts = useMarginAnnotationCounts()
 
   const available = status?.ai?.available === true
@@ -176,7 +178,20 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
 
   const turns = useMemo(() => chatTurns(messages), [messages])
   const orderedTurns = useMemo(() => sortTurns(turns, orderOf), [turns, orderOf])
-  const marks = useMemo(() => questionMarks(messages), [messages])
+  // Navigator marks are keyed by the rendered turn (assistant id when answered),
+  // so jump/current-mark queries hit real entries in document order.
+  const marks = useMemo<QuestionMark[]>(
+    () =>
+      orderedTurns
+        .filter((turn) => turn.question.trim() !== '')
+        .map((turn, index) => ({
+          id: turn.id,
+          messageId: turn.id,
+          ordinal: index + 1,
+          question: displayText(turn.question),
+        })),
+    [orderedTurns],
+  )
   const counts = useMemo(
     () => ({ chat: turns.length, ai: annotationCounts.ai, user: annotationCounts.user }),
     [turns.length, annotationCounts.ai, annotationCounts.user],
@@ -414,7 +429,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const stateName =
     documentId === ''
       ? 'no-document'
-      : historyState === 'loading'
+      : historyState === 'loading' || historyState === 'idle'
         ? 'loading'
         : historyState === 'error'
           ? 'error'
@@ -427,10 +442,8 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   let stream: ReactNode
   if (documentId === '') {
     stream = <StateNote text={t('ai.noDocument')} />
-  } else if (historyState === 'loading') {
-    stream = (
-      <StateNote spinner text={t('ai.loadingHistory')} />
-    )
+  } else if (historyState === 'loading' || historyState === 'idle') {
+    stream = <StateNote spinner text={t('ai.loadingHistory')} />
   } else if (historyState === 'error') {
     stream = (
       <StateNote
@@ -484,7 +497,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
             streaming={turn.assistant !== null && turn.assistant.id === streamingId}
             flash={flashId !== null && turn.id === flashId}
             collapsed={collapsed[turn.id] === true}
-            showEntailment={showEntailment}
+            showEntailment={showEntailmentEnabled}
             streamError={streamError}
             onToggleCollapse={() =>
               setCollapsed((state) => ({ ...state, [turn.id]: state[turn.id] !== true }))
@@ -628,8 +641,8 @@ function TurnView(props: TurnViewProps): ReactElement {
   const failed = assistant?.failed === true
   const stopped = assistant?.stopped === true
   const longAnswer = answer.length > COLLAPSE_THRESHOLD
-  const checkingClaims = streaming && phase === 'entailment' && answer !== ''
   const thinking = streaming && answer === ''
+  const statusLabel = phase === 'entailment' ? t('ai.checkingClaims') : t('ai.thinking')
   const failure: AiFailure | null =
     assistant !== null && streamError !== null && streamError.entryId === assistant.id
       ? { code: 'stream', message: streamError.message, retryable: streamError.retryable }
@@ -727,19 +740,17 @@ function TurnView(props: TurnViewProps): ReactElement {
       <div className={`ln-ai__answer${collapsed ? ' is-collapsed' : ''}`}>
         {thinking ? (
           <div className="ln-ai__status" role="status" aria-live="polite" aria-label={t('ai.generating')}>
-            <Spinner size={13} label={t('ai.thinking')} />
-            <span>{t('ai.thinking')}</span>
+            <Spinner size={13} label={statusLabel} />
+            <span>{statusLabel}</span>
           </div>
         ) : null}
-        {answer !== '' ? (
-          <AiMarkdown text={answer} renderCitation={renderCitation} />
-        ) : null}
+        {answer !== '' ? <AiMarkdown text={answer} renderCitation={renderCitation} /> : null}
         {streaming && answer !== '' ? (
           <span className="ln-ai__caret" aria-hidden="true">
             ▍
           </span>
         ) : null}
-        {checkingClaims || (streaming && phase === 'entailment') ? (
+        {streaming && phase === 'entailment' && answer !== '' ? (
           <div className="ln-ai__status" role="status" aria-live="polite">
             <Spinner size={13} label={t('ai.checkingClaims')} />
             <span>{t('ai.checkingClaims')}</span>

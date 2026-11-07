@@ -33,7 +33,8 @@ import {
   type Viewport,
 } from './camera.ts'
 import { createDragSimulation, type DragSimulation } from './layout.ts'
-import { IconButton, useHotkey, useMediaQuery } from '../design/primitives.tsx'
+import { useGraphMediaQuery } from './hooks.ts'
+import { IconButton, useHotkey } from '../design/primitives.tsx'
 import { useT } from '../shell/locale-context.ts'
 
 /** Props of the graph canvas. */
@@ -113,7 +114,7 @@ export function GraphCanvas(props: GraphCanvasProps): ReactElement {
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [livePositions, setLivePositions] = useState<Record<string, Point> | null>(null)
   const [labelOverride, setLabelOverride] = useState(false)
-  const narrow = useMediaQuery('(max-width: 820px)')
+  const narrow = useGraphMediaQuery('(max-width: 820px)')
   const [fitted, setFitted] = useState(false)
   const panRef = useRef<{ record: PointerRecord } | null>(null)
   const dragRef = useRef<DragState | null>(null)

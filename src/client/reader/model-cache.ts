@@ -30,7 +30,7 @@ let cacheOrder = 0
 const pageMarkViews = new WeakMap<PaperModel, { contentList: readonly unknown[]; marked: PaperModel }>()
 
 /** Stable cache key of one fetched markdown payload. */
-export function modelCacheKey(documentId: string, markdown: string): string {
+function modelCacheKey(documentId: string, markdown: string): string {
   return `${documentId}:${fnv1a(markdown)}`
 }
 
@@ -86,18 +86,6 @@ export function getViewableModel(
   }
   pageMarkViews.set(base, { contentList, marked })
   return marked
-}
-
-/** Drop one document's cached parse (reparse invalidation) or the whole cache. */
-export function invalidateModelCache(documentId?: string): void {
-  if (documentId === undefined) {
-    cache.clear()
-    return
-  }
-  const prefix = `${documentId}:`
-  for (const key of Array.from(cache.keys())) {
-    if (key.startsWith(prefix)) cache.delete(key)
-  }
 }
 
 /** Index of every block key in document order (`orderOf` source). */

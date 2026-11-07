@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_PREFERENCES, mergePreferences } from '../../src/shared/preferences.ts'
+import { ApiError } from '../../src/client/api/client.ts'
 import type { HostClient } from '../../src/client/api/client.ts'
 import type {
   ApiMethod,
@@ -281,6 +282,15 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHostClient {
         case 'library.list':
           // Internal assertion: the fake answers the exact wire shape.
           return { documents: [makeSummary()] } as unknown as ApiResults[K]
+        case 'chat.history':
+          // Internal assertion: the fake answers the exact wire shape.
+          return { messages: [] } as unknown as ApiResults[K]
+        case 'chat.clear':
+          // Internal assertion: the fake answers the exact wire shape.
+          return { cleared: true } as unknown as ApiResults[K]
+        case 'graph.doc':
+        case 'graph.library':
+          throw new ApiError('not-found', 'graph not built')
         default:
           throw new Error(`fake host: unexpected method ${String(method)}`)
       }

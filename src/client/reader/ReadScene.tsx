@@ -33,7 +33,7 @@ import { engineLabelKey, formatNumber } from '../shell/format.ts'
 import { useKatexReady } from './katex.ts'
 import { MemoBlockView, computeHeadingNumbers } from './blocks.tsx'
 import type { BlockRenderContext } from './blocks.tsx'
-import { findBlock } from './model-cache.ts'
+import { findBlock, modelNeedsKatex } from './model-cache.ts'
 import { readSelection, blocksByKey, clearBrowserSelection } from './selection.ts'
 import type { ReaderSelection } from './selection.ts'
 import { MarginNotes, NoteEditor } from './notes.tsx'
@@ -103,7 +103,8 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   const marginOpen = useUiStore((state) => state.marginOpen)
   const marginFilter = useUiStore((state) => state.marginFilter)
   const activeAspect = useUiStore((state) => state.activeAspect)
-  const katexReady = useKatexReady()
+  const needsKatex = useMemo(() => modelNeedsKatex(model), [model])
+  const katexReady = useKatexReady(needsKatex)
 
   /* ---- DOM refs ------------------------------------------------------ */
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -157,7 +158,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
         useReaderStore.getState().close()
       }
     }
-  }, [document.id])
+  }, [document.id, document.updatedAt])
 
   /* ---- page-mark preference changes rebuild the view model ------------ */
   const showPageMarks = preferences.showPageMarks
@@ -696,6 +697,24 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
     setHovered({ annotationId: null, blockKey: null })
   }, [])
 
+  /** Hovering a highlighted sentence lights its margin slip (reverse tether). */
+  const handleBodyOver = useCallback((event: ReactMouseEvent<HTMLElement>): void => {
+    const target = event.target as HTMLElement | null
+    if (target === null || typeof target.closest !== 'function') return
+    const mark = target.closest<HTMLElement>('.ln-hl')
+    if (mark === null) return
+    const annotationId = mark.getAttribute('data-id') ?? mark.getAttribute('data-annotation-id')
+    const block = mark.closest<HTMLElement>('[data-block-key]')
+    setHovered({
+      annotationId,
+      blockKey: block === null ? null : block.getAttribute('data-block-key'),
+    })
+  }, [])
+
+  const handleBodyLeave = useCallback((): void => {
+    setHovered({ annotationId: null, blockKey: null })
+  }, [])
+
   /* ---- block render context ------------------------------------------ */
   const blockContext = useMemo<BlockRenderContext>(
     () => ({
@@ -795,6 +814,8 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
                 className="ln-paper__body"
                 onMouseUp={handleMouseUp}
                 onKeyUp={handleKeyUp}
+                onMouseOver={handleBodyOver}
+                onMouseLeave={handleBodyLeave}
               >
                 {blocks.length === 0 ? (
                   <p className="ln-reader__empty">{t('read.emptyDoc')}</p>
@@ -874,6 +895,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
                 marginFilter={marginFilter}
                 activeAspect={activeAspect}
                 activeAnnotationId={activeAnnotationId}
+                hoveredAnnotationId={hovered.annotationId}
                 orderOf={orderOf}
                 onHover={hoverAnnotation}
                 onActivate={focusAnnotation}

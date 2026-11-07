@@ -146,7 +146,7 @@ degrade to empty values instead of failing the library.
 |---|---|
 | `engine` | `standard \| agent \| local` |
 | `provider` | local provider id when the local engine ran |
-| `modelVersion`, `language`, `options`, `isOcr` mirror | requested standard-API parameters (`options` holds the raw parse options) |
+| `modelVersion`, `language`, `options` | requested standard-API parameters (`options` holds the effective parse options, including `isOcr`) |
 | `phase` | `extracting \| submitting \| uploading \| polling` while parsing |
 | `remoteState` | MinerU task state (`waiting-file \| pending \| running \| converting \| null`) |
 | `taskId`, `batchId` | remote handles, used to resume polling after a host restart |
@@ -294,7 +294,7 @@ Request and result payloads are typed in `src/shared/protocol.ts` (`ApiRequests`
 | method | request | result |
 |---|---|---|
 | `health.ping` | `{clientVersion?, event?, detail?}` | `{ok:true, hostVersion, receivedAt}` (also appends a diagnostics line) |
-| `status` | `{}` | `StatusValue`: version, dataDir, token/translator/model state, counts, preferences, local capabilities, AI status |
+| `status` | `{}` | `StatusValue`: version/hostVersion, data directory display, token/translator/model state, counts, preferences, local capabilities, AI status |
 | `library.list` | `{}` | `{documents: DocumentSummary[]}` newest first |
 | `library.get` | `{id}` | `{document, annotations: Annotation[], translations}` |
 | `library.update` | `{id, title?}` | `{document}` |
@@ -469,7 +469,7 @@ ignores unknown ones.
 | `pollIntervalMs` | 3000 | 10 – 600 000 |
 | `parseTimeoutMs` | 30 min | 1 s – 24 h |
 | `toolMaxChars` | 40 000 | 1 000 – 400 000 (caps tool read slices and rendered results) |
-| `ai.*` | see `AI-SPEC.md` §9 | provider/model override, context chars, history turns, answer/graph tokens, annotation cap, reasoning effort, graph chunk caps, entailment switch |
+| `ai.*` | see `AI-SPEC.md` §7 | provider/model override, context chars, history turns, answer/graph tokens, annotation cap, reasoning effort, graph chunk caps, entailment switch |
 | `local.*` | enabled, 500 pages, 200 MiB PDF, 32 MiB text, 120 s timeout, 100 MiB Office | every field clamped; see `PARSING.md` |
 
 **Credentials.** The MinerU token lives in the Host credential store under
@@ -536,7 +536,7 @@ failures under `--final`.
 
 ## 15. Performance budgets
 
-Release targets (acceptance harness, `UI-SPEC.md` §10): library entry interactive < 400 ms after
+Release targets (acceptance harness, `UI-SPEC.md` §9): library entry interactive < 400 ms after
 data returns; reader first paint < 500 ms for a 10k-word paper (skeleton first); scroll at 60 fps;
 AI stream updates ≤ 1 React commit per frame; graph first layout ≤ 900 ms for 120 nodes; client
 bundle ≤ 620 KiB minified (goal ≤ 450 KiB), CSS ≤ 140 KiB; Host bundle ≤ 2 MiB. Structural

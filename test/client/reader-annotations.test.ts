@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 import type { Annotation } from '../../src/shared/model.ts'
 import {
   MAX_ANNOTATION_QUOTE,
-  countAnnotationOrigins,
   mergeAnnotationsForSave,
   normalizeStaleAnnotation,
 } from '../../src/client/reader/annotations.ts'
@@ -100,17 +99,5 @@ describe('normalizeStaleAnnotation', () => {
     expect(out?.createdAt).toBe('1970-01-01T00:00:00.000Z')
     expect(out?.updatedAt).toBe(out?.createdAt)
     expect(out?.aspect).toBeUndefined()
-  })
-})
-
-describe('countAnnotationOrigins', () => {
-  it('counts AI provenance separately and tolerates bad input', () => {
-    expect(countAnnotationOrigins(null)).toEqual({ all: 0, ai: 0, user: 0 })
-    const counts = countAnnotationOrigins([
-      { id: '1', blockKey: '', start: 0, end: 1, quote: '', color: 'yellow', origin: 'ai' },
-      { id: '2', blockKey: '', start: 0, end: 1, quote: '', color: 'yellow', origin: 'user' },
-      { id: '3', blockKey: '', start: 0, end: 1, quote: '', color: 'yellow' },
-    ])
-    expect(counts).toEqual({ all: 3, ai: 1, user: 2 })
   })
 })

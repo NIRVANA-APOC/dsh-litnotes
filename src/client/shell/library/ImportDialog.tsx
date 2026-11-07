@@ -16,7 +16,7 @@ import { useSettingsStore } from '../../state/settings.ts'
 import { useUiStore } from '../../state/ui.ts'
 import { Button, Dialog, IconButton } from '../../design/primitives.tsx'
 import { useT } from '../locale-context.ts'
-import { defaultParseOptions } from './options.ts'
+import { defaultParseOptions, localSupportForFile } from './options.ts'
 import { rememberParseOptions } from './options.ts'
 import { extensionOf } from './format.ts'
 import type { ImportFailure } from './import-errors.ts'
@@ -103,6 +103,14 @@ export function ImportDialog(): ReactElement {
     // Keep the draft aligned when preferences finish loading after opening.
   }, [dialog, preferences])
 
+  // A remembered "local" choice must not strand the user on an unsupported file.
+  useEffect(() => {
+    const first = files[0]
+    if (first === undefined || options.engine !== 'local') return
+    if (localSupportForFile(local, first, t).supported) return
+    setOptions((previous) => ({ ...previous, engine: 'auto' }))
+  }, [files, local, options.engine, t])
+
   /** Add files from the picker, filtering unsupported extensions. */
   const addFiles = (incoming: ReadonlyArray<File>): void => {
     const picked = partitionFiles(incoming)
@@ -167,10 +175,19 @@ export function ImportDialog(): ReactElement {
           <Button variant="ghost" onClick={close} disabled={busy}>
             {t('action.cancel')}
           </Button>
-          <Button variant="quiet" onClick={() => submitFiles(false)} disabled={busy || files.length === 0}>
-            {t('dlg.import.onlyImport')}
-          </Button>
-          <Button variant="primary" onClick={() => submitFiles(true)} disabled={busy || files.length === 0}>
+          {files.length === 0 ? null : (
+            <Button variant="quiet" onClick={() => submitFiles(false)} disabled={busy}>
+              {t('dlg.import.onlyImport')}
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (files.length > 0) submitFiles(true)
+              else void submitUrl()
+            }}
+            disabled={busy || !canSubmit}
+          >
             {files.length > 0 ? t('dlg.import.start') : t('dlg.import.urlSubmit')}
           </Button>
         </>

@@ -5,7 +5,7 @@
  * versioned ({@link PROMPT_VERSION}) when graph/chat artifacts are cached on
  * disk. Every prompt is written in English; the *answer* follows the language
  * of the reader's question. The model output contract is the fenced
- * `litnotes-json` block described in `docs/AI-SPEC.md` §5 — prompts describe it
+ * `litnotes-json` block described in `docs/AI-SPEC.md` §4 — prompts describe it
  * and the host enforces it.
  *
  * Context blocks are embedded as:

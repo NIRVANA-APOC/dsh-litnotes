@@ -629,3 +629,24 @@ test('library curation merges alias labels within and across papers (no duplicat
   expect(relation.length).toBe(1)
   expect(relation[0]?.weight).toBe(2)
 })
+
+test('library polish prompt is bounded by ai.graphSummaryChars', async () => {
+  const env = twoDocEnvironment()
+  let polishPrompt = ''
+  const gateway = createFakeGateway({
+    library({ request }) {
+      const message = Array.isArray(request.messages) ? request.messages[0] : undefined
+      const content = message !== undefined && message !== null && typeof message === 'object' ? message.content : undefined
+      polishPrompt = typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content.map((part) => (part !== null && typeof part === 'object' && typeof part.text === 'string' ? part.text : '')).join('')
+          : ''
+      return '## Polished\n\nBounded.'
+    },
+  })
+  const service = makeService(env, gateway, { graphSummaryChars: 300 })
+  await collect(service.rebuildLibraryGraph())
+  expect(polishPrompt.length).toBeGreaterThan(0)
+  expect(polishPrompt.length).toBeLessThan(400)
+})

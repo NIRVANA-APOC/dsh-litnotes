@@ -462,6 +462,8 @@ var STATUS_BY_CODE = Object.freeze({
   "local-empty-text": 422,
   "local-encrypted": 422,
   "local-failed": 500,
+  "repair-unavailable": 409,
+  "ai-unavailable": 503,
   aborted: 499
 });
 var INTERNAL_MESSAGE = "\u670D\u52A1\u5668\u5185\u90E8\u9519\u8BEF\uFF08Internal host error\uFF09";
@@ -13425,7 +13427,7 @@ function createChatService(deps) {
       historyTurns: clampInt3(ai.historyTurns, 0, 20, 6),
       answerMaxTokens: clampInt3(ai.answerMaxTokens, 256, 16384, 4096),
       maxAnnotationsPerAnswer: clampInt3(ai.maxAnnotationsPerAnswer, 0, 20, DEFAULT_MAX_ANNOTATIONS),
-      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §5): on by
+      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §4.4): on by
       // default; a cheap, bounded classification call.
       entailmentCheck: ai.entailmentCheck !== false,
       entailmentMaxTokens: clampInt3(ai.entailmentMaxTokens, 64, 4096, DEFAULT_ENTAILMENT_MAX_TOKENS),

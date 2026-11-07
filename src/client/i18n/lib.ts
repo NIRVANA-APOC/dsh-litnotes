@@ -29,8 +29,6 @@ export const zh = {
   'dlg.import.badUrl': '请输入 http(s) 开头的链接。',
   'dlg.import.tokenWarn': '未配置 MinerU Token：精准解析不可用，可改用本地或轻量解析。',
   'dlg.import.tokenAction': '配置令牌',
-  'dlg.import.localUnavailable': '本地解析不可用：{reason}',
-  'dlg.import.error': '导入失败：{message}',
   'dlg.import.readyToParse': '导入完成后可在文献行中开始解析。',
 
   // Reparse dialog --------------------------------------------------------
@@ -43,7 +41,6 @@ export const zh = {
   'dlg.reparse.repairHint': '只重新解析未识别或乱码的页面，其余页面保持原样。',
   'dlg.reparse.repairUnavailable': '本地解析无法按页修复，请整篇重新解析。',
   'dlg.reparse.lastOptions': '上次：{engine} · {language}',
-  'dlg.reparse.loading': '正在解析…',
   'dlg.reparse.parseRunning': '这篇文献正在解析，完成后再试。',
 
   // Rename / delete -------------------------------------------------------
@@ -52,7 +49,6 @@ export const zh = {
   'dlg.rename.placeholder': '文献标题',
   'dlg.delete.title': '删除文献',
   'dlg.delete.body': '删除后，该文献的解析结果、批注、对话与图谱会一并删除，且不可恢复。',
-  'dlg.delete.target': '将删除',
   'dlg.delete.confirm': '删除',
 
   // Parse options (shared form) ------------------------------------------
@@ -84,7 +80,6 @@ export const zh = {
   'parse.tableHint': '识别表格结构',
   'parse.localFixed': '本地解析只提取文字层，以上选项不适用。',
   'parse.moreOptions': '更多选项',
-  'parse.tokenMissing': '未配置 Token 时，精准解析不可用。',
 
   // Settings --------------------------------------------------------------
   'set.title': '设置',
@@ -101,7 +96,6 @@ export const zh = {
   'set.tokenSaved': '已配置 · 保存在本机凭据中',
   'set.tokenMemory': '已配置 · 仅本次运行有效',
   'set.tokenMissing': '未配置',
-  'set.tokenHint': '本地解析无需 Token；配置后可解锁 MinerU 精准解析（公式/表格/OCR）。',
   'set.tokenLocalFallback': '未配置 Token 时默认使用本地解析，文件不会上传。',
   'set.local': '本地解析能力',
   'set.localHint': '本地解析不上传文件；扫描件需云端解析或 OCR 侧车。',
@@ -115,14 +109,12 @@ export const zh = {
   'set.localEmpty': '宿主未提供本地解析能力。',
   'set.defaults': '默认解析设置',
   'set.defaultsHint': '导入与重新解析对话框的初始值。',
-  'set.translate': '翻译',
   'set.targetLang': '目标语言',
   'set.targetLangHint': '译文与对照阅读使用的语言。',
   'set.provider': '翻译服务',
   'set.providerAuto': '自动（按宿主可用服务选择）',
   'set.providerHint': '由宿主翻译服务提供；不可用时回退到自动。',
   'set.providerUnavailable': '宿主没有可用的翻译服务，翻译按钮会提示配置。',
-  'set.ai': 'AI 功能',
   'set.graphAutoBuild': '解析完成后自动生成知识图谱',
   'set.graphAutoBuildHint': '每篇文献解析完成时自动构建单篇图谱。',
   'set.graphAutoBuildUnavailable': '需要可用的 AI 模型与图谱引擎。',
@@ -132,7 +124,6 @@ export const zh = {
   'set.modelRouteValue': '{provider} · {model}',
   'set.modelRouteNone': '未配置模型，AI 功能不可用。',
   'set.aiUnavailable': 'AI 不可用：{reason}',
-  'set.appearance': '外观',
   'set.theme': '主题',
   'set.themeFollow': '跟随宿主主题（浅色 / 深色自动切换）',
   'set.readScale': '正文字号',
@@ -141,8 +132,6 @@ export const zh = {
   'set.readScale.112': '大',
   'set.readPageMarks': '显示页标记',
   'set.readPageMarksHint': '在正文中显示页码与页边界。',
-  'set.readMeasure': '行宽',
-  'set.about': '关于',
   'set.version': '版本',
   'set.hostVersion': '宿主版本',
   'set.dataDir': '数据目录',
@@ -153,8 +142,6 @@ export const zh = {
   'set.copyDiagnostics': '复制诊断信息',
   'set.diagnosticsCopied': '诊断信息已复制',
   'set.aboutBody': 'LitNotes 是 DeepSeek Harness 的本地文献阅读台：文献与数据保存在本机，AI 由宿主模型提供。',
-  'set.saveFailed': '设置保存失败，已恢复原值。',
-  'set.loadFailed': '设置加载失败：{message}',
 
   // Rail ------------------------------------------------------------------
   'rail.clear': '清空筛选',
@@ -188,11 +175,9 @@ export const zh = {
   'rail.repair': '按页修复',
   'rail.repairNone': '这篇文献没有需要修复的页面，已打开重新解析。',
   'rail.retryParse': '重试解析',
-  'rail.retryHint': '上次失败，可重试或换引擎。',
   'rail.foot': '{total} 篇 · {parsed} 已解析',
   'rail.close': '关闭文献列表',
   'rail.drawer': '文献列表',
-  'rail.importHint': '拖入文件即可导入',
   'rail.rowMeta.pages': '{count} 页',
   'rail.rowMeta.words': '{count} 词',
   'rail.moreActions': '文献操作',
@@ -204,12 +189,9 @@ export const zh = {
   'err.tooLarge': '文件超过大小限制，请压缩后重试或改用其他解析引擎。',
   'err.unsupportedType': '不支持这种文件格式，请导入 PDF、Word、PPT、Excel、图片或 HTML。',
   'err.network': '无法连接主机，请确认宿主正在运行后重试。',
-  'err.importFailed': '导入失败：{message}',
   'err.importUrlFailed': '无法从该链接导入：{message}',
-  'err.parseFailed': '解析失败：{message}',
   'toast.uploadFailed': '导入失败：{message}',
   'toast.parseStarted': '已开始解析 {name}',
-  'toast.filterCleared': '已清除筛选',
 
   // Language labels (MinerU document languages) --------------------------
   'setup.langCh': '中文',
@@ -248,8 +230,6 @@ export const en: Record<keyof typeof zh, string> = {
   'dlg.import.badUrl': 'Enter a link that starts with http(s).',
   'dlg.import.tokenWarn': 'No MinerU token: precise parsing is unavailable. Use local or light parsing instead.',
   'dlg.import.tokenAction': 'Set token',
-  'dlg.import.localUnavailable': 'Local parsing unavailable: {reason}',
-  'dlg.import.error': 'Import failed: {message}',
   'dlg.import.readyToParse': 'After importing you can start parsing from the document row.',
 
   // Reparse dialog --------------------------------------------------------
@@ -263,7 +243,6 @@ export const en: Record<keyof typeof zh, string> = {
   'dlg.reparse.repairHint': 'Reparse only unreadable pages; every other page stays untouched.',
   'dlg.reparse.repairUnavailable': 'Local parsing cannot repair pages; parse the whole paper again.',
   'dlg.reparse.lastOptions': 'Last time: {engine} · {language}',
-  'dlg.reparse.loading': 'Parsing…',
   'dlg.reparse.parseRunning': 'This paper is being parsed. Try again when it finishes.',
 
   // Rename / delete -------------------------------------------------------
@@ -273,7 +252,6 @@ export const en: Record<keyof typeof zh, string> = {
   'dlg.delete.title': 'Delete paper',
   'dlg.delete.body':
     'Deleting removes this paper’s parse, annotations, conversation and graph. This cannot be undone.',
-  'dlg.delete.target': 'About to delete',
   'dlg.delete.confirm': 'Delete',
 
   // Parse options (shared form) ------------------------------------------
@@ -306,7 +284,6 @@ export const en: Record<keyof typeof zh, string> = {
   'parse.tableHint': 'Recognize table structure',
   'parse.localFixed': 'Local parsing extracts the text layer only; these options do not apply.',
   'parse.moreOptions': 'More options',
-  'parse.tokenMissing': 'Precise parsing needs a token.',
 
   // Settings --------------------------------------------------------------
   'set.title': 'Settings',
@@ -323,7 +300,6 @@ export const en: Record<keyof typeof zh, string> = {
   'set.tokenSaved': 'Configured · stored in local credentials',
   'set.tokenMemory': 'Configured · this session only',
   'set.tokenMissing': 'Not configured',
-  'set.tokenHint': 'Local parsing needs no token; configure one to unlock MinerU precise parsing (formulas/tables/OCR).',
   'set.tokenLocalFallback': 'Without a token the local engine is preferred; files are never uploaded.',
   'set.local': 'Local parsing capabilities',
   'set.localHint': 'Local parsing never uploads files; scans need cloud parsing or an OCR sidecar.',
@@ -337,14 +313,12 @@ export const en: Record<keyof typeof zh, string> = {
   'set.localEmpty': 'The host reports no local parsing capabilities.',
   'set.defaults': 'Default parse settings',
   'set.defaultsHint': 'Initial values for the import and reparse dialogs.',
-  'set.translate': 'Translation',
   'set.targetLang': 'Target language',
   'set.targetLangHint': 'Language used for translations and bilingual reading.',
   'set.provider': 'Translation service',
   'set.providerAuto': 'Auto (pick an available host service)',
   'set.providerHint': 'Provided by the host translator; falls back to auto when unavailable.',
   'set.providerUnavailable': 'The host has no translation service; the translate action will ask for setup.',
-  'set.ai': 'AI features',
   'set.graphAutoBuild': 'Build the knowledge graph after parsing',
   'set.graphAutoBuildHint': 'Build the per-paper graph automatically when a parse finishes.',
   'set.graphAutoBuildUnavailable': 'Needs an available AI model and graph engine.',
@@ -354,7 +328,6 @@ export const en: Record<keyof typeof zh, string> = {
   'set.modelRouteValue': '{provider} · {model}',
   'set.modelRouteNone': 'No model configured; AI features are unavailable.',
   'set.aiUnavailable': 'AI unavailable: {reason}',
-  'set.appearance': 'Appearance',
   'set.theme': 'Theme',
   'set.themeFollow': 'Follows the host theme (light / dark)',
   'set.readScale': 'Body size',
@@ -363,8 +336,6 @@ export const en: Record<keyof typeof zh, string> = {
   'set.readScale.112': 'Large',
   'set.readPageMarks': 'Show page marks',
   'set.readPageMarksHint': 'Show page numbers and page breaks in the text.',
-  'set.readMeasure': 'Measure',
-  'set.about': 'About',
   'set.version': 'Version',
   'set.hostVersion': 'Host version',
   'set.dataDir': 'Data directory',
@@ -376,8 +347,6 @@ export const en: Record<keyof typeof zh, string> = {
   'set.diagnosticsCopied': 'Diagnostics copied',
   'set.aboutBody':
     'LitNotes is a local reading desk for DeepSeek Harness: papers and data stay on this machine, AI comes from the host model.',
-  'set.saveFailed': 'Could not save settings; the previous value was restored.',
-  'set.loadFailed': 'Could not load settings: {message}',
 
   // Rail ------------------------------------------------------------------
   'rail.clear': 'Clear filters',
@@ -411,11 +380,9 @@ export const en: Record<keyof typeof zh, string> = {
   'rail.repair': 'Repair pages',
   'rail.repairNone': 'No problem pages to repair; opening a full reparse instead.',
   'rail.retryParse': 'Retry parsing',
-  'rail.retryHint': 'Last attempt failed; retry or switch engines.',
   'rail.foot': '{total} papers · {parsed} parsed',
   'rail.close': 'Close library list',
   'rail.drawer': 'Library list',
-  'rail.importHint': 'Drop files to import',
   'rail.rowMeta.pages': '{count} pages',
   'rail.rowMeta.words': '{count} words',
   'rail.moreActions': 'Paper actions',
@@ -427,12 +394,9 @@ export const en: Record<keyof typeof zh, string> = {
   'err.tooLarge': 'The file is over the size limit; compress it or use another engine.',
   'err.unsupportedType': 'Unsupported file type. Import PDF, Word, PowerPoint, Excel, images or HTML.',
   'err.network': 'Cannot reach the host. Make sure it is running, then retry.',
-  'err.importFailed': 'Import failed: {message}',
   'err.importUrlFailed': 'Could not import that link: {message}',
-  'err.parseFailed': 'Parsing failed: {message}',
   'toast.uploadFailed': 'Import failed: {message}',
   'toast.parseStarted': 'Parsing started for {name}',
-  'toast.filterCleared': 'Filters cleared',
 
   // Language labels (MinerU document languages) --------------------------
   'setup.langCh': 'Chinese',

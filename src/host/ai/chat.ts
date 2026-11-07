@@ -1,5 +1,6 @@
 /**
- * Grounded reading conversation for dsh-litnotes (`docs/AI-SPEC.md` §3/§4/§5).
+ * Grounded reading conversation for dsh-litnotes (`docs/AI-SPEC.md` §3.4 engine,
+ * §4 model output, §5 wire).
  *
  * One turn: load history → retrieve a bounded context window from the shared
  * reader-parser blocks → ask the model for a Markdown answer plus the trailing
@@ -14,7 +15,7 @@
  * stream starts is emitted as an error frame; aborts never persist a half turn
  * and never touch user annotations.
  *
- * Frames (exact objects from `docs/AI-SPEC.md` §4):
+ * Frames (exact objects from `docs/AI-SPEC.md` §5.2):
  *
  *     { type:'start', messageId, model }
  *     { type:'delta', text }
@@ -781,7 +782,7 @@ function normalizeMessage(raw: unknown): StoredChatMessage | null {
         note: boundedString(entry.note, MAX_NOTE_CHARS),
         verified: entry.verified !== false,
       }
-      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §5).
+      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §4.4).
       const entailment = normalizeEntailmentState(entry.entailment)
       if (entailment !== undefined) normalized.entailment = entailment
       const entailmentReason = boundedString(entry.entailmentReason, 500).trim()
@@ -860,7 +861,7 @@ function normalizeChatFile(raw: unknown): ChatFile {
 /**
  * Create the grounded chat service.
  *
- * @param deps - engine dependencies (`docs/AI-SPEC.md` §3): the LLM gateway,
+ * @param deps - engine dependencies (`docs/AI-SPEC.md` §3.4): the LLM gateway,
  *   the retriever, the store (readMarkdown/aux/annotations) and the optional
  *   atomic store helpers. Without them the historical load/save path is used
  *   (tests / minimal hosts).
@@ -903,7 +904,7 @@ export function createChatService(deps: ChatServiceDeps): ChatService {
       historyTurns: clampInt(ai.historyTurns, 0, 20, 6),
       answerMaxTokens: clampInt(ai.answerMaxTokens, 256, 16384, 4096),
       maxAnnotationsPerAnswer: clampInt(ai.maxAnnotationsPerAnswer, 0, 20, DEFAULT_MAX_ANNOTATIONS),
-      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §5): on by
+      // Citation–claim entailment second pass (`docs/AI-SPEC.md` §4.4): on by
       // default; a cheap, bounded classification call.
       entailmentCheck: ai.entailmentCheck !== false,
       entailmentMaxTokens: clampInt(ai.entailmentMaxTokens, 64, 4096, DEFAULT_ENTAILMENT_MAX_TOKENS),
@@ -1219,7 +1220,7 @@ export function createChatService(deps: ChatServiceDeps): ChatService {
    * abort, unparsed document, bad request) are yielded as `{ type:'error' }`
    * frames so the HTTP route can keep writing after headers.
    *
-   * @param request - client request (`docs/AI-SPEC.md` §3).
+   * @param request - client request (`docs/AI-SPEC.md` §2.6, §3.4).
    * @param signal - consumer abort signal (the route's abort controller).
    * @returns NDJSON frame objects.
    */

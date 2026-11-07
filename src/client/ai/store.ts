@@ -101,6 +101,8 @@ export interface AiState {
   input: string
   /** Selection context shown as the 选区 chip and sent as `focus`. */
   composerContext: AiComposerContext | null
+  /** Visible-paragraph block key shown as the 本段 chip when no selection exists. */
+  autoFocusBlockKey: string | null
   /** Incremented when the reader asks for composer focus. */
   composerFocusTick: number
   /** Last failed run (entry-level error + retry). */
@@ -122,6 +124,7 @@ export interface AiState {
   setInput: (input: string) => void
   setComposerContext: (context: AiComposerContext | null) => void
   clearComposerContext: () => void
+  setAutoFocus: (blockKey: string | null) => void
   focusComposer: (context: AiComposerContext | null) => void
   dismissError: () => void
   /** Build the export payload (null for an empty/unusable conversation). */
@@ -423,7 +426,10 @@ export const useAiStore = create<AiState>((set, get) => {
     const userEntry =
       options.appendUser === false ? null : localEntry(`local-user-${sequence}`, 'user', question)
     const assistant = localEntry(assistantId, 'assistant', question)
-    const focus = wireFocus(get().composerContext, options.focus)
+    const autoFocus = get().autoFocusBlockKey
+    const focus =
+      wireFocus(get().composerContext, options.focus) ??
+      (autoFocus !== null && autoFocus !== '' ? { blockKey: autoFocus } : undefined)
     const run: ActiveRun = {
       id: assistantId,
       documentId,
@@ -493,6 +499,7 @@ export const useAiStore = create<AiState>((set, get) => {
     busy: false,
     input: '',
     composerContext: null,
+    autoFocusBlockKey: null,
     composerFocusTick: 0,
     streamError: null,
     lastKnowledgeDelta: null,
@@ -513,6 +520,7 @@ export const useAiStore = create<AiState>((set, get) => {
         streamError: null,
         streamingId: null,
         busy: false,
+        input: '',
         lastKnowledgeDelta: null,
       })
       try {
@@ -599,6 +607,8 @@ export const useAiStore = create<AiState>((set, get) => {
     setComposerContext: (context) => set({ composerContext: context }),
 
     clearComposerContext: () => set({ composerContext: null }),
+
+    setAutoFocus: (blockKey) => set({ autoFocusBlockKey: blockKey === null || blockKey === '' ? null : blockKey }),
 
     focusComposer: (context) => {
       set((state) => ({

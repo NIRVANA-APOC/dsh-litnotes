@@ -1,26 +1,12 @@
 /**
- * AI margin seat.
+ * AI margin seat — the single import point the reader scene uses for the AI
+ * conversation stream.
  *
- * `client-ai` owns `AiMarginEntries` (conversation stream, citation chips,
- * composer, filter chips). This module is the single import point the reader
- * scene uses, so the handoff is one line: when the AI component lands, this
- * file re-exports it from `../ai/AiMarginEntries.tsx` and the reader scene does
- * not change.
- *
- * Until that file exists this module exposes a typed, inert stub that keeps the
- * margin layout and the tether contract exercised (no fake content, no copy).
+ * `client-ai` owns the component (`src/client/ai/AiMarginEntries.tsx`); this
+ * module only re-exports it so the reader never depends on AI internals and the
+ * handoff stays one line. Props contract: `documentId`, `orderOf`, `onJump`,
+ * `onAnnotationsChanged` (lead-brokered; mirrored in `./api.ts`).
  */
 
-import type { ReactElement } from 'react'
-import type { AiMarginEntriesProps } from './api.ts'
-
-/** Placeholder for `client-ai`'s margin stream (deleted on handoff). */
-export function AiMarginEntries({ documentId }: AiMarginEntriesProps): ReactElement {
-  return (
-    <div
-      className="ln-margin__ai ln-margin__ai--empty"
-      data-document-id={documentId}
-      data-ai-margin="pending"
-    />
-  )
-}
+export { AiMarginEntries } from '../ai/AiMarginEntries.tsx'
+export type { AiMarginEntriesProps } from '../ai/AiMarginEntries.tsx'

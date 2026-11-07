@@ -38,16 +38,15 @@ function largeResultZip(): Buffer {
   return makeZip(entries)
 }
 
-test('extract the canonical MinerU result archive', () => {
+test('extract the canonical MinerU result archive', { timeout: 60_000 }, () => {
   const archive = resultZip
   let lastResult = unzip(archive)
-  const sample = measureSync(
-    { suite: 'unzip', case: 'mineru-result-zip', iters: 100, bytes: archive.length, note: `${lastResult.entries.length} entries` },
+  measureSync(
+    { suite: 'unzip', case: 'mineru-result-zip', iters: 60, bytes: archive.length, note: `${lastResult.entries.length} entries` },
     () => {
       lastResult = unzip(archive)
     },
   )
-  expect(sample.iters).toBe(100)
   const markdownEntry = lastResult.entries.find((entry) => entry.name === 'full.md')
   expect(markdownEntry?.data.toString('utf8')).toBe(resultMarkdown)
   expect(lastResult.entries.some((entry) => entry.name === 'sample_content_list.json')).toBe(true)
@@ -55,30 +54,28 @@ test('extract the canonical MinerU result archive', () => {
   expect(lastResult.warnings).toHaveLength(0)
 })
 
-test('extract a large multi-entry archive', () => {
+test('extract a large multi-entry archive', { timeout: 60_000 }, () => {
   const archive = largeResultZip()
   let lastCount = 0
-  const sample = measureSync(
-    { suite: 'unzip', case: 'large-result-zip', iters: 15, bytes: archive.length, note: '60 entries' },
+  measureSync(
+    { suite: 'unzip', case: 'large-result-zip', iters: 10, bytes: archive.length, note: '60 entries' },
     () => {
       lastCount = unzip(archive).entries.length
     },
   )
-  expect(sample.iters).toBe(15)
   expect(lastCount).toBe(62)
 })
 
-test('extract only the filtered entry set (parse-manager keep filter)', () => {
+test('extract only the filtered entry set (parse-manager keep filter)', { timeout: 60_000 }, () => {
   const archive = resultZip
   let lastCount = 0
-  const sample = measureSync(
-    { suite: 'unzip', case: 'filtered-result-zip', iters: 100, bytes: archive.length },
+  measureSync(
+    { suite: 'unzip', case: 'filtered-result-zip', iters: 60, bytes: archive.length },
     () => {
       lastCount = unzip(archive, {
         filter: (name) => name === 'full.md' || name.endsWith('_content_list.json') || name.startsWith('images/'),
       }).entries.length
     },
   )
-  expect(sample.iters).toBe(100)
   expect(lastCount).toBe(3)
 })

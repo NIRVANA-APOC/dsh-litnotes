@@ -681,6 +681,22 @@
 .ln-note.is-active {
   border-color: color-mix(in srgb, var(--ln-signal) 40%, var(--ln-rule));
   background: var(--ln-signal-soft);
+  animation: ln-note-pulse 1.2s var(--ln-ease);
+}
+
+.ln-note.is-hover {
+  border-color: var(--ln-rule-strong);
+  background: var(--ln-surface-2);
+}
+
+@keyframes ln-note-pulse {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  30% {
+    box-shadow: 0 0 0 2px var(--ln-signal-soft);
+  }
 }
 
 .ln-note.is-stale {

@@ -9,7 +9,7 @@
  */
 
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { DocumentSummary, GraphNode } from '../../shared/model.ts'
 import { AspectDot, Badge, Button, IconButton, TextInput } from '../design/primitives.tsx'
@@ -48,7 +48,6 @@ export function GraphNodeCard(props: GraphNodeCardProps): ReactElement {
   const [saving, setSaving] = useState(false)
   const [mergeStep, setMergeStep] = useState<'idle' | 'pick' | 'confirm'>('idle')
   const [mergeTargetId, setMergeTargetId] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
 
   // A different node resets every transient editor state.
   useEffect(() => {
@@ -58,10 +57,6 @@ export function GraphNodeCard(props: GraphNodeCardProps): ReactElement {
     setMergeTargetId(null)
     setSaving(false)
   }, [node.id, node.label])
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus()
-  }, [editing])
 
   const pinned = node.pinned === true
   const ink = nodeInk(node)
@@ -133,7 +128,7 @@ export function GraphNodeCard(props: GraphNodeCardProps): ReactElement {
           }}
         >
           <TextInput
-            ref={inputRef}
+            autoFocus
             value={draft}
             aria-label={t('graph.rename.placeholder')}
             placeholder={t('graph.rename.placeholder')}
@@ -201,7 +196,7 @@ export function GraphNodeCard(props: GraphNodeCardProps): ReactElement {
               variant="ghost"
               size="sm"
               icon="pin"
-              pressed={pinned}
+              aria-pressed={pinned}
               disabled={saving || (!pinned && position === null)}
               onClick={() => void togglePin()}
             >

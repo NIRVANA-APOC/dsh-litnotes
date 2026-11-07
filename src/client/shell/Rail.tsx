@@ -15,7 +15,7 @@ import { useLibraryStore } from '../state/library.ts'
 import { useSettingsStore } from '../state/settings.ts'
 import { useUiStore } from '../state/ui.ts'
 import { useImportController } from './library/import-controller.ts'
-import { Button, Chip, EmptyState, IconButton, Menu, cx, useMediaQuery, type MenuItem } from '../design/primitives.tsx'
+import { Button, Chip, EmptyState, IconButton, Menu, useMediaQuery, type MenuItem } from '../design/primitives.tsx'
 import { Icon } from '../design/icons.tsx'
 import { useT } from './locale-context.ts'
 import { useInjectedStyle } from '../design/use-style.ts'
@@ -29,7 +29,7 @@ import {
   type RailStatusFilter,
 } from './library/search.ts'
 import { defaultParseOptions } from './library/options.ts'
-import { loadParseDetail, repairRequest, retryRequest, summaryParseOptions } from './library/parse-request.ts'
+import { loadParseDetail, repairRequest, retryRequest, summaryParseOptions, type ParseDetail } from './library/parse-request.ts'
 import { formatNumber } from './library/format.ts'
 import { SHELL_LIBRARY_CSS } from './library/styles.ts'
 
@@ -51,7 +51,6 @@ export function Rail(): ReactElement {
   const t = useT()
   const documents = useLibraryStore((state) => state.documents)
   const loaded = useLibraryStore((state) => state.loaded)
-  const loading = useLibraryStore((state) => state.loading)
   const error = useLibraryStore((state) => state.error)
   const refresh = useLibraryStore((state) => state.refresh)
   const startParse = useLibraryStore((state) => state.startParse)
@@ -153,7 +152,7 @@ export function Rail(): ReactElement {
 
   /** Repair the pages the last parse reported as unreadable (no modal). */
   const repairDocument = async (document: DocumentSummary): Promise<void> => {
-    let detail
+    let detail: ParseDetail
     try {
       detail = await loadParseDetail(document.id)
     } catch {
@@ -213,7 +212,7 @@ export function Rail(): ReactElement {
 
   /** The list content: loading skeleton, error, empty invitations or rows. */
   const listContent = ((): ReactElement => {
-    if (!loaded && loading) {
+    if (!loaded && error === null) {
       return (
         <div aria-busy="true" aria-label={t('action.loading')}>
           <div className="ln-rail__skeleton" />
@@ -305,7 +304,7 @@ export function Rail(): ReactElement {
           onClick={() => setCollapsed(true)}
         />
       ) : null}
-      <aside className={cx('ln-rail')} data-drawer={drawer || undefined} aria-label={t(drawer ? 'rail.drawer' : 'rail.title')}>
+      <aside className="ln-rail" data-drawer={drawer || undefined} aria-label={t(drawer ? 'rail.drawer' : 'rail.title')}>
         <header className="ln-rail__head">
           <span className="ln-rail__title">{t('rail.title')}</span>
           <span className="ln-rail__count ln-tabular">{formatNumber(documents.length)}</span>
@@ -366,6 +365,9 @@ export function Rail(): ReactElement {
         <div
           ref={listRef}
           className="ln-rail__list ln-scroll"
+          data-loading={!loaded || undefined}
+          data-empty={(loaded && documents.length === 0 && uploads.length === 0) || undefined}
+          data-filtered={(visible.length === 0 && (matched !== null || filter !== 'all')) || undefined}
           role="list"
           aria-label={t('rail.title')}
           onKeyDown={onListKeyDown}
@@ -377,7 +379,7 @@ export function Rail(): ReactElement {
             {t('rail.foot', { total: formatNumber(documents.length), parsed: formatNumber(counts.parsed) })}
           </span>
           {drawer ? null : (
-            <span className="ln-rail__width">{preferences.readingMeasure}ch</span>
+            <IconButton icon="chevronLeft" label={t('rail.collapse')} size={14} onClick={() => setCollapsed(true)} />
           )}
         </footer>
       </aside>

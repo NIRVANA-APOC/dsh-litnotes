@@ -454,13 +454,25 @@ export interface KnowledgeGraph {
   glossary?: Array<{ term: string; definition: string; blockKeys: string[] }>
   nodes: GraphNode[]
   edges: GraphEdge[]
+  /** Library scope only: deterministic topic clusters computed at aggregation. */
+  clusters?: GraphCluster[]
   stats: { nodes: number; edges: number; builtAtSeq?: number | null }
+}
+
+/** One library-graph cluster (runtime field on library `graph` values). */
+export interface GraphCluster {
+  id: string
+  label: string
+  nodeIds: string[]
+  size: number
+  weight: number
 }
 
 /** `graph.update` patch (document scope curation). */
 export interface GraphPatch {
   nodes?: Array<{
-    id: string
+    /** Omitted when the patch creates a node; set when updating one. */
+    id?: string
     label?: string
     summary?: string
     aspect?: Aspect

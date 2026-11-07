@@ -19,6 +19,7 @@ import { useUiStore } from '../../src/client/state/ui.ts'
 import { useReaderStore } from '../../src/client/reader/store.ts'
 import { registerAskAI } from '../../src/client/reader/api.ts'
 import { ReadScene } from '../../src/client/reader/ReadScene.tsx'
+import { ReadContextBar } from '../../src/client/reader/ReadContextBar.tsx'
 import { LocaleContext } from '../../src/client/shell/locale-context.ts'
 import type { LitnotesTranslate } from '../../src/client/shell/locale-context.ts'
 import {
@@ -459,11 +460,13 @@ describe('ReadScene — selection toolbar', () => {
 })
 
 describe('ReadScene — navigation and AI margin', () => {
-  it('mounts the AI margin seat with the document id', async () => {
+  it('mounts the AI margin stream, filter chips and composer inside the margin', async () => {
     await renderScene()
-    const seat = container.querySelector('[data-ai-margin]')
+    const seat = container.querySelector('.ln-sheet__margin .ln-margin__ai .ln-ai')
     expect(seat).not.toBeNull()
-    expect(seat?.getAttribute('data-document-id')).toBe('doc-1')
+    expect(seat?.querySelector('.ln-ai__filters')).not.toBeNull()
+    expect(seat?.querySelector('.ln-ai__stream')).not.toBeNull()
+    expect(seat?.querySelector('.ln-ai__composer')).not.toBeNull()
   })
 
   it('scrolls and flashes the target block on a citation jump request', async () => {
@@ -514,5 +517,172 @@ describe('ReadScene — navigation and AI margin', () => {
       'ann-first',
       'ann-later',
     ])
+  })
+})
+
+describe('ReadContextBar — reading controls', () => {
+  /** Render the context bar next to the scene (same stores). */
+  async function renderBar(
+    options: { preferences?: Partial<Preferences>; host?: FakeHostOptions } = {},
+  ): Promise<{ fake: ReturnType<typeof createFakeHost> }> {
+    const fake = createFakeHost(options.host)
+    setHostClient(fake)
+    useSettingsStore.setState({
+      preferences: makePreferences(options.preferences),
+      loaded: true,
+      error: null,
+    })
+    await act(async () => {
+      root.render(
+        <LocaleContext.Provider value={t}>
+          <ReadContextBar />
+          <ReadScene document={makeSummary()} />
+        </LocaleContext.Provider>,
+      )
+    })
+    await settleReady()
+    await flush(2)
+    return { fake }
+  }
+
+  it('keeps the fixed control order: mode, measure, page marks, outline, scale', async () => {
+    await renderBar()
+    const groups = container.querySelectorAll('.ln-contextbar__left > *')
+    expect(groups.length).toBeGreaterThanOrEqual(7)
+    const labels = Array.from(container.querySelectorAll('.ln-contextbar__left [aria-label]')).map(
+      (element) => element.getAttribute('aria-label'),
+    )
+    expect(labels).toContain('read.controls.pageMarks')
+    expect(labels).toContain('read.controls.outline')
+    expect(labels).toContain('read.controls.scaleDown')
+    expect(labels).toContain('read.controls.scaleUp')
+    expect(labels).toContain('read.controls.mode')
+    expect(labels).toContain('read.controls.measure')
+  })
+
+  it('patches measure, scale and page-mark preferences through the settings store', async () => {
+    const { fake } = await renderBar()
+    const measureButton = Array.from(container.querySelectorAll('.ln-contextbar .ln-seg__item')).find(
+      (button) => textOf(button) === 'read.measure.narrow',
+    )
+    act(() => click(measureButton))
+    await flush(1)
+    expect(useSettingsStore.getState().preferences.readingMeasure).toBe(500)
+    expect(fake.lastCall('settings.update')).toBeDefined()
+    act(() => click(container.querySelector('[aria-label="read.controls.scaleUp"]')))
+    await flush(1)
+    expect(useSettingsStore.getState().preferences.readingScale).toBe(1.12)
+    act(() => click(container.querySelector('[aria-label="read.controls.pageMarks"]')))
+    await flush(1)
+    expect(useSettingsStore.getState().preferences.showPageMarks).toBe(false)
+  })
+
+  it('opens the outline popover and jumps to a section on click', async () => {
+    await renderBar()
+    const trigger = container.querySelector('[aria-label="read.controls.outline"]')
+    act(() => click(trigger))
+    await flush(1)
+    const popover = container.querySelector('.ln-outline')
+    expect(popover).not.toBeNull()
+    const items = popover?.querySelectorAll('.ln-outline__item') ?? []
+    expect(items.length).toBeGreaterThan(4)
+    act(() => click(items[0]))
+    await flush(1)
+    expect(container.querySelector('.ln-outline')).toBeNull()
+    expect(useReaderStore.getState().jumpRequest).not.toBeNull()
+  })
+
+  it('wires the aspect legend as the shared filter', async () => {
+    await renderBar()
+    const legend = container.querySelectorAll('.ln-contextbar .ln-legend__item')
+    expect(legend.length).toBe(5)
+    act(() => click(legend[0]))
+    expect(useUiStore.getState().activeAspect).toBe('definition')
+    act(() => click(legend[0]))
+    expect(useUiStore.getState().activeAspect).toBeNull()
+  })
+})
+
+describe('ReadScene — margin filters and editing', () => {
+  it('honors the shared origin filter for the margin notes', async () => {
+    const key = firstParagraphKey()
+    const annotation: Annotation = {
+      id: 'ann-user',
+      blockKey: key,
+      start: 0,
+      end: 4,
+      quote: 'Dens',
+      color: 'sage',
+      aspect: 'method',
+      origin: 'user',
+      note: 'note body',
+      createdAt: '2026-11-02T00:00:00.000Z',
+      updatedAt: '2026-11-02T00:00:00.000Z',
+    }
+    await renderScene({ host: { annotations: [annotation] } })
+    expect(container.querySelectorAll('.ln-note').length).toBe(1)
+    act(() => useUiStore.getState().setMarginFilter('chat'))
+    await flush(1)
+    expect(container.querySelectorAll('.ln-note').length).toBe(0)
+    expect(textOf(container.querySelector('.ln-margin__empty'))).toContain('margin.emptyFiltered')
+    act(() => useUiStore.getState().setMarginFilter('all'))
+    await flush(1)
+    expect(container.querySelectorAll('.ln-note').length).toBe(1)
+  })
+
+  it('edits an existing note from its margin slip', async () => {
+    const key = firstParagraphKey()
+    const annotation: Annotation = {
+      id: 'ann-edit',
+      blockKey: key,
+      start: 0,
+      end: 4,
+      quote: 'Dens',
+      color: 'yellow',
+      aspect: 'definition',
+      origin: 'user',
+      note: 'before',
+      createdAt: '2026-11-02T00:00:00.000Z',
+      updatedAt: '2026-11-02T00:00:00.000Z',
+    }
+    await renderScene({ host: { annotations: [annotation] } })
+    const editButton = container.querySelector('[aria-label="margin.noteEdit"]')
+    expect(editButton).not.toBeNull()
+    act(() => click(editButton))
+    await flush(1)
+    const editor = container.querySelector('.ln-noteeditor')
+    expect(editor).not.toBeNull()
+    expect(textOf(editor?.querySelector('.ln-noteeditor__quote'))).toBe('Dens')
+    const deleteButton = editor?.querySelector('.ln-btn--danger')
+    expect(deleteButton).not.toBeNull()
+    act(() => click(deleteButton))
+    await flush(1)
+    expect(useReaderStore.getState().annotations.length).toBe(0)
+    expect(container.querySelector('.ln-noteeditor')).toBeNull()
+  })
+
+  it('focuses the matching margin slip when a highlight is clicked', async () => {
+    const key = firstParagraphKey()
+    const annotation: Annotation = {
+      id: 'ann-click',
+      blockKey: key,
+      start: 0,
+      end: 4,
+      quote: 'Dens',
+      color: 'sky',
+      origin: 'user',
+      createdAt: '2026-11-02T00:00:00.000Z',
+      updatedAt: '2026-11-02T00:00:00.000Z',
+    }
+    await renderScene({ host: { annotations: [annotation] } })
+    scrollSpy.mockClear()
+    const mark = container.querySelector('.ln-hl')
+    act(() => click(mark))
+    await flush(1)
+    expect(useReaderStore.getState().activeAnnotationId).toBe('ann-click')
+    const targets = (scrollSpy.mock.instances as unknown as HTMLElement[]).map((element) =>
+      element.getAttribute('data-annotation-id'),
+    )
+    expect(targets).toContain('ann-click')
   })
 })

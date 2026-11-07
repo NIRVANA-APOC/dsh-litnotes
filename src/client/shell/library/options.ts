@@ -12,14 +12,13 @@ import {
   MODEL_VERSIONS,
   PARSE_ENGINES,
   TARGET_LANGUAGE_OPTIONS,
-  type LocalProvider,
   type ModelVersion,
   type ParseEngine,
 } from '../../../shared/constants.ts'
-import type { DocumentSummary, LocalCapabilities, ParseOptions, Preferences } from '../../../shared/model.ts'
+import type { LocalCapabilities, ParseOptions, Preferences } from '../../../shared/model.ts'
+import { extensionOf } from './format.ts'
 import type { LitnotesTranslate } from '../locale-context.ts'
 import type { SegmentOption } from '../../design/primitives.tsx'
-import { extensionLabel, extensionOf } from './format.ts'
 
 /** Client-side approximation of "can the local engine parse this file". */
 export interface LocalSupport {
@@ -73,15 +72,6 @@ export function localSupportFor(
       : { supported: false, reason: t('parse.engine.localUnsupported') }
   }
   return { supported: false, reason: t('parse.engine.localUnsupported') }
-}
-
-/** Local support for a library document. */
-export function localSupportForDocument(
-  local: LocalCapabilities | null,
-  document: DocumentSummary,
-  t: LitnotesTranslate,
-): LocalSupport {
-  return localSupportFor(local, document.ext.toLowerCase(), t)
 }
 
 /** Local support for a file chosen for import. */
@@ -187,14 +177,4 @@ export function engineHint(
   if (engine === 'local') return t('parse.engine.localHint')
   if (!tokenConfigured) return localSupport.supported ? t('parse.engine.autoHint') : t('parse.engine.agentHint')
   return t('parse.engine.autoHint')
-}
-
-/** Local provider choices offered when the local engine is chosen. */
-export function localProviderOptions(): Array<LocalProvider> {
-  return ['auto', 'builtin', 'system:officeToPdf']
-}
-
-/** Debug label for a file (kept short in copy). */
-export function fileLabel(file: File): string {
-  return `${file.name} (${extensionLabel(extensionOf(file.name)) || '?'})`
 }

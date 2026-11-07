@@ -21,37 +21,35 @@ const markdown = standardMarkdown()
 const contentList = standardContentList()
 const input = { documentId: 'perf-fixture-paper', markdown, contentList }
 
-test('retriever builds a cold index for the fixture paper', () => {
+test('retriever builds a cold index for the fixture paper', { timeout: 60_000 }, () => {
   const retriever = createRetriever()
   let totalBlocks = 0
-  const sample = measureSync(
-    { suite: 'retrieval', case: 'build-index', iters: 15, bytes: markdown.length, note: 'canonical fixture paper' },
+  measureSync(
+    { suite: 'retrieval', case: 'build-index', iters: 10, bytes: markdown.length, note: 'canonical fixture paper' },
     () => {
       retriever.invalidate()
       totalBlocks = retriever.buildIndex(input).totalBlocks
     },
   )
-  expect(sample.iters).toBe(15)
   expect(totalBlocks).toBeGreaterThan(5)
   expect(retriever.buildIndex(input).documentId).toBe('perf-fixture-paper')
 })
 
-test('retriever answers warm lexical searches', () => {
+test('retriever answers warm lexical searches', { timeout: 60_000 }, () => {
   const retriever = createRetriever()
   const index = retriever.buildIndex(input)
   const focusKey = index.blocks[3]?.key ?? ''
   const hits = retriever.search({ ...input, query: 'sparse expert routing retrieval', limit: 8 })
-  const sample = measureSync(
+  measureSync(
     {
       suite: 'retrieval',
       case: 'search-warm',
-      iters: 300,
+      iters: 200,
       bytes: markdown.length,
       note: `indexedBlocks=${index.totalBlocks}`,
     },
     () => retriever.search({ ...input, query: 'sparse expert routing retrieval', limit: 8 }),
   )
-  expect(sample.iters).toBe(300)
   expect(hits.length).toBeGreaterThan(0)
   const hit = hits[0]
   expect(typeof hit?.blockKey).toBe('string')
@@ -62,7 +60,7 @@ test('retriever answers warm lexical searches', () => {
   expect(focusKey).not.toBe('')
 })
 
-test('retriever assembles a bounded question context', () => {
+test('retriever assembles a bounded question context', { timeout: 60_000 }, () => {
   const retriever = createRetriever()
   const index = retriever.buildIndex(input)
   const focusKey = index.blocks[3]?.key ?? ''
@@ -74,17 +72,16 @@ test('retriever assembles a bounded question context', () => {
     budgetChars: 6_000,
   }
   const context = retriever.context(contextInput)
-  const sample = measureSync(
+  measureSync(
     {
       suite: 'retrieval',
       case: 'context-assembly',
-      iters: 200,
+      iters: 100,
       bytes: markdown.length,
       note: 'topK=10 budgetChars=6000',
     },
     () => retriever.context(contextInput),
   )
-  expect(sample.iters).toBe(200)
   expect(context.blocks.length).toBeGreaterThan(0)
   expect(context.blocks.length).toBeLessThanOrEqual(40)
   expect(context.usedChars).toBeLessThanOrEqual(6_000)

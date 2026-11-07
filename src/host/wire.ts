@@ -41,6 +41,8 @@ export const STATUS_BY_CODE: Readonly<Record<string, number>> = Object.freeze({
   'local-empty-text': 422,
   'local-encrypted': 422,
   'local-failed': 500,
+  'repair-unavailable': 409,
+  'ai-unavailable': 503,
   aborted: 499,
 })
 

@@ -21,15 +21,6 @@ import { FormulaView, renderInlineRuns } from './inline.tsx'
 import { useRectFloating } from './floating.ts'
 import type { TranslationJob } from './store.ts'
 
-/** Select a translation entry for one block. */
-function translationOf(
-  entries: Record<string, string>,
-  blockKey: string,
-): string | null {
-  const entry = entries[blockKey]
-  return typeof entry === 'string' && entry !== '' ? entry : null
-}
-
 /** Plain display text of a translated markdown string. */
 function displayText(value: string): string {
   return String(value ?? '').replace(/\ufffd/g, '□')
@@ -268,6 +259,3 @@ export function SelectionTranslationCard({
     </div>
   )
 }
-
-/** Select the translation text for one block (exported for the scene/test use). */
-export { translationOf }

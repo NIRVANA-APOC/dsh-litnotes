@@ -6,7 +6,7 @@
  * builds the gateway, retriever, graph service and grounded chat service and
  * memoizes them; `peek()` returns the bundle only when it is already built.
  *
- * Contract: `AiServicesApi` in `src/host/contracts.ts`, `docs/AI-SPEC.md` §3.
+ * Contract: `AiServicesApi` in `src/host/contracts.ts`, `docs/AI-SPEC.md` §3.7.
  *
  * @module host/ai/index
  */

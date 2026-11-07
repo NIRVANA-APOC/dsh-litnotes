@@ -94,27 +94,12 @@ export function ensureKatex(): void {
   }
 }
 
-/** Current loader status (non-reactive). */
-export function getKatexStatus(): KatexStatus {
-  return status
-}
-
 /** Subscribe to loader status changes (returns a disposer). */
 export function subscribeKatex(listener: Listener): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
   }
-}
-
-/** Remove the injected runtime (plugin unload / tests). */
-export function disposeKatex(): void {
-  listeners.clear()
-  scriptElement?.parentNode?.removeChild(scriptElement)
-  styleElement?.parentNode?.removeChild(styleElement)
-  scriptElement = null
-  styleElement = null
-  status = 'idle'
 }
 
 /**
@@ -137,15 +122,21 @@ export function renderFormula(latex: string, display: boolean): string {
   }
 }
 
-/** Reactive KaTeX readiness; loading starts on first use. */
-export function useKatexReady(): boolean {
+/**
+ * Reactive KaTeX readiness.
+ *
+ * The runtime is only fetched when the open model actually contains math
+ * (`enabled`), so a text-only paper never pays the KaTeX asset cost
+ * (ALGORITHMS.md performance #6: lazy-load KaTeX only when a formula renders).
+ */
+export function useKatexReady(enabled = true): boolean {
   const snapshot = useSyncExternalStore(
     (onChange) => subscribeKatex(() => onChange()),
     () => status,
     () => 'idle' as KatexStatus,
   )
   useEffect(() => {
-    if (snapshot === 'idle') ensureKatex()
-  }, [snapshot])
+    if (enabled && snapshot === 'idle') ensureKatex()
+  }, [enabled, snapshot])
   return snapshot === 'ready'
 }

@@ -23,6 +23,7 @@ import { DEFAULT_PREFERENCES } from '../../src/shared/preferences.ts'
 import { zh } from '../../src/client/i18n/index.ts'
 import { LocaleContext, type LitnotesTranslate } from '../../src/client/shell/locale-context.ts'
 import { useLibraryStore } from '../../src/client/state/library.ts'
+import { useSettingsStore } from '../../src/client/state/settings.ts'
 import { useReaderStore } from '../../src/client/reader/store.ts'
 import { useUiStore } from '../../src/client/state/ui.ts'
 import { useAiStore } from '../../src/client/ai/store.ts'
@@ -189,8 +190,8 @@ function happyFrames(annotationIds: string[] = []): ChatFrame[] {
 
 let container: HTMLDivElement
 let root: Root
-let onJump: ReturnType<typeof vi.fn>
-let onAnnotationsChanged: ReturnType<typeof vi.fn>
+let onJump: (blockKey: string) => void
+let onAnnotationsChanged: () => void | Promise<void>
 
 /** Order map the reader would provide for the fixture block keys. */
 const ORDER: Record<string, number> = { 'b12:abc': 3, 'b20:def': 7, 'b1:first': 1, 'b2:second': 2 }
@@ -241,8 +242,8 @@ function click(element: Element | null | undefined): void {
 }
 
 beforeEach(() => {
-  onJump = vi.fn()
-  onAnnotationsChanged = vi.fn()
+  onJump = vi.fn() as (blockKey: string) => void
+  onAnnotationsChanged = vi.fn() as () => void | Promise<void>
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -263,7 +264,8 @@ beforeEach(() => {
   })
   useUiStore.setState({ marginFilter: 'all', activeAspect: null, toasts: [] })
   useLibraryStore.setState({ status: STATUS, documents: [DOCUMENT], loaded: true })
-  useReaderStore.setState({ annotations: [], selectionContext: null })
+  useSettingsStore.setState({ preferences: { ...DEFAULT_PREFERENCES }, loaded: true })
+  useReaderStore.setState({ annotations: [], selectionContext: null, visibleBlockKey: null } as never)
 })
 
 afterEach(() => {
@@ -307,6 +309,16 @@ describe('margin entries', () => {
     const chip = container.querySelector('.ln-ai__cite[data-index="1"]')
     click(chip)
     expect(onJump).toHaveBeenCalledWith('b12:abc')
+  })
+
+  it('gates the entailment notice on the host-persisted preference', async () => {
+    useSettingsStore.setState({ preferences: { ...DEFAULT_PREFERENCES, entailmentNotice: false } })
+    setHostClient(createFakeHost({ history: history() }))
+    mount()
+    await flush()
+    expect(container.querySelector('.ln-ai__notice--entailment')).toBeNull()
+    // The evidence itself stays visible: the unsupported citation is still dimmed.
+    expect(container.querySelectorAll('.ln-ai__cite[data-verified="false"]').length).toBeGreaterThan(0)
   })
 
   it('opens the preview card instead of jumping for an entailment-unsupported citation', async () => {
@@ -457,6 +469,33 @@ describe('composer', () => {
     expect(container.querySelectorAll('.ln-ai__turn')).toHaveLength(1)
     const after = container.querySelector<HTMLTextAreaElement>('.ln-ai__input')
     expect(after?.value).toBe('')
+  })
+
+  it('shows the 本段 context chip from the reading position and sends it as focus', async () => {
+    useReaderStore.setState({ visibleBlockKey: 'b7:visible' } as never)
+    let focus: { blockKey?: string; selectionQuote?: string } | undefined
+    setHostClient(
+      createFakeHost({
+        history: [],
+        stream: async ({ request, handlers }) => {
+          focus = request.focus
+          for (const frame of happyFrames()) handlers.onFrame(frame)
+        },
+      }),
+    )
+    mount()
+    await flush()
+    const chip = container.querySelector('.ln-ai__chip[data-kind="visible"]')
+    expect(chip).not.toBeNull()
+    expect(chip?.textContent).toContain('当前段落')
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.ln-ai__input')
+    setTextareaValue(textarea as HTMLTextAreaElement, 'Q')
+    act(() => {
+      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))
+    })
+    await flush()
+    expect(focus).toEqual({ blockKey: 'b7:visible' })
   })
 
   it('shows the setup invitation when the model is unavailable', async () => {

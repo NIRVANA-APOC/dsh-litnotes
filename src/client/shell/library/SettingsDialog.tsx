@@ -209,7 +209,6 @@ export function SettingsDialog(): ReactElement {
               >
                 {t('set.localRedetect')}
               </Button>
-              {!localAvailable ? <span className="ln-field__hint">{t('set.localEmpty')}</span> : null}
             </div>
             <div className="ln-set__localList">
               {local === null || local.providers.length === 0 ? (

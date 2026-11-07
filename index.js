@@ -621,7 +621,7 @@ var PACKAGE_VERSION = readPackageVersion();
 function readPackageVersion() {
   try {
     if (true) {
-      return "2.0.1";
+      return "1.0.0";
     }
   } catch {
   }

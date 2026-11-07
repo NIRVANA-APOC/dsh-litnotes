@@ -5,7 +5,7 @@
  * dictionary in `./index.ts` stays key-complete at compile time. Keys ported
  * from the frozen 1.0.0 dictionaries keep their `ai.*` names so the export
  * markdown and error vocabulary stay byte-compatible; margin-specific keys
- * (`ai.filter.*`, `ai.clear`, …) are new in 2.0.
+ * (`ai.filter.*`, `ai.clear`, …) are new in 1.0.0.
  */
 
 export const zh = {

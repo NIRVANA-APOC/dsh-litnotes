@@ -3,7 +3,7 @@
  *
  * Port of `.agents/baseline-1.0.0/test/reader/markdown.test.mjs` (the frozen
  * 1.0.0 executable spec) to vitest/TypeScript, plus focused assertions for the
- * 2.0 markdown-it implementation where the frozen contract needs it.
+ * 1.0.0 markdown-it implementation where the frozen contract needs it.
  */
 
 import { test, expect } from 'vitest'
@@ -354,7 +354,7 @@ test('markdown parses CRLF and strips a leading BOM', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 2.0 focused coverage: markdown-it delegates standard constructs; the paper
+// 1.0.0 focused coverage: markdown-it delegates standard constructs; the paper
 // rules keep the frozen contract for the non-standard ones.
 // ---------------------------------------------------------------------------
 

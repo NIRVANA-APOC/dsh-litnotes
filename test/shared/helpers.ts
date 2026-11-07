@@ -2,7 +2,7 @@
  * Reader-test helpers (port of `.agents/baseline-1.0.0/test/reader/helpers.mjs`).
  *
  * `assertModelIntegrity` asserts the structural invariants every reader model
- * must satisfy. The 1.0.0 helper inspected plain JS objects; the 2.0 model is a
+ * must satisfy. The 1.0.0 helper inspected plain JS objects; the 1.0.0 model is a
  * typed discriminated union, so the helper narrows per kind and additionally
  * checks the uniform `page`/`plainText` base fields.
  */
@@ -49,7 +49,7 @@ export function assertModelIntegrity(model: PaperModel): void {
     else expect(Number.isInteger(block.index)).toBe(true)
     if (block.kind === 'page') {
       expect(block.key).toMatch(/^page:\d+:\d+$/)
-      // 2.0 contract: page marks carry the uniform base field as ''.
+      // 1.0.0 contract: page marks carry the uniform base field as ''.
       expect(block.plainText).toBe('')
     } else {
       expect(block.key).toMatch(/^b\d+:[0-9a-f]{8}$/)

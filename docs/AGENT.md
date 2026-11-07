@@ -1,4 +1,4 @@
-# dsh-litnotes — agent tools (2.0)
+# dsh-litnotes — agent tools (1.0.0)
 
 The DSH agent can operate the same literature library the browser uses through **seven focused
 tools**: `library_search`, `library_read`, `library_ask`, `library_annotate`, `library_translate`,

@@ -1,5 +1,5 @@
 /**
- * Focused coverage for the 2.0 math tokenization (task-3 deliverable):
+ * Focused coverage for the 1.0.0 math tokenization (task-3 deliverable):
  * `$…$` / `\(…\)` inline math and `$$…$$` / `\[…\]` display math. The parser
  * only tokenizes — KaTeX renders client-side — but the plain-text offset space
  * must keep the raw delimiters so annotations stay stable.

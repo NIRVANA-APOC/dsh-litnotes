@@ -3,7 +3,7 @@
  *
  * `snapshots/paper-model.snapshot.json` was generated from the frozen
  * `.agents/baseline-1.0.0/ui/markdown.js` parser (the v1.0.0 executable spec)
- * for the two shared fixtures, with and without MinerU page marks. 2.0 owns the
+ * for the two shared fixtures, with and without MinerU page marks. 1.0.0 owns the
  * same contract through @see src/shared/markdown/parse.ts, so block kinds, block
  * keys (the only annotation anchor), outline entries and stats must stay
  * byte-identical: an existing user library's annotations/translations must keep

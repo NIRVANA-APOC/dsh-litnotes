@@ -3,7 +3,7 @@
  * (docs/AI-SPEC.md §2): chat/graph files per document and the library graph,
  * plus the per-document stale-file cleanup on store init.
  *
- * Ported from the frozen 1.0.0 `.mjs` suites. 2.0 contract difference: a
+ * Ported from the frozen 1.0.0 `.mjs` suites. 1.0.0 contract difference: a
  * missing/corrupt aux file reads as `undefined` (the store contract types aux
  * reads as `T | undefined`) instead of the 1.0.0 `null`.
  */

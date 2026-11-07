@@ -49,8 +49,8 @@ const fakeT = ((key: string, params?: Record<string, unknown>) =>
 const PREFERENCES: Preferences = { ...DEFAULT_PREFERENCES }
 
 const STATUS: StatusValue = {
-  version: '2.0.0',
-  hostVersion: '2.0.0+host',
+  version: '1.0.0',
+  hostVersion: '1.0.0+host',
   dataDirDisplay: '~/.dsh/litnotes',
   tokenConfigured: false,
   tokenPersistent: true,

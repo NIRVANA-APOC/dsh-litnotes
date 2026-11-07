@@ -48,7 +48,7 @@ const CONFIG: ResolvedConfig = {
     timeoutMs: 120000,
     maxOfficePdfBytes: 100 * 1024 * 1024,
   },
-  hostVersion: '2.0.0',
+  hostVersion: '1.0.0',
 }
 
 /** Fake tool registry capturing definitions. */

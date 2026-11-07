@@ -6,7 +6,7 @@
  *
  * Ported from the frozen 1.0.0 `.mjs` suites (`service.test.mjs` plus the
  * service half of `qa-fixes.test.mjs`); response-shape assertions follow the
- * 2.0 contracts (documented per case).
+ * 1.0.0 contracts (documented per case).
  */
 
 import { randomUUID } from 'node:crypto'

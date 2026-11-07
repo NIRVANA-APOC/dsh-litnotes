@@ -8,7 +8,7 @@
  * prose must round-trip to its original plain text.
  *
  * Ported from the frozen `test/unit/local-synth.test.mjs`; the reader parser is
- * the 2.0 shared model (`src/shared/markdown/parse.ts`).
+ * the 1.0.0 shared model (`src/shared/markdown/parse.ts`).
  */
 
 import assert from 'node:assert/strict'

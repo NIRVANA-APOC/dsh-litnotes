@@ -124,7 +124,7 @@ export function SettingsDialog(): ReactElement {
 
   const diagnosticsText = useMemo(() => {
     const lines: string[] = []
-    lines.push(`${t('set.version')}: ${status?.version ?? '2.0.0'}`)
+    lines.push(`${t('set.version')}: ${status?.version ?? '1.0.0'}`)
     lines.push(`${t('set.hostVersion')}: ${status?.hostVersion ?? '—'}`)
     lines.push(`${t('set.dataDir')}: ${status?.dataDirDisplay ?? '—'}`)
     lines.push(`${t('set.modelRoute')}: ${route === null ? t('set.modelRouteNone') : `${route.provider} · ${route.model}`}`)
@@ -374,7 +374,7 @@ export function SettingsDialog(): ReactElement {
         >
           <h3 className="ln-set__sectionTitle">{t('set.nav.about')}</h3>
           <Field label={t('set.version')}>
-            <span className="ln-tabular">{status?.version ?? '2.0.0'}</span>
+            <span className="ln-tabular">{status?.version ?? '1.0.0'}</span>
           </Field>
           <Field label={t('set.hostVersion')}>
             <span className="ln-tabular">{status?.hostVersion ?? '—'}</span>

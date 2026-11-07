@@ -44,8 +44,8 @@ function fakeClient(): HostClient {
     },
   }
   const status: StatusValue = {
-    version: '2.0.0',
-    hostVersion: '2.0.0+host',
+    version: '1.0.0',
+    hostVersion: '1.0.0+host',
     dataDirDisplay: '~/.dsh/litnotes',
     tokenConfigured: false,
     tokenPersistent: true,

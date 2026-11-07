@@ -4,7 +4,7 @@
  *
  * The frozen test asserted factory-body constraints (no imports, no default
  * exports, one shared bundle scope) because 1.0.0 inlined two plain JS files
- * into the client factory. 2.0 ships real ES modules, so those assertions no
+ * into the client factory. 1.0.0 ships real ES modules, so those assertions no
  * longer apply; the documented API surface and the parser ↔ annotation
  * round-trip remain the contract.
  */

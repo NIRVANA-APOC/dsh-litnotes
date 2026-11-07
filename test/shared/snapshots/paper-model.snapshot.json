@@ -1,5 +1,5 @@
 {
-  "description": "Frozen 1.0.0 (v1.0.0) parser output for the shared fixtures: block kind+key+(text kinds: plainText, code: source), outline and stats, with and without MinerU page marks. Generated with .agents/baseline-1.0.0/ui/markdown.js; 2.0 must stay byte-identical for these documents (formula/figure payloads compare by key only).",
+  "description": "Frozen 0.3.0 parser output for the shared fixtures: block kind+key+(text kinds: plainText, code: source), outline and stats, with and without MinerU page marks. Generated with the pre-refactor ui/markdown.js; 1.0.0 must stay byte-identical for these documents (formula/figure payloads compare by key only).",
   "fixtures": {
     "test/fixtures/paper.md": {
       "plain": {

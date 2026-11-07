@@ -53,11 +53,14 @@ export function GraphContextBar(): ReactElement {
   const aiGraphAvailable = useLibraryStore((state) => state.status?.ai?.graph)
   const documents = useLibraryStore((state) => state.documents)
 
+  // No documents means no graph at all (stale persisted graphs must not leak
+  // counts or build actions into the frame).
+  const libraryEmpty = documents.length === 0
   const entry = scope === 'library' ? libraryEntry : docEntry
-  const graph = entry.graph
+  const graph = libraryEmpty ? null : entry.graph
   const building = entry.status === 'building'
   const progress = entry.progress
-  const nodes = graph?.nodes ?? []
+  const nodes = libraryEmpty ? [] : (graph?.nodes ?? [])
 
   const scopeOptions: Array<SegmentOption<GraphScope>> = [
     { value: 'doc', label: t('graph.scope.doc'), disabled: documentId === null },
@@ -104,6 +107,7 @@ export function GraphContextBar(): ReactElement {
           onChange={setScope}
           ariaLabel={t('graph.scope.switch')}
         />
+        {libraryEmpty ? null : (
         <Menu
           items={typeItems}
           ariaLabel={t('graph.type.filter')}
@@ -120,6 +124,8 @@ export function GraphContextBar(): ReactElement {
             </button>
           )}
         />
+        )}
+        {libraryEmpty ? null : (
         <AspectLegend
           aspects={ASPECTS}
           active={activeAspect}
@@ -127,9 +133,12 @@ export function GraphContextBar(): ReactElement {
           onToggle={(aspect) => toggleAspect(aspect as Aspect)}
           labelOf={(aspect) => (aspect === 'legend' ? t('aspect.legend') : t(`aspect.${aspect}` as 'aspect.method'))}
         />
+        )}
         {scope === 'doc' && documents.some((document) => document.id === documentId) ? null : null}
       </div>
       <div className="ln-contextbar__right">
+        {libraryEmpty ? null : (
+        <>
         <span className="ln-contextbar__count ln-tabular">
           {t('graph.counts', { nodes: nodes.length, edges: graph?.edges.length ?? 0 })}
         </span>
@@ -160,6 +169,8 @@ export function GraphContextBar(): ReactElement {
           >
             {buildLabel}
           </Button>
+        )}
+        </>
         )}
       </div>
     </div>

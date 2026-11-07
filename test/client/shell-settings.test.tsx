@@ -63,7 +63,7 @@ describe('settings dialog', () => {
     expect(text).toContain('set.graphAutoBuild')
     expect(text).toContain('set.entailmentNotice')
     expect(text).toContain('set.themeFollow')
-    expect(text).toContain('2.0.0')
+    expect(text).toContain('1.0.0')
     expect(text).toContain('~/.dsh/litnotes')
     expect(text).toContain('pdfjs-dist/5.4.449')
   })

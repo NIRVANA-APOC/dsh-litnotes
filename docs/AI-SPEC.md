@@ -65,8 +65,8 @@ All data is JSON on disk under the configured data directory. Writes are atomic
 | per-paper graph | `documents/<documentId>/graph.json` | `KnowledgeGraph` (`scope: 'document'`) |
 | library graph | `library-graph.json` | `KnowledgeGraph` (`scope: 'library'`) |
 
-The formats are compatible with the frozen 1.0.0 data files: existing user libraries are read
-without migration, and 2.0 written files keep the same field names and semantics. Unknown extra
+The formats are compatible with the pre-refactor 0.3.0 data files: existing user libraries are read
+without migration, and 1.0.0 written files keep the same field names and semantics. Unknown extra
 fields are ignored on read; the significant fields are modelled in `src/shared/model.ts`.
 
 ### 2.1 ChatMessage
@@ -170,7 +170,7 @@ and verified citations carry `entailment: 'unchecked'` (fail-open).
 
 ### 2.4 Annotations (AI provenance and dedupe)
 
-Verified citations become annotations with the 1.0.0-compatible extension fields:
+Verified citations become annotations with the 0.3.0-compatible extension fields:
 
 ```ts
 interface Annotation {
@@ -602,7 +602,7 @@ createAiServices({ store, config, logger, getLlm?, getDefaultModel?, getTokenMet
   services may mount after the plugin boots.
 - If the graph factory cannot be created (e.g. an incomplete store), the bundle still resolves
   and exposes a degraded graph service whose methods reject / emit `llm-unavailable` error
-  frames — grounded Q&A keeps working (the graph engine is optional, as in 1.0.0).
+  frames — grounded Q&A keeps working (the graph engine is optional, as in the 0.3.0 baseline).
 - `AiServicesApi` = `{ llm, retriever, chat, graph, available, version }`; `available` reflects
   the gateway route at bundle creation (callers may also re-check `llm.available()` — the gateway
   is live), `version` is the Host version string.

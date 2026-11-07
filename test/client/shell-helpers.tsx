@@ -53,8 +53,8 @@ export interface ShellClient extends HostClient {
 /** Build a status payload with sensible defaults. */
 export function makeStatus(overrides: Partial<StatusValue> = {}): StatusValue {
   return {
-    hostVersion: '2.0.0-test',
-    version: '2.0.0',
+    hostVersion: '1.0.0-test',
+    version: '1.0.0',
     dataDirDisplay: '~/.dsh/litnotes',
     tokenConfigured: false,
     tokenPersistent: true,

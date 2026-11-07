@@ -1,7 +1,7 @@
 /**
  * Shared annotation/highlight helpers.
  *
- * The 1.0.0 client kept these in `ui/highlight.js`; 2.0 moves them under
+ * The 0.3.0 client kept these in `ui/highlight.js`; 1.0.0 moves them under
  * `src/shared/annotate/**` so the Host (AI annotation creation, quote
  * normalization, stale flags) and the Client (highlight rendering, margin
  * notes) agree byte-for-byte on annotation shapes, clamping and overlay

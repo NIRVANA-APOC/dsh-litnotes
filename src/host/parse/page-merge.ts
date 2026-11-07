@@ -13,7 +13,7 @@
  * enough to turn both documents into ordered page chunks. Unalignable pages are
  * left untouched and reported as failed rather than risking a wrong splice.
  *
- * Library audit (2.0): this is pure domain mapping — page scoping comes from
+ * Library audit (1.0.0): this is pure domain mapping — page scoping comes from
  * MinerU's `page_idx`, the splice unit is a line range, and the merge is a
  * structural content-list join. A text-diff library (jsdiff) has no semantic
  * hook here (the new archive is a subset with renumbered pages, not an edited

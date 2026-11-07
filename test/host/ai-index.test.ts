@@ -46,7 +46,7 @@ function makeConfig(): ResolvedConfig {
       timeoutMs: 1,
       maxOfficePdfBytes: 1,
     },
-    hostVersion: '2.0.0',
+    hostVersion: '1.0.0',
   }
 }
 
@@ -77,7 +77,7 @@ function makeDeps(fake: FakeLlm = createFakeLlm()): AiServicesDeps {
     getLlm: () => fake,
     getDefaultModel: () => createFakeDefaultModel(),
     getTokenMeter: () => undefined,
-    hostVersion: '2.0.0-test',
+    hostVersion: '1.0.0-test',
   }
 }
 
@@ -94,7 +94,7 @@ test('peek() is empty until ensure() builds the bundle and memoizes it', async (
   expect(built.chat).toBeDefined()
   expect(built.graph).toBeDefined()
   expect(typeof built.available).toBe('boolean')
-  expect(built.version).toBe('2.0.0-test')
+  expect(built.version).toBe('1.0.0-test')
 })
 
 test('the AiServicesApi surface matches the contract (available/version/engines)', async () => {

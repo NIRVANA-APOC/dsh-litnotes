@@ -1,7 +1,7 @@
 /**
  * Shared markdown → paper-model parser.
  *
- * 2.0 replaces the 1.0.0 hand-rolled block scanner with **markdown-it** for
+ * 1.0.0 replaces the 0.3.0 hand-rolled block scanner with **markdown-it** for
  * standard block structure (paragraphs, ATX headings, fenced code, rules, GFM
  * pipe tables) and **htmlparser2** for `<table>` HTML blocks (MinerU emits
  * those for real paper tables, including `colspan`/`rowspan`/`<thead>`).
@@ -1131,7 +1131,7 @@ function createParser(): MarkdownItInstance {
   // Keep the source bytes intact: markdown-it's stock normalize rule replaces
   // NUL with U+FFFD, but the frozen contract hashes the block's verbatim plain
   // text (real MinerU PDF extractions do contain NUL), and block keys must stay
-  // annotation-stable across the 2.0 upgrade. Only newline normalization stays.
+  // annotation-stable across the 1.0.0 upgrade. Only newline normalization stays.
   parser.core.ruler.at('normalize', (state: StateCore) => {
     state.src = state.src.replace(/\r\n?/g, '\n')
   })

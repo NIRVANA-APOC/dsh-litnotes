@@ -178,8 +178,8 @@ export function makeSettingsValue(preferences: Preferences): SettingsValue {
 /** Build the status payload (used when a test loads the library store). */
 export function makeStatusValue(preferences: Preferences): StatusValue {
   return {
-    version: '2.0.0',
-    hostVersion: '2.0.0+host',
+    version: '1.0.0',
+    hostVersion: '1.0.0+host',
     dataDirDisplay: '~/.dsh/litnotes',
     tokenConfigured: false,
     tokenPersistent: true,

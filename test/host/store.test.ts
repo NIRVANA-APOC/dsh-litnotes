@@ -4,7 +4,7 @@
  * atomicity, parsed markdown reads, and diagnostics capping.
  *
  * Ported from the frozen 1.0.0 `.mjs` suite; assertions are unchanged except
- * where the 2.0 store contract names a field differently.
+ * where the 1.0.0 store contract names a field differently.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -496,7 +496,7 @@ test('reads a frozen 1.0.0-format library without migrating it', async () => {
   await writeFile(join(documentDir, 'chat.json'), `${JSON.stringify({ version: 1, messages: [{ id: 'm1', role: 'user', question: 'hi' }] }, null, 2)}\n`)
   await writeFile(join(documentDir, 'graph.json'), `${JSON.stringify({ nodes: [{ id: 'n1' }], edges: [] }, null, 2)}\n`)
   await writeFile(join(dataDir, 'library-graph.json'), `${JSON.stringify({ nodes: [{ id: 'p1' }], edges: [] }, null, 2)}\n`)
-  // 1.0.0 preferences included client-owned keys that 2.0 drops (e.g. marginTab);
+  // 1.0.0 preferences included client-owned keys that 1.0.0 drops (e.g. marginTab);
   // normalization must tolerate them without rewriting the file.
   await writeFile(
     join(dataDir, 'preferences.json'),
@@ -538,7 +538,7 @@ test('reads a frozen 1.0.0-format library without migrating it', async () => {
   const preferencesRaw = await readFile(join(dataDir, 'preferences.json'), 'utf8')
   expect(preferencesRaw).toContain('marginTab')
 
-  // A 2.0 write keeps the same frozen envelope shape.
+  // A 1.0.0 write keeps the same frozen envelope shape.
   await store.saveAnnotations(documentId, { items: annotations.items })
   const annotationsRaw = await readFile(join(documentDir, 'annotations.json'), 'utf8')
   expect(Object.keys(JSON.parse(annotationsRaw) as object).sort()).toEqual(['items', 'version'])

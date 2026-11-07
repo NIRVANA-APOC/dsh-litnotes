@@ -162,7 +162,7 @@ test('a table-only document round-trips the plain text invariant', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 2.0 focused coverage: htmlparser2 structural edge cases.
+// 1.0.0 focused coverage: htmlparser2 structural edge cases.
 // ---------------------------------------------------------------------------
 
 test('HTML table rows outside thead/tbody are kept as body rows', () => {

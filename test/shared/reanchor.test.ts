@@ -242,7 +242,7 @@ test('reanchorAnnotations is a no-op without annotations or store', async () => 
 })
 
 // ---------------------------------------------------------------------------
-// 2.0 extension: the pure hook the parse manager wires into contracts.ReanchorHook.
+// 1.0.0 extension: the pure hook the parse manager wires into contracts.ReanchorHook.
 // ---------------------------------------------------------------------------
 
 test('reanchorDocumentAnnotations is the pure ReanchorHook-shaped entry point', () => {

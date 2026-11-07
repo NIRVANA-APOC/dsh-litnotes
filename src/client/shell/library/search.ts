@@ -140,7 +140,7 @@ export function buildLibrarySearchIndex(
 /**
  * Search annotation text through the Host (seam only).
  *
- * The 2.0 wire has no annotation-search method yet; the rail composes its
+ * The 1.0.0 wire has no annotation-search method yet; the rail composes its
  * instant title search with whatever this returns once a workstream adds it.
  * Kept `async` so callers already treat it as a remote lookup.
  *

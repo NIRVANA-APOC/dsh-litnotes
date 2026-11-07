@@ -12,7 +12,7 @@
  * so `apply(ctx, {})` resolves its data dir there — the real user library is
  * never touched.
  *
- * Ported from the frozen 1.0.0 `test/e2e/boot.test.mjs` (2.0 response shapes).
+ * Ported from the frozen 1.0.0 `test/e2e/boot.test.mjs` (1.0.0 response shapes).
  */
 
 import { once } from 'node:events'

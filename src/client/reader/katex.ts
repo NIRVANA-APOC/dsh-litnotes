@@ -2,7 +2,7 @@
  * KaTeX loader — lazily loads the vendored runtime through `client.vendor(...)`.
  *
  * The 1.0.0 client loaded `vendor/katex/katex.min.js` + `.css` as static
- * assets; 2.0 keeps that approach (ALGORITHMS.md "Vendored KaTeX runtime —
+ * assets; 1.0.0 keeps that approach (ALGORITHMS.md "Vendored KaTeX runtime —
  * already the mature renderer; loaded lazily as a static asset") because the
  * math renderer is large and most papers never need it. The global `katex`
  * object is the host the runtime installs on `window`; formulas render as raw

@@ -168,8 +168,8 @@ export function makeLibraryGraph(): KnowledgeGraph {
 /** A tiny status value for the library store (`graphAiAvailable`). */
 export function makeStatus(): StatusValue {
   return {
-    version: '2.0.0',
-    hostVersion: '2.0.0+host',
+    version: '1.0.0',
+    hostVersion: '1.0.0+host',
     dataDirDisplay: '~/.dsh/litnotes',
     tokenConfigured: true,
     tokenPersistent: true,

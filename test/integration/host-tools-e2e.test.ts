@@ -684,7 +684,7 @@ describe('agent tools end-to-end against the real service layer', () => {
 
     const statusArgs = { action: 'status' }
     const status = (await runTool('library_manage', statusArgs)) as Record<string, unknown>
-    expect(String(status.version)).toMatch(/^2\.\d+\.\d+/)
+    expect(String(status.version)).toMatch(/^\d+\.\d+\.\d+/)
     expect(status.tokenConfigured).toBe(false)
     expect(status.translatorAvailable).toBe(true)
     expect(status.modelAvailable).toBe(true)

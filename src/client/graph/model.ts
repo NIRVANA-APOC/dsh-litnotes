@@ -5,7 +5,7 @@
  * contract, filter by type/aspect, size/colour nodes, validate curation actions
  * into `GraphPatch` payloads and keep the map stable.
  *
- * The 1.0.0 implementation (`ui/graph.js`) kept these in the client bundle; 2.0
+ * The 1.0.0 implementation (`ui/graph.js`) kept these in the client bundle; 1.0.0
  * keeps the domain rules (dedupe, patch validation, pinned-position rounding)
  * while the force layout itself moves to d3-force (`./layout.ts`).
  */
@@ -166,7 +166,7 @@ export function curationPatch(action: CurationAction, input: CurationInput): Gra
       const from = nodeIdOf(input.from !== undefined ? input.from : input.node)
       const into = nodeIdOf(input.into !== undefined ? input.into : input.id)
       if (from === '' || into === '' || from === into) return null
-      // Shared 2.0 GraphPatch contract: `to` is the surviving node (`into`).
+      // Shared 1.0.0 GraphPatch contract: `to` is the surviving node (`into`).
       return { merge: [{ from, to: into }] }
     }
     default:

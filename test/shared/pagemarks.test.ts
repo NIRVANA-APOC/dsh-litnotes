@@ -219,7 +219,7 @@ test('stats are recomputed after page marks are inserted', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 2.0 extension: page numbers are also filled onto the content blocks.
+// 1.0.0 extension: page numbers are also filled onto the content blocks.
 // ---------------------------------------------------------------------------
 
 test('appendPageMarks fills the display page on every content block', () => {

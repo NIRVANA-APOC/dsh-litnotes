@@ -1,88 +1,80 @@
 # Changelog
 
-## 2.0.0
+## 1.0.0
 
-A full rebuild of the plugin as strict TypeScript with an unchanged feature set, wire contract and
-on-disk data formats.
+First stable release. The complete pre-refactor feature set (0.3.0, preserved as tag `v0.3.0`)
+was rebuilt end to end — TypeScript, a new reading-desk UI, mature algorithms, platform reuse —
+with the same user-facing capabilities, the same HTTP wire contract and the same on-disk data
+formats. Existing libraries load as-is; no migration step.
 
-### Platform and toolchain
+### UI/UX
 
-- TypeScript everywhere: Host, Client, shared model, tests, build and gate scripts (`strict`,
-  `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `erasableSyntaxOnly`, no `any`).
-- New typed seams: `src/shared/{constants,model,protocol,preferences,urls}.ts`,
-  `src/host/{contracts,host-services,wire}.ts`; the Host and Client halves meet at one typed wire
-  contract and one shared paper model instead of duplicated parsers.
-- esbuild build (`scripts/build.ts`) generating the Host ESM bundle `index.js` and the Client
-  module-loader bundle `lib/client.js`, with size budgets; a 17-check pre-install gate
-  (`scripts/check.ts`, `--no-tests`, `--final`) covering manifest, identity, types, build,
-  artifacts, vendored runtimes and the vitest suite.
-- Zero runtime npm dependencies in the shipped plugin; the Client bundle's only external requests
-  are the platform-provided React runtime modules (`react`, `react-dom`, `react-dom/client`);
-  everything else is bundled. pdf.js and KaTeX stay vendored and version-locked.
+- New reading desk ("页边 / the margin voice"): the paper is the page and one right margin carries
+  notes and the AI conversation, ordered by their place in the text.
+- **Tethers**: every margin entry is connected to its sentence by a 1px aspect-ink hairline that
+  lights up on either side; arriving AI citations draw their tether.
+- One frame, two scenes (read / graph): the scene switch, breadcrumb, utilities, context bar and
+  status bar keep the same position in every state (position principle).
+- Reader: bilingual column, four aspect inks, selection toolbar (highlight/note/ask/translate),
+  anchored annotation card on highlight click, outline, page marks, reading modes/measure/scale,
+  lazy KaTeX, figures, tables and scroll restore.
+- AI margin: streaming grounded answers, citation chips with hover previews and jump-to-block,
+  entailment/unsupported states, quick prompts, follow-ups, stop/regenerate and Markdown export;
+  the composer stays pinned in the margin.
+- Knowledge map: d3-force layout with a deterministic seed, infinite canvas (pan, zoom at cursor,
+  fit), drag-to-pin, hover focus, type/aspect filters, curation card (rename, merge, pin, ask,
+  jump) and a library-wide map.
+- Import / settings / reparse dialogs rebuilt on the same design tokens; drag-and-drop import,
+  inline parse progress in the rail, status filters, sort and instant search (MiniSearch).
+- Light and dark themes inherit the host tokens; reduced-motion honored; keyboard operation and
+  focus rings throughout.
 
-### Shared paper model
+### Algorithms
 
-- markdown-it based block parser (+ htmlparser2 for HTML tables) producing the reading model:
-  headings, paragraphs, quotes, lists, fenced code, rules, figures, pipe/HTML tables, display and
-  inline math, outline and stats — with stable `b<index>:<hash>` annotation anchors and
-  `plainText` offset spaces.
-- Page marks, quote normalization/location, annotation normalization and re-anchoring live in
-  `src/shared/annotate/**`: the reader and the Host use the same implementation, so block keys,
-  citation offsets and re-anchored notes cannot drift.
+- ZIP extraction: **fflate**, behind a security preflight (caps, path-traversal rejection,
+  CRC/ZIP64/multi-disk policy).
+- Paper model: **markdown-it** (+ **htmlparser2** for HTML tables) replacing the hand-written
+  Markdown scanner; block keys/anchors are byte-identical to 0.3.0 for the fixtures and two real
+  library documents.
+- Retrieval: **MiniSearch** (BM25+, ASCII + CJK tokenizer) replacing the hand-written scoring.
+- Graph layout/camera: **d3-force** with a seeded deterministic layout and a custom canvas camera.
+- Overlay positioning: **@floating-ui**; client state: **zustand**; relative time/numbers:
+  `Intl`. Domain logic (anchors, citation validation, curation, prompts) stays ours.
 
-### Host
+### Platform reuse
 
-- Rebuilt store (atomic JSON, per-document write queues, bounded reads, annotation `baseIds`
-  three-way merge, aux chat/graph storage, preferences, diagnostics), config/credentials,
-  operations service (one implementation for HTTP and agent tools), routes (JSON dispatch, NDJSON
-  streams, streaming upload, asset/source/vendor routes, connection fence) and composition root.
-- Parsing: MinerU standard and token-free agent clients with structured error mapping, parse
-  manager (queue, progress, cancel, restart resume, page-scoped repair), local engine (vendored
-  pdf.js 5.4.449 lazy extraction + optional DSH `officeToPdf`), and ZIP extraction moved to
-  **fflate** behind a security preflight (caps, traversal rejection, CRC/ZIP64 policy).
-- AI engine: LLM gateway over the Host `llm` service with `tokenMeter` budgeting, **MiniSearch**
-  retrieval over the shared block model, grounded chat (citation validation, quote–claim
-  entailment, auto-annotations, persistence), per-paper and library knowledge graphs with
-  curation, and one static system-prompt section advertising the library to the agent.
-- Seven agent tools rebuilt with behaviour-first descriptions, bounded outputs and
-  citation-ready coordinates.
-
-### Client
-
-- New reading-desk UI on host theme tokens: persistent frame (top bar, scene context bar, status
-  bar, library rail), library and read scenes, import/reparse/settings dialogs.
-- Reader rebuilt around the shared block model: bilingual column, margin notes with tethers,
-  selection actions, translation jobs, outline, page marks, local KaTeX rendering and position
-  restore.
-- AI as a margin voice: streaming grounded answers with citation chips, hover previews,
-  jump-to-block, entailment/unverified states, quick prompts and Markdown export.
-- Knowledge-map scene on **d3-force** with a deterministic seeded layout, infinite-canvas camera,
-  drag-to-pin, curation (rename/merge/pin) and a deterministic library graph.
-- Client state moved to small **zustand** stores per domain; transport covers JSON/NDJSON/upload
-  with timeouts and aborts; complete zh/en locale dictionaries; design-system styles compiled into
-  the bundle.
+- Host: `llm`, `tools`, `credentials`, `translator`, `officeToPdf`, `tokenMeter` (context budget),
+  `systemPrompt` (one static library section), connection fence and web server.
+- Client: locale service, theme tokens, Harness module table and host layout/slot contracts.
+- Agent interface: seven `library_*` tools (search/read/ask/annotate/translate/graph/manage) with
+  bounded outputs and `documentId`/`blockKey`/`page`/`quote` coordinates, plus a static
+  system-prompt section so the agent discovers the library.
 
 ### Engineering
 
-- Renamed and restructured source tree (`src/**`) with fresh architecture, parsing, agent, AI, UI
-  and vision docs; historical working notes and reports removed.
-- Offline test strategy: shared-model snapshot parity, per-module Host suites, parse flows against
-  a dependency-free mock MinerU server, fake LLM helpers, Client component/store suites, a real
-  built-bundle integration test, recorded perf benchmarks and artifact smoke tests.
-- On-disk formats and the HTTP wire contract remain the version-1 shapes: existing libraries load
-  as-is with no migration step.
+- TypeScript everywhere (Host, Client, shared model, tests, scripts) under `strict`,
+  `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `erasableSyntaxOnly`; zero `any` in the
+  shipped tree.
+- Typed seams: `src/shared/{constants,model,protocol,preferences,urls}.ts`,
+  `src/host/{contracts,host-services,wire}.ts`, one shared paper model.
+- esbuild bundles: Host ESM `index.js`, Client module-loader `lib/client.js`; zero runtime npm
+  dependencies. The client bundle's only external requests are the platform React runtime
+  modules; pdf.js and KaTeX stay vendored and version-locked. Enforced budgets: client
+  ≤ 620 KiB, CSS ≤ 160 KiB, Host ≤ 2 MiB.
+- One gate (`scripts/check.ts`, 17 checks incl. `--final`) covering manifest, identity, strict
+  types, build, artifact contracts, vendored runtimes, docs and the vitest suite; 790 tests.
+- Offline test strategy: shared-model snapshot parity, Host unit/integration suites, parse flows
+  against a dependency-free mock MinerU server, fake-LLM engine and cross-half AI stream tests,
+  agent-tools end-to-end, Client component/store suites, real built-bundle integration tests and
+  recorded perf benchmarks.
+- New docs: README plus `docs/{ARCH,PARSING,AGENT,AI-SPEC,UI-SPEC,VISION}.md`; legacy identity and
+  historical working notes removed.
 
-## 1.0.0 — frozen feature baseline
+### Fixes included
 
-The complete feature set, frozen as the behavioural contract for the refactor:
-
-- Local literature library with MinerU standard/agent parsing and a token-free local engine
-  (pdf.js text layer; optional Office→PDF conversion).
-- Bilingual reading desk: serif original, quiet translation, reading modes, outline, page marks,
-  four-ink highlights and margin annotations; position restore.
-- Grounded AI reading conversation: citation-first answers validated against parser blocks, a
-  quote–claim entailment pass, auto-annotations, regenerate/stop, follow-ups, Markdown export.
-- Per-paper and library knowledge graphs: AI extraction, Q&A enrichment, curated library
-  aggregation, infinite canvas, rename/merge/pin curation, auto-build switch.
-- Seven DSH agent tools over the library, all returning citation-ready coordinates.
-- i18n (zh/en), diagnostics, credential storage.
+- Rail document menu anchored to its button; dialogs sized to their content without clipping.
+- Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
+- Import dialog lays out in one column at every width.
+- No stale annotation/graph counts after deleting documents: an empty library shows the import
+  invitation and the graph context bar hides all graph facts.
+- AI composer pinned in the margin; graph margin hint names the selection action.

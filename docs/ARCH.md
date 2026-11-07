@@ -1,9 +1,9 @@
-# dsh-litnotes — architecture (2.0)
+# dsh-litnotes — architecture (1.0.0)
 
 A DeepSeek Harness plugin that turns a local literature library into a reading desk: import and
 parse papers, read them bilingually, ask questions whose evidence is anchored on the page, keep
 per-paper and library knowledge graphs, and let the DSH agent operate the same library through
-seven tools. This document describes the shipped 2.0 implementation; code is the authority
+seven tools. This document describes the shipped 1.0.0 implementation; code is the authority
 (`src/shared/**`, `src/host/contracts.ts`, `src/host/**`, `src/client/**`, `scripts/**`).
 
 Companion documents: [`PARSING.md`](PARSING.md) (parse engines), [`AGENT.md`](AGENT.md) (agent

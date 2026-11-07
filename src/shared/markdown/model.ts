@@ -24,7 +24,7 @@
  * Deviations from the frozen JS shape (documented so consumers agree):
  *  - every block carries `page: number | null` (the 1-based display page, `null`
  *    until page marks are applied). The frozen page-mark design only inserted
- *    marker blocks; the extra field is a 2.0 convenience for retrieval/tool
+ *    marker blocks; the extra field is a 1.0.0 convenience for retrieval/tool
  *    results and is filled in by `appendPageMarks()`.
  *  - `code`/`formula`/`figure` blocks also carry `plainText` (code source, latex,
  *    or `''` for figures) so consumers can treat every non-page block uniformly.

@@ -8,6 +8,9 @@
 export const zh = {
   'graph.scope.doc': '本文',
   'graph.selectHint': '选择一个节点查看详情',
+  'graph.empty.noDocsTitle': '还没有文献',
+  'graph.empty.noDocsBody': '导入并解析文献后，知识图谱会在这里展开。',
+  'graph.empty.noDocsAction': '导入文献',
   'graph.selectHintLibrary': '选择一篇论文或主题查看详情',
   'graph.scope.library': '全库',
   'graph.scope.switch': '图谱范围',
@@ -79,6 +82,9 @@ export const zh = {
 export const en: Record<keyof typeof zh, string> = {
   'graph.scope.doc': 'This paper',
   'graph.selectHint': 'Select a node to see its details',
+  'graph.empty.noDocsTitle': 'No papers yet',
+  'graph.empty.noDocsBody': 'Import and parse a paper and its knowledge map opens here.',
+  'graph.empty.noDocsAction': 'Import a paper',
   'graph.selectHintLibrary': 'Select a paper or topic to see its details',
   'graph.scope.library': 'Library',
   'graph.scope.switch': 'Graph scope',

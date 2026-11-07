@@ -26,7 +26,7 @@ import { useGraphMediaQuery } from './hooks.ts'
 import { GraphNodeCard } from './GraphNodeCard.tsx'
 import { layoutGraph } from './layout.ts'
 import { storedPins, visibleGraph, type Point, type VisibleGraph } from './model.ts'
-import { graphAiAvailable, installGraphSeams, useGraphStore } from './store.ts'
+import { emptyGraphEntry, graphAiAvailable, installGraphSeams, useGraphStore } from './store.ts'
 import graphCss from './styles.css'
 
 /** Props supplied by the shell: the open document (may be undefined for library scope). */
@@ -36,6 +36,9 @@ export interface GraphSceneProps {
 
 /** Empty visible graph (shared constant so memos stay referentially stable). */
 const EMPTY_VISIBLE: VisibleGraph = { nodes: [], edges: [] }
+
+/** Idle empty graph entry shown when the library has no documents. */
+const EMPTY_GRAPH_ENTRY = emptyGraphEntry(null)
 
 /** Map a build phase to a copy key. */
 function phaseLabelKey(phase: string): 'graph.phase.reading' | 'graph.phase.extracting' | 'graph.phase.merging' | 'graph.phase.done' | 'graph.building' {
@@ -65,7 +68,11 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
   const marginOpen = useUiStore((state) => state.marginOpen)
   const activeAspect = useUiStore((state) => state.activeAspect)
 
-  const entry = scope === 'library' ? libraryEntry : docEntry
+  // With no documents the library graph persisted by the Host (or a stale
+  // in-memory entry) must never leak counts into the frame: force an empty
+  // library entry and show the import invitation instead.
+  const libraryEmpty = documents.length === 0
+  const entry = libraryEmpty ? EMPTY_GRAPH_ENTRY : scope === 'library' ? libraryEntry : docEntry
   const graph = entry.graph
 
   // Cross-workstream seams (idempotent): auto-build after parse / AI knowledge.
@@ -73,10 +80,19 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
     installGraphSeams()
   }, [])
 
+  // A document-scoped map is meaningless without a document: collapse to the
+  // library scope (which itself renders the import invitation while empty).
+  useEffect(() => {
+    if (documentId !== null) return
+    if (useGraphStore.getState().scope !== 'doc') return
+    useGraphStore.getState().setScope('library')
+  }, [documentId])
+
   // Load whichever scope is showing (the store deduplicates concurrent loads).
   useEffect(() => {
+    if (libraryEmpty) return
     void loadActive(documentId)
-  }, [documentId, scope, loadActive])
+  }, [documentId, scope, loadActive, libraryEmpty])
 
   const pinned = useMemo(() => (graph === null ? {} : storedPins(graph.nodes)), [graph])
 
@@ -163,7 +179,7 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
   }
 
   const aiAvailable = graphAiAvailable()
-  const canBuild = scope === 'library' || documentId !== null
+  const canBuild = !libraryEmpty && (scope === 'library' || documentId !== null)
   const build = (force = false): void => {
     if (scope === 'library') {
       void rebuildLibrary()
@@ -176,10 +192,10 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
     ? { label: scope === 'library' ? t('graph.empty.libraryAction') : t('graph.empty.action'), onClick: () => build(false) }
     : { label: t('graph.empty.noAiAction'), onClick: () => useUiStore.getState().openDialog('settings') }
 
-  const showBuildInvitation = graph === null
-  const showEmptyNodes = graph !== null && graph.nodes.length === 0
-  const loading = entry.status === 'loading' && graph === null
-  const error = entry.status === 'error' && graph === null
+  const showBuildInvitation = !libraryEmpty && graph === null
+  const showEmptyNodes = !libraryEmpty && graph !== null && graph.nodes.length === 0
+  const loading = !libraryEmpty && entry.status === 'loading' && graph === null
+  const error = !libraryEmpty && entry.status === 'error' && graph === null
 
   return (
     <div className="ln-graph" data-scope={scope} data-status={entry.status}>
@@ -201,6 +217,25 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
           />
         ) : null}
 
+        {libraryEmpty ? (
+          <div className="ln-graph__state">
+            <EmptyState
+              icon="book"
+              title={t('graph.empty.noDocsTitle')}
+              body={t('graph.empty.noDocsBody')}
+              actions={
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  onClick={() => useUiStore.getState().openDialog('import')}
+                >
+                  {t('graph.empty.noDocsAction')}
+                </Button>
+              }
+            />
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="ln-graph__state" role="status">
             <Spinner label={t('graph.loading')} />
@@ -208,7 +243,7 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
           </div>
         ) : null}
 
-        {entry.status === 'building' ? (
+        {!libraryEmpty && entry.status === 'building' ? (
           <div className="ln-graph__state ln-graph__state--build" role="status">
             <span className="ln-graph__stateTitle">
               {entry.progress === null
@@ -318,7 +353,9 @@ export function GraphScene({ document }: GraphSceneProps): ReactElement {
             <p className="ln-graph__marginHint">
               <Icon name="graph" size={16} />
               <span>
-                {graph !== null && graph.nodes.length > 0
+                {libraryEmpty
+                  ? t('graph.empty.noDocsBody')
+                  : graph !== null && graph.nodes.length > 0
                   ? scope === 'library'
                     ? t('graph.selectHintLibrary')
                     : t('graph.selectHint')

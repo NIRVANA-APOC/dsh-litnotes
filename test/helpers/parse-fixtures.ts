@@ -1,7 +1,7 @@
 /**
  * Shared MinerU/parse fixtures for the Host parse-pipeline tests.
  *
- * These are the typed 2.0 equivalents of the frozen helpers
+ * These are the typed 1.0.0 equivalents of the frozen helpers
  * (`test/e2e/helpers.mjs` + `test/fixtures/make-zip.mjs`): the canonical paper
  * markdown / content list / figure used by the mock MinerU server, the canonical
  * result ZIP, a small plausible PDF payload and a bounded async `waitFor`.

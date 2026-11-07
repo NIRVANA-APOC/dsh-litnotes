@@ -440,6 +440,8 @@ let libraryAnnotations = [
     id: 'ann-normal', blockKey: FIRST_PARAGRAPH.key,
     start: 0, end: 12, quote: FIRST_PARAGRAPH.plainText.slice(0, 12),
     color: 'sage', aspect: 'method', note: 'my note',
+    origin: 'ai', chatId: `doc:${DOC_ID}`, messageId: 'm-1',
+    model: { provider: 'deepseek', model: 'deepseek-flash' },
     createdAt: ANNOTATION_TIME, updatedAt: ANNOTATION_TIME,
   },
   {
@@ -490,6 +492,8 @@ const HISTORY_MESSAGES = [
 ]
 const calls = []
 const settingsUpdates = []
+// Optional host-side merge simulation for the annotations.save response (C3).
+let annotationSaveUpgrade = null
 function envelope(value) {
   return { ok: true, status: 200, headers: { get: (name) => (String(name).toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => ({ ok: true, value }) }
 }
@@ -541,6 +545,16 @@ async function mockFetch(url, options) {
       return envelope({ preferences: (payload && payload.preferences) || PREFERENCES })
     case 'settings.get': return envelope({ tokenConfigured: true, preferences: PREFERENCES, providers: ['google'], defaults: {} })
     case 'graph.doc': return envelope({ graph: DOC_GRAPH })
+    case 'graph.update': {
+      const patch = payload || {}
+      const nodes = Array.isArray(patch.nodes)
+        ? DOC_GRAPH.nodes.map((node) => {
+          const change = patch.nodes.find((entry) => entry && entry.id === node.id)
+          return change ? { ...node, ...change } : node
+        })
+        : DOC_GRAPH.nodes
+      return envelope({ graph: { ...DOC_GRAPH, nodes, edges: DOC_GRAPH.edges } })
+    }
     case 'graph.library': return envelope({ graph: LIBRARY_GRAPH })
     case 'graph.build': return ndjson([
       { type: 'progress', phase: 'reading', done: 0, total: 2, chunk: 0 },
@@ -565,7 +579,10 @@ async function mockFetch(url, options) {
         { type: 'done' },
       ])
     }
-    case 'annotations.save':
+    case 'annotations.save': {
+      const items = typeof annotationSaveUpgrade === 'function' ? annotationSaveUpgrade(payload) : null;
+      return envelope(items === null ? { saved: true } : { saved: true, items });
+    }
     case 'translations.save': return envelope({ saved: true })
     default: return envelope({})
   }
@@ -686,6 +703,33 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     } else {
       assert.match(textOf(first('mru-graph')), /graph\.nodes/, 'placeholder must reflect the built graph')
     }
+  })
+
+  await t.test('graph curation: onUpdateGraph sends one patch and adopts the KG', async () => {
+    const view = captured.get('MruGraphView')
+    assert.ok(view, 'the doc graph view must be captured')
+    assert.equal(typeof view.onUpdateGraph, 'function', 'doc mode receives the curation handler')
+    const before = calls.filter((call) => call.method === 'graph.update').length
+    const renamed = await view.onUpdateGraph({ nodes: [{ id: 'n-1', label: 'Self-attention (curated)' }] })
+    await settle(6)
+    const updates = calls.filter((call) => call.method === 'graph.update')
+    assert.equal(updates.length, before + 1, 'rename posts one graph.update')
+    assert.deepEqual(updates[updates.length - 1].payload.nodes, [{ id: 'n-1', label: 'Self-attention (curated)' }])
+    assert.ok(renamed && Array.isArray(renamed.nodes), 'the handler resolves the updated KG')
+    const latest = captured.get('MruGraphView')
+    assert.ok(latest.graph.nodes.some((node) => node.id === 'n-1' && node.label === 'Self-attention (curated)'),
+      'the app adopts the curated graph')
+    const merged = await latest.onUpdateGraph({ merge: [{ from: 'n-1', into: 'n-2' }] })
+    await settle(6)
+    const mergeCall = calls.filter((call) => call.method === 'graph.update').pop()
+    assert.deepEqual(mergeCall.payload.merge, [{ from: 'n-1', into: 'n-2' }], 'merge rides the same patch contract')
+    assert.ok(merged && Array.isArray(merged.nodes), 'merge resolves the updated KG')
+    const pinned = await latest.onUpdateGraph({ nodes: [{ id: 'n-1', pinned: true, position: { x: 120, y: 240 } }] })
+    await settle(6)
+    const pinCall = calls.filter((call) => call.method === 'graph.update').pop()
+    assert.deepEqual(pinCall.payload.nodes, [{ id: 'n-1', pinned: true, position: { x: 120, y: 240 } }],
+      'pin rides the node patch')
+    assert.ok(pinned && Array.isArray(pinned.nodes), 'pin resolves the updated KG')
   })
 
   await t.test('library graph view loads and rebuilds', async () => {
@@ -839,6 +883,47 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     assert.equal(findAllInTree(legend, 'mru-aspect-legend__label').length, 5, 'text labels stay next to the dots')
   })
 
+  await t.test('margin notes: AI spark + origin/aspect filter', async () => {
+    click(findButtonByText('margin.notes'))
+    await settle(4)
+    const aiNotes = findAll('mru-note--ai')
+    assert.equal(aiNotes.length, 1, 'the AI note carries the AI marker class')
+    assert.equal(String(aiNotes[0].props.attrs && aiNotes[0].props.attrs['data-origin'] || aiNotes[0].attrs['data-origin']), 'ai')
+    const origin = findAllInTree(aiNotes[0], 'mru-note__origin')[0]
+    assert.ok(origin, 'the AI note shows the spark origin badge')
+    assert.match(textOf(origin), /notes\.aiOrigin/, 'the badge names the AI origin and aspect')
+    const filter = first('mru-note-filter')
+    assert.ok(filter, 'the notes tab shows the filter bar')
+    const chips = findAll('mru-note-filter__chip')
+    assert.equal(chips.length, 3, 'all / AI / my-note chips render with counts')
+    const aiChip = chips.find((chip) => chip.attrs && chip.attrs['data-filter'] === 'ai')
+    assert.ok(aiChip, 'the AI filter chip exists')
+    click(aiChip)
+    await settle(4)
+    assert.ok(settingsUpdates.some((prefs) => prefs.notesFilter === 'ai'), 'origin filter persists host-side')
+    assert.equal(findAll('mru-note--stale').length, 0, 'AI filter hides stale notes without AI origin')
+    assert.equal(findAll('mru-note').length, 1, 'AI filter keeps only AI notes')
+    const status = first('mru-note-filter__status')
+    assert.ok(status, 'an active filter shows the shown/total status')
+    assert.match(textOf(status), /notes\.filteredCount/, 'status copy comes from the dictionary')
+    // Aspect toggles AND with the origin filter; result is empty here.
+    const aspectButtons = findAll('mru-note-filter__aspect')
+    const resultAspect = aspectButtons.find((button) => button.attrs && button.attrs['data-aspect'] === 'result')
+    assert.ok(resultAspect, 'the aspect toggle row renders one button per aspect')
+    click(resultAspect)
+    await settle(4)
+    assert.ok(first('mru-margin__empty--filtered'), 'an empty filtered result renders the empty state')
+    const clearButton = first('mru-note-filter__clear')
+    assert.ok(clearButton, 'an active filter offers a clear action')
+    click(clearButton)
+    await settle(4)
+    assert.ok(!first('mru-note-filter__status'), 'clearing restores the unfiltered list')
+    assert.ok(settingsUpdates.some((prefs) => prefs.notesFilter === 'all'), 'clearing persists the all filter')
+    assert.ok(findAll('mru-note').length >= 3, 'all notes are back')
+    click(findButtonByText('margin.ai'))
+    await settle(3)
+  })
+
   await t.test('stale annotations: rendered, kept across saves, and re-anchored ones render', async () => {
     const notesTab = findButtonByText('margin.notes')
     assert.ok(notesTab, 'notes tab must exist')
@@ -904,6 +989,105 @@ test('AI integration: tabs, quick actions, graph views, streaming and prefs', as
     savedIds = (lastSave.payload.annotations || []).map((annotation) => annotation.id)
     assert.equal(savedIds.includes('ann-stale') && savedIds.includes('ann-orphan'), false, 'deleted stale card is removed')
     assert.equal(savedIds.filter((id) => id.startsWith('ann-')).length, 2, 'the other stale card is still kept')
+  })
+
+  await t.test('concurrent annotation merge: baseIds and host-merged additions', async () => {
+    click(findButtonByText('margin.notes'))
+    await settle(4)
+    const baseReloads = calls.filter((call) => call.method === 'library.get').length
+    const concurrent = {
+      id: 'ann-concurrent',
+      blockKey: SECOND_PARAGRAPH.key,
+      start: 0,
+      end: 8,
+      quote: SECOND_PARAGRAPH.plainText.slice(0, 8),
+      color: 'sky',
+      aspect: 'result',
+      note: 'written by a concurrent Q&A turn',
+      origin: 'ai',
+      createdAt: ANNOTATION_TIME,
+      updatedAt: ANNOTATION_TIME,
+    }
+    annotationSaveUpgrade = (payload) => {
+      const items = (Array.isArray(payload.annotations) ? payload.annotations : []).concat([concurrent])
+      libraryAnnotations = items
+      return items
+    }
+    try {
+      const annotateButton = first('mru-block__annotate')
+      assert.ok(annotateButton, 'block annotate tool must exist')
+      click(annotateButton)
+      await settle(3)
+      const editor = first('mru-noteeditor')
+      assert.ok(editor, 'note editor must open')
+      click(findAllInTree(editor, 'mru-btn--primary')[0])
+      await sleep(950)
+      await settle(8)
+      const saves = calls.filter((call) => call.method === 'annotations.save')
+      const last = saves.pop()
+      assert.ok(last, 'the edit saves')
+      assert.ok(Array.isArray(last.payload.baseIds), 'the save carries the merge baseline')
+      assert.ok(last.payload.baseIds.includes('ann-normal'), 'loaded annotation ids are in baseIds')
+      assert.ok(last.payload.baseIds.includes('ann-stale') || last.payload.baseIds.includes('ann-orphan'),
+        'orphan/stale ids stay authoritative too')
+      const reloads = calls.filter((call) => call.method === 'library.get').length
+      assert.ok(reloads > baseReloads, 'a host-merged addition triggers a reload so it renders')
+      assert.ok(findAll('mru-note').some((note) => note.attrs && note.attrs['data-annotation-id'] === 'ann-concurrent'),
+        'the concurrently written AI note appears in the margin')
+    } finally {
+      annotationSaveUpgrade = null
+    }
+    click(findButtonByText('margin.ai'))
+    await settle(3)
+  })
+
+  await t.test('conversation export hook and the AI settings section', async () => {
+    const panel = captured.get('MruAiPanel')
+    assert.ok(panel, 'the AI panel must be mounted')
+    assert.equal(typeof panel.onExportConversation, 'function', 'the panel receives the conversation export hook')
+    const downloads = []
+    const originalCreate = documentStub.createElement
+    const originalCreateObjectURL = URL.createObjectURL
+    documentStub.createElement = (tag) => ({
+      tagName: String(tag).toUpperCase(),
+      set href(value) { this._href = value },
+      get href() { return this._href },
+      set download(value) { this._download = value; downloads.push(value) },
+      get download() { return this._download },
+      click() { this._clicked = true },
+    })
+    URL.createObjectURL = () => 'blob:test'
+    try {
+      const ok = panel.onExportConversation('# paper\n\nquestion', 'attention.md')
+      assert.equal(ok, true, 'the export hook reports a triggered download')
+      assert.deepEqual(downloads, ['attention.md'], 'the export hook downloads the sanitized filename')
+    } finally {
+      documentStub.createElement = originalCreate
+      URL.createObjectURL = originalCreateObjectURL
+    }
+
+    // Settings: the auto-build switch lives in its own AI section, with hints.
+    let settingsButton = null
+    walk(tree, (element) => {
+      if (!settingsButton && element.attrs && element.attrs['aria-label'] === 'settings.title'
+        && typeof element.props.onClick === 'function') settingsButton = element
+    })
+    if (settingsButton) {
+      click(settingsButton)
+      await settle(5)
+      assert.ok(first('mru-modal'), 'settings modal opens')
+      assert.match(textOf(first('mru-modal')), /settings\.sectionAi/, 'the AI section title renders')
+      assert.match(textOf(first('mru-modal')), /settings\.graphAutoBuildHint/, 'the switch explains what it does')
+      const toggle = findAll('mru-toggle-row--plain').find((row) => textOf(row).includes('settings.graphAutoBuild'))
+      assert.ok(toggle, 'the auto-build toggle row renders in the AI section')
+      const switches = findAllInTree(toggle, 'mru-switch')
+      assert.equal(switches.length, 1, 'the toggle has a switch control')
+      click(switches[0])
+      await settle(4)
+      assert.ok(settingsUpdates.some((prefs) => prefs.graphAutoBuild === true), 'the auto-build switch persists')
+      click(findButtonByText('settings.close'))
+      await settle(3)
+    }
   })
 
   await t.test('chat module contract: history, streaming frames and error mapping', async () => {

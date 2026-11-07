@@ -419,13 +419,11 @@ modifier classes beyond §8:
 - `.mru-ai--placeholder`, `.mru-graph--placeholder` and `.mru-graph__empty-text` — the
   intermediate surfaces rendered while the modules were still placeholders.
 
-**Planned hooks (not yet emitted by the markup, documented for a later round):** an AI-origin
-marker on margin notes (proposed `.mru-note--ai` with the `.mru-ai__spark` glyph in
-`.mru-note__head`) and an "AI 批注" margin filter chip (proposed `.mru-note-filter--ai`, reusing
-the `.mru-chip` / `.mru-tab` control language and the aspect dots). Per the QA round these are
-not styled yet because the notes/filter markup does not exist; the AI-origin provenance is
-currently carried by the existing annotation model (`origin: 'ai'`, aspect color + spark in the
-margin note head once app.js renders it).
+**Curation/trust round hooks (implemented):** the AI-origin marker on margin notes
+(`.mru-note--ai` + `.mru-note__origin` with the spark glyph in `.mru-note__head`) and the
+origin/aspect margin filter (`.mru-note-filter*`, see §12c) now ship in `ui/app.js`; the
+AI-origin provenance is carried by the annotation model (`origin: 'ai'`, aspect + spark) and
+survives the client normalizer and the whole-list save.
 
 ### 12.5 Verification
 
@@ -589,3 +587,70 @@ stale in the 批注 tab (markup added by client-ui):
 - Legend dots match the real highlight inks pixel-for-pixel (above), and the removed hint styles
   leave clean title+legend surfaces.
 - Braces balanced, no `@import`/external `url()`; only `ui/styles.css` + this file changed.
+
+## 12c. Curation & trust round — margin filter, graph curation, exported chats
+
+The reading desk grows a quiet curation layer; all of it reuses the existing ink/rule language and
+the four annotation inks (no new palette, no new external assets).
+
+### 12c.1 Margin AI filter and spark
+
+- `.mru-note-filter` sits between the 大纲/批注/AI tabs and the note list (it is a sibling of the
+  aspect legend, so the legend keeps its place). Two rows: origin chips `全部 / AI 批注 / 我的批注`
+  with tabular counts, and a compact per-aspect toggle row (18px round dot buttons, `aria-pressed`,
+  `title` = aspect label). Origin × aspect is an AND filter; the active state shows
+  「显示 {shown} / {total} 条」 plus a dotted-underline 清除筛选 action, and an empty result
+  renders `.mru-margin__empty--filtered` with the same clear action.
+- `.mru-note--ai` is a slightly firmer hairline around an AI note; `.mru-note__origin` is a
+  10px spark + 「AI 批注 · 方法」 badge (accent spark, ink-soft text) with the title
+  「由 AI 阅读生成」. User notes keep the plain head. The note editor shows the same badge
+  (`.mru-noteeditor__head` / `__origin` / `__aspect`) so provenance is visible while editing.
+- The filter is host-persisted (`notesFilter` preference); the aspect toggle is session-local. The
+  tab count stays the total number of notes.
+
+### 12c.2 Graph curation
+
+- The document graph's details card gains `.mru-graph__card-actions` with
+  `.mru-graph__card-action` buttons (重命名 / 合并到… / 固定位置·取消固定, plus the existing 问 AI).
+  Rename swaps the card title for `.mru-graph__rename` (input + 保存/取消, Enter/Escape), 80 chars
+  max, empty blocked; merge shows `.mru-graph__merge-bar--hint` (dashed accent rule + source
+  label) while the canvas stays clickable and other nodes become
+  `.mru-graph__node--merge-candidate` (dashed accent ring, copy cursor); the confirmation swaps to
+  `.mru-graph__merge-bar--confirm` (`.mru-graph__merge-title` + `.mru-graph__merge-labels` /
+  `__merge-node` / `__merge-arrow`, solid accent rule, 保存/取消). Pin uses the node's current
+  laid-out position, and drag-release also persists. Pending/error/notice rows are
+  `.mru-graph__card-pending` (spinner, `graph.saving`) / `.mru-graph__card-error` /
+  `.mru-graph__card-notice`; actions disable while pending. The source node during merge is
+  `.mru-graph__node--merge-source` (accent dashed ring).
+- Pinned nodes get `.mru-graph__node--pinned` (label weight) and a `.mru-graph__node-pin` accent
+  dot at the node's top-right (`.mru-graph__node-pin-group`); the stored `position` seeds the
+  seeded layout, so reopening the paper keeps the arrangement and "reset view" keeps persisted
+  pins. The library map keeps the same read-only surface (no curation actions at all; read-only
+  is enforced by hiding the controls, so no extra note class is emitted). Mode/pending states are
+  exposed as data hooks (`data-merge-mode`, card `data-pending`/`data-merging`, node
+  `data-pinned`/`data-merge-source`/`data-merge-candidate`) for the harness.
+
+### 12c.3 Entailment states and exported conversations
+
+- `.mru-ai__citation--partial` is the third citation state: amber dotted underline and amber-mixed
+  ink (full ink on hover/focus), distinct from the grey `--unverified` and the amber
+  `--missing`. The citation card gains an `.mru-ai__claim` row (「论点核对」 + the partial/
+  unsupported sentence); the answer-level notice reuses `.mru-ai__notice` (`--entailment`
+  modifier for the claim-specific wording). Unsupported citations stay in the dimmed
+  `--unverified` state and are not jumpable — they never became annotations.
+- The chat header's 导出对话 action reuses `.mru-ai__action`; the downloaded Markdown is the
+  panel's own serialization (title, model, time, per-turn question/answer + citation list), so it
+  prints/reads like the rest of the desk.
+- Settings: the auto-build switch lives in a dedicated AI section with a hint line and a disabled
+  state (`.mru-switch--disabled`, `.mru-toggle-row--disabled`) when no graph engine is available.
+
+### 12c.4 Checks
+
+- Braces balanced in `ui/styles.css`; only `mru-*` selectors and host tokens
+  (`--mru-*`, `--dsw-alias-*`); no `@import`/`url()`/new assets. The new controls are ≥18px hit
+  targets, real buttons with `aria-pressed`/`aria-label`, and honour reduced motion.
+- The fake-React harness drives the full loop: AI spark + filter chips (counts, empty state,
+  persistence), rename/merge/pin patches through `onUpdateGraph` with the returned KG adopted,
+  the export hook (download filename) and the AI settings toggle.
+- Full gate (`node scripts/check.mjs --require-client-ai`) green after the round; docs updated in
+  `docs/AI-SPEC.md` §2/§3/§4/§5/§6/§8/§9/§10.

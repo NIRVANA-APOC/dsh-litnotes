@@ -45,6 +45,7 @@ async function setup({
   llm,
   defaultModel,
   fetchImpl,
+  ai,
   config: configOverrides = {},
 } = {}) {
   // Reset the module-level in-memory token fallback so tests stay isolated.
@@ -79,6 +80,7 @@ async function setup({
     getTranslator: () => translator,
     getLlm: () => llm,
     getDefaultModel: () => defaultModel,
+    getAi: ai === undefined ? undefined : () => ai,
     fetchImpl,
   })
   return { dataDir, config, store, service, managerCalls }
@@ -562,6 +564,91 @@ test('library removal keeps no files behind and health counts follow', async () 
       assert.equal(error.code, 'not-found')
       return true
     })
+  } finally {
+    await teardown(env)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Annotation concurrency (PLAN C3) and graph curation pass-through
+// ---------------------------------------------------------------------------
+
+test('saveAnnotations returns the persisted merged items and honours baseIds', async () => {
+  const env = await setup()
+  try {
+    const document = await addDocument(env)
+    const base = { id: 'ann-mine', blockKey: 'b0:deadbeef', start: 0, end: 4, quote: 'base', note: '', color: 'yellow' }
+    const first = await env.service.saveAnnotations(document.id, [base])
+    assert.equal(first.saved, true)
+    assert.deepEqual(first.items.map((item) => item.id), ['ann-mine'])
+
+    // A concurrent AI/agent annotation lands after the client loaded its list.
+    await env.store.mutateAnnotations(document.id, (items) => {
+      items.push({
+        id: 'ann-ai',
+        blockKey: 'b1:feedface',
+        start: 1,
+        end: 5,
+        quote: 'ai',
+        note: 'from AI',
+        color: 'sky',
+        origin: 'ai',
+      })
+      return items
+    })
+
+    // The client edits its annotation and save with the loaded baseIds.
+    const saved = await env.service.saveAnnotations(
+      document.id,
+      [{ ...base, note: 'edited by user' }],
+      ['ann-mine'],
+    )
+    assert.equal(saved.saved, true)
+    assert.equal(saved.items.length, 2, 'the concurrent AI annotation is preserved')
+    assert.equal(saved.items.find((item) => item.id === 'ann-mine').note, 'edited by user')
+    assert.ok(saved.items.some((item) => item.id === 'ann-ai'))
+    assert.deepEqual((await env.store.loadAnnotations(document.id)).items, saved.items)
+
+    // Deletions win for ids the client had loaded (they are in baseIds).
+    const cleared = await env.service.saveAnnotations(document.id, [], ['ann-mine', 'ann-ai'])
+    assert.deepEqual(cleared.items, [])
+    assert.deepEqual((await env.store.loadAnnotations(document.id)).items, [])
+
+    // Without baseIds the historical replace semantics stay exactly as today.
+    await env.service.saveAnnotations(document.id, [base])
+    const replaced = await env.service.saveAnnotations(document.id, [], undefined)
+    assert.equal(replaced.saved, true)
+    assert.deepEqual(replaced.items, [])
+    assert.deepEqual((await env.store.loadAnnotations(document.id)).items, [])
+  } finally {
+    await teardown(env)
+  }
+})
+
+test('updateDocGraph forwards nodes/edges/merge to the graph engine', async () => {
+  const calls = []
+  const ai = {
+    graph: {
+      async updateDocGraph(documentId, patch) {
+        calls.push({ documentId, patch })
+        return { scope: 'document', nodes: [], edges: [], stats: { nodes: 0, edges: 0 } }
+      },
+    },
+  }
+  const env = await setup({ ai })
+  try {
+    const document = await addDocument(env)
+    const nodes = [{ id: 'n-a', label: 'A' }]
+    const edges = [{ from: 'n-a', to: 'n-b', type: 'uses' }]
+    const merge = [{ from: 'n-a', into: 'n-b' }]
+    const result = await env.service.updateDocGraph(document.id, { nodes, edges, merge })
+    assert.equal(result.graph.scope, 'document')
+    assert.deepEqual(calls[0], { documentId: document.id, patch: { nodes, edges, merge } })
+
+    // Missing arrays normalize to empty arrays (never undefined) so the engine
+    // always sees the documented payload shape.
+    await env.service.updateDocGraph(document.id, {})
+    assert.deepEqual(calls[1].patch, { nodes: [], edges: [], merge: [] })
   } finally {
     await teardown(env)
   }

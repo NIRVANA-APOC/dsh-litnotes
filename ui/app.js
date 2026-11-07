@@ -50,6 +50,7 @@ const MRU_DEFAULT_PREFS = {
   libraryView: 'library',
   docView: 'read',
   graphAutoBuild: false,
+  notesFilter: 'all',
 };
 
 /** MinerU document language options (value -> dictionary key). */
@@ -85,6 +86,9 @@ const MRU_TRANSLATE_CONCURRENCY = 4;
 
 /** Margin tabs: outline / notes / AI conversation (docs/AI-SPEC.md §6). */
 const MRU_MARGIN_TABS = ['outline', 'notes', 'ai'];
+
+/** Margin-note origin filter (persisted preference `notesFilter`). */
+const MRU_NOTES_FILTERS = ['all', 'ai', 'user'];
 
 /** Library-topbar views: the library rail or the library-wide knowledge graph. */
 const MRU_LIBRARY_VIEWS = ['library', 'graph'];
@@ -415,6 +419,147 @@ const ZH = {
   'graph.insight': '洞见',
   'graph.paper': '论文',
   'graph.topic': '主题',
+  // AI modules (ui/chat.js, ui/graph.js) read these from the app dictionary.
+  // Source: the former per-module copy decks; docs/AI-SPEC.md §6.
+  'ai.modelDefault': '默认模型',
+  'ai.modelUnavailable': '模型未连接',
+  'ai.unavailableTitle': 'AI 模型尚未就绪',
+  'ai.loadingHistory': '正在载入对话…',
+  'ai.historyError': '对话载入失败。',
+  'ai.quickSummary': '总结全文',
+  'ai.quickSolved': '这篇论文解决了什么',
+  'ai.quickMethod': '方法是什么',
+  'ai.quickLimits': '有什么局限',
+  'ai.quickConcept': '解释这个概念',
+  'ai.hint': '⌘/Ctrl + Enter 发送 · Shift + Enter 换行',
+  'ai.busyHint': '正在回答，可先写下一条问题…',
+  'ai.answerEmpty': '没有收到回答，请重试。',
+  'ai.dismiss': '关闭',
+  'ai.citationsCount': '共 {count} 条引用',
+  'ai.unverifiedNotice': '{count} 条引用未通过校验，已置灰且不会写入批注。',
+  'ai.citationLabel': '引用 {index}',
+  'ai.citationLabelPage': '引用 {index}，第 {page} 页',
+  'ai.missingCitation': '引用 {index}（数据缺失）',
+  'ai.jump': '跳到原文',
+  'ai.unverifiedShort': '未通过校验',
+  'ai.annotationsNotice': '已在原文标注 {count} 处引用',
+  'ai.selection': '选中文本',
+  'ai.visible': '当前段落',
+  'ai.noDocument': '先从文献库选一篇已解析的论文。',
+  'ai.errHost': 'AI 服务还未就绪，请稍后重试。',
+  'ai.errModel': '模型不可用，请检查 DSH 的默认模型配置。',
+  'ai.errFailed': '模型调用失败，请重试。',
+  'ai.errContext': '检索到的上下文过长，请缩小提问范围。',
+  'ai.errAborted': '生成已中断。',
+  'ai.errNetwork': '网络请求失败，请重试。',
+  'ai.errGeneric': '这次提问没有完成。',
+  'ai.followups': '继续追问',
+  'ai.legendTitle': '颜色图例',
+  'ai.navLabel': '问题导航',
+  'ai.navJump': '跳到第 {index} 个问题',
+  'ai.navQuestion': '问题 {index}',
+  'ai.toLatest': '回到最新',
+  'graph.edgesTrimmed': '已聚焦 {shown}/{total} 条关系',
+  'graph.aspectLegend': '批注颜色',
+  'graph.aspect.definition': '定义/背景',
+  'graph.aspect.method': '方法',
+  'graph.aspect.result': '结果',
+  'graph.aspect.limitation': '局限',
+  'graph.canvas': '知识图谱画布',
+  'graph.sources': '原文来源',
+  'graph.documents': '相关文献',
+  'graph.relations': '关系',
+  'graph.noSummary': '暂无摘要',
+  'graph.noSources': '暂无原文坐标',
+  'graph.noRelations': '暂无关系',
+  'graph.more': '还有 {count} 个',
+  'graph.filtered': '显示 {shown} / {total} 个节点',
+  'graph.collapsed': '已折叠 {count} 个节点',
+  'graph.zoom': '缩放 {percent}%',
+  'graph.zoomIn': '放大',
+  'graph.zoomOut': '缩小',
+  'graph.resetView': '重置视图',
+  'graph.hint': '滚轮缩放 · 拖动节点固定位置',
+  'graph.noMatches': '没有匹配的节点',
+  'graph.noMatchesHint': '换个关键词，或清除筛选条件。',
+  'graph.clearFilters': '清除筛选',
+  'graph.unavailableHint': '配置可用的模型后，即可生成和浏览知识图谱。',
+  'graph.clusterSummary': '{count} 个「{type}」节点折叠在这里',
+  'graph.members': '成员',
+  'graph.expandCluster': '展开这组节点',
+  'graph.degree': '{count} 条关系',
+  'graph.source.ai-summary': 'AI 精读',
+  'graph.source.qa': '问答补充',
+  'graph.source.user': '手动添加',
+  'graph.source.aggregate': '聚合',
+  'graph.edge.defines': '定义',
+  'graph.edge.uses': '使用',
+  'graph.edge.supports': '支持',
+  'graph.edge.contradicts': '反驳',
+  'graph.edge.part_of': '属于',
+  'graph.edge.leads_to': '引出',
+  'graph.edge.evolves_from': '演化自',
+  'graph.edge.relates': '相关',
+  'graph.edge.answers': '回答',
+  'graph.edge.mentions': '提及',
+  'graph.edge.shares': '共享主题',
+  // AI curation / export / entailment / margin-filter copy (this round).
+  'notes.filterLabel': '筛选批注',
+  'notes.filterAll': '全部',
+  'notes.filterAi': 'AI 批注',
+  'notes.filterUser': '我的批注',
+  'notes.filterAspect': '按侧重点',
+  'notes.filterEmpty': '没有符合筛选条件的批注',
+  'notes.filterClear': '清除筛选',
+  'notes.filteredCount': '显示 {shown} / {total} 条',
+  'notes.aiOrigin': 'AI 批注 · {aspect}',
+  'notes.aiOriginPlain': 'AI 批注',
+  'notes.userOrigin': '我的批注',
+  'notes.sparkTitle': '由 AI 阅读生成',
+  'graph.curate': '策展',
+  'graph.rename': '重命名',
+  'graph.renameTitle': '重命名节点',
+  'graph.renamePlaceholder': '节点名称',
+  'graph.renameSave': '保存',
+  'graph.renameCancel': '取消',
+  'graph.renameEmpty': '名称不能为空',
+  'graph.renameFailed': '重命名失败',
+  'graph.merge': '合并到…',
+  'graph.mergeTitle': '合并节点',
+  'graph.mergeHint': '点击要并入的目标节点',
+  'graph.mergeConfirm': '确认合并',
+  'graph.mergeCancel': '取消合并',
+  'graph.merged': '已合并节点',
+  'graph.mergeFailed': '合并失败',
+  'graph.pin': '固定位置',
+  'graph.unpin': '取消固定',
+  'graph.pinned': '位置已固定',
+  'graph.pinFailed': '固定失败',
+  'graph.curationReadOnly': '全景图谱由文献自动聚合，不能直接编辑',
+  'graph.curationSaved': '已保存',
+  'graph.saving': '正在保存…',
+  'graph.cancel': '取消',
+  'ai.export': '导出对话',
+  'ai.exported': '对话已导出',
+  'ai.exportFailed': '导出对话失败',
+  'ai.exportTitle': 'AI 对话',
+  'ai.exportModel': '模型',
+  'ai.exportTime': '导出时间',
+  'ai.exportQuestion': '问题 {index}',
+  'ai.exportAnswer': '回答 {index}',
+  'ai.exportCitation': '引用',
+  'ai.exportUnverified': '未通过校验',
+  'ai.checkingClaims': '正在核对引文与论点…',
+  'ai.entailmentPartial': '引文仅部分支持该论点',
+  'ai.entailmentPartialShort': '部分支持',
+  'ai.entailmentUnsupported': '引文未支持该论点',
+  'ai.entailmentUnsupportedShort': '论点未获支持',
+  'ai.entailmentNotice': '{count} 条引文与论点不符，已置灰且不写入批注',
+  'ai.claimCheck': '论点核对',
+  'settings.sectionAi': 'AI 功能',
+  'settings.graphAutoBuildHint': '解析完成后自动生成单篇知识图谱',
+  'settings.graphAutoBuildUnavailable': '需要可用的 AI 模型与图谱引擎',
+  'toast.autoGraph': '解析完成，已开始自动生成知识图谱',
   'toast.graphBuilt': '知识图谱已生成',
   'toast.graphUpdated': '知识图谱已更新',
   'err.aiUnavailable': 'AI 服务不可用（{message}）',
@@ -722,6 +867,147 @@ const EN = {
   'graph.insight': 'Insight',
   'graph.paper': 'Paper',
   'graph.topic': 'Topic',
+  // AI modules (ui/chat.js, ui/graph.js) read these from the app dictionary.
+  // Source: the former per-module copy decks; docs/AI-SPEC.md §6.
+  'ai.modelDefault': 'Default model',
+  'ai.modelUnavailable': 'Model unavailable',
+  'ai.unavailableTitle': 'AI model not ready',
+  'ai.loadingHistory': 'Loading conversation…',
+  'ai.historyError': 'Could not load the conversation.',
+  'ai.quickSummary': 'Summarize the paper',
+  'ai.quickSolved': 'What problem does this paper solve?',
+  'ai.quickMethod': 'What is the method?',
+  'ai.quickLimits': 'What are the limitations?',
+  'ai.quickConcept': 'Explain this concept',
+  'ai.hint': '⌘/Ctrl + Enter to send · Shift + Enter for a new line',
+  'ai.busyHint': 'Answering… you can draft the next question',
+  'ai.answerEmpty': 'No answer arrived. Try again.',
+  'ai.dismiss': 'Dismiss',
+  'ai.citationsCount': '{count} citations',
+  'ai.unverifiedNotice': '{count} citations failed verification. They are dimmed and are not saved as annotations.',
+  'ai.citationLabel': 'Citation {index}',
+  'ai.citationLabelPage': 'Citation {index}, page {page}',
+  'ai.missingCitation': 'Citation {index} (data missing)',
+  'ai.jump': 'Jump to source',
+  'ai.unverifiedShort': 'Unverified',
+  'ai.annotationsNotice': 'Marked {count} citations in the paper',
+  'ai.selection': 'Selection',
+  'ai.visible': 'Current paragraph',
+  'ai.noDocument': 'Select a parsed paper first.',
+  'ai.errHost': 'The AI service is not ready yet. Try again shortly.',
+  'ai.errModel': 'The model is unavailable. Check the default model in DSH.',
+  'ai.errFailed': 'The model call failed. Try again.',
+  'ai.errContext': 'The retrieved context is too long. Narrow the question.',
+  'ai.errAborted': 'Generation was interrupted.',
+  'ai.errNetwork': 'The request failed. Try again.',
+  'ai.errGeneric': 'This question did not finish.',
+  'ai.followups': 'Follow up',
+  'ai.legendTitle': 'Colour legend',
+  'ai.navLabel': 'Question navigator',
+  'ai.navJump': 'Jump to question {index}',
+  'ai.navQuestion': 'Question {index}',
+  'ai.toLatest': 'Back to latest',
+  'graph.edgesTrimmed': 'showing {shown}/{total} relations',
+  'graph.aspectLegend': 'Annotation colours',
+  'graph.aspect.definition': 'definition/context',
+  'graph.aspect.method': 'method',
+  'graph.aspect.result': 'result',
+  'graph.aspect.limitation': 'limitation',
+  'graph.canvas': 'Knowledge graph canvas',
+  'graph.sources': 'Sources',
+  'graph.documents': 'Papers',
+  'graph.relations': 'Connections',
+  'graph.noSummary': 'No summary',
+  'graph.noSources': 'No source location',
+  'graph.noRelations': 'No connections',
+  'graph.more': '{count} more',
+  'graph.filtered': 'Showing {shown} / {total} nodes',
+  'graph.collapsed': '{count} nodes folded',
+  'graph.zoom': 'Zoom {percent}%',
+  'graph.zoomIn': 'Zoom in',
+  'graph.zoomOut': 'Zoom out',
+  'graph.resetView': 'Reset view',
+  'graph.hint': 'Scroll to zoom · drag a node to pin it',
+  'graph.noMatches': 'No matching nodes',
+  'graph.noMatchesHint': 'Try another keyword, or clear the filters.',
+  'graph.clearFilters': 'Clear filters',
+  'graph.unavailableHint': 'Set up an available model to build and explore knowledge graphs.',
+  'graph.clusterSummary': '{count} {type} nodes are folded here',
+  'graph.members': 'Members',
+  'graph.expandCluster': 'Expand this group',
+  'graph.degree': '{count} connections',
+  'graph.source.ai-summary': 'AI reading',
+  'graph.source.qa': 'Q&A',
+  'graph.source.user': 'Manual',
+  'graph.source.aggregate': 'Aggregate',
+  'graph.edge.defines': 'defines',
+  'graph.edge.uses': 'uses',
+  'graph.edge.supports': 'supports',
+  'graph.edge.contradicts': 'contradicts',
+  'graph.edge.part_of': 'part of',
+  'graph.edge.leads_to': 'leads to',
+  'graph.edge.evolves_from': 'evolves from',
+  'graph.edge.relates': 'relates',
+  'graph.edge.answers': 'answers',
+  'graph.edge.mentions': 'mentions',
+  'graph.edge.shares': 'shares topics',
+  // AI curation / export / entailment / margin-filter copy (this round).
+  'notes.filterLabel': 'Filter notes',
+  'notes.filterAll': 'All',
+  'notes.filterAi': 'AI notes',
+  'notes.filterUser': 'My notes',
+  'notes.filterAspect': 'By aspect',
+  'notes.filterEmpty': 'No notes match this filter',
+  'notes.filterClear': 'Clear filter',
+  'notes.filteredCount': 'Showing {shown} / {total}',
+  'notes.aiOrigin': 'AI note · {aspect}',
+  'notes.aiOriginPlain': 'AI note',
+  'notes.userOrigin': 'My note',
+  'notes.sparkTitle': 'Created by AI reading',
+  'graph.curate': 'Curate',
+  'graph.rename': 'Rename',
+  'graph.renameTitle': 'Rename node',
+  'graph.renamePlaceholder': 'Node name',
+  'graph.renameSave': 'Save',
+  'graph.renameCancel': 'Cancel',
+  'graph.renameEmpty': 'The name cannot be empty',
+  'graph.renameFailed': 'Rename failed',
+  'graph.merge': 'Merge into…',
+  'graph.mergeTitle': 'Merge nodes',
+  'graph.mergeHint': 'Click the target node to merge into',
+  'graph.mergeConfirm': 'Confirm merge',
+  'graph.mergeCancel': 'Cancel merge',
+  'graph.merged': 'Nodes merged',
+  'graph.mergeFailed': 'Merge failed',
+  'graph.pin': 'Pin position',
+  'graph.unpin': 'Unpin',
+  'graph.pinned': 'Position pinned',
+  'graph.pinFailed': 'Pin failed',
+  'graph.curationReadOnly': 'The library map is aggregated from the papers and cannot be edited directly',
+  'graph.curationSaved': 'Saved',
+  'graph.saving': 'Saving…',
+  'graph.cancel': 'Cancel',
+  'ai.export': 'Export conversation',
+  'ai.exported': 'Conversation exported',
+  'ai.exportFailed': 'Could not export the conversation',
+  'ai.exportTitle': 'AI conversation',
+  'ai.exportModel': 'Model',
+  'ai.exportTime': 'Exported',
+  'ai.exportQuestion': 'Question {index}',
+  'ai.exportAnswer': 'Answer {index}',
+  'ai.exportCitation': 'Citation',
+  'ai.exportUnverified': 'Unverified',
+  'ai.checkingClaims': 'Checking citations against claims…',
+  'ai.entailmentPartial': 'The quote only partly supports this claim',
+  'ai.entailmentPartialShort': 'Partly supported',
+  'ai.entailmentUnsupported': 'The quote does not support this claim',
+  'ai.entailmentUnsupportedShort': 'Claim unsupported',
+  'ai.entailmentNotice': '{count} citations do not support their claims; dimmed and not annotated',
+  'ai.claimCheck': 'Claim check',
+  'settings.sectionAi': 'AI features',
+  'settings.graphAutoBuildHint': 'Build the paper knowledge graph automatically after parsing',
+  'settings.graphAutoBuildUnavailable': 'Needs an available AI model and graph engine',
+  'toast.autoGraph': 'Parsing finished — building the knowledge graph',
   'toast.graphBuilt': 'Knowledge graph built',
   'toast.graphUpdated': 'Knowledge graph updated',
   'err.aiUnavailable': 'AI service unavailable ({message})',
@@ -1340,6 +1626,9 @@ const MRU_GLYPHS = {
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-14v5l3 2',
   spark: 'M12 3l2.1 6.3L21 12l-6.9 2.7L12 21l-2.1-6.3L3 12l6.9-2.7L12 3Z',
   graph: 'M6 4.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm12 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-6 11a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-4.6-6.9 4.1 5.6m4.1-5.6-4.1 5.6',
+  edit: 'M4 20h4L20 8l-4-4L4 16v4Zm9-13 4 4',
+  pin: 'M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
+  merge: 'M7 4v5a3 3 0 0 0 3 3h8m0 0-3-3m3 3-3 3M7 20v-3',
 };
 
 /** Render one inline stroke glyph. */
@@ -2979,16 +3268,25 @@ function MruMargin(props) {
   const {
     t, tab, onTabChange, model, annotations, droppedCount, activeAnnotationId,
     activeHeadingKey, onOutlineClick, onNoteClick, onNoteDelete, docTitle, aiPanelProps,
-    staleAnnotations,
+    staleAnnotations, notesFilter, onNotesFilterChange,
   } = props;
   const activeTab = MRU_MARGIN_TABS.includes(tab) ? tab : 'outline';
+  const originFilter = MRU_NOTES_FILTERS.includes(notesFilter) ? notesFilter : 'all';
+  const [aspectFilter, setAspectFilter] = React.useState(null);
   const outlineAll = model && Array.isArray(model.outline) ? model.outline : [];
   const titleText = String(docTitle || '').trim().toLowerCase();
   const outline = outlineAll.filter((item) => !(titleText !== ''
     && Number(item.level) === 1
     && String(item.text || '').trim().toLowerCase() === titleText));
   const tabClass = (value) => 'mru-tab' + (activeTab === value ? ' mru-tab--active' : '');
+  /** Aspect label key for one annotation aspect, or '' when unknown. */
+  const aspectLabelKey = (aspect) => {
+    const entry = MRU_ASPECT_LEGEND.find((item) => item.aspect === aspect);
+    return entry === undefined ? '' : entry.labelKey;
+  };
   let body;
+  let notesFilterNode = null;
+  let legendNode = null;
   if (activeTab === 'ai') {
     body = aiPanelProps
       ? h(MruAiSurface, Object.assign({ key: `ai-${aiPanelProps.documentId}` }, aiPanelProps))
@@ -3012,30 +3310,111 @@ function MruMargin(props) {
   } else {
     const notes = Array.isArray(annotations) ? annotations : [];
     const stale = Array.isArray(staleAnnotations) ? staleAnnotations : [];
+    const total = notes.length + stale.length;
+    const aiCount = notes.filter((annotation) => annotation.origin === 'ai').length
+      + stale.filter((annotation) => annotation.origin === 'ai').length;
+    const userCount = total - aiCount;
+    const matchOrigin = (annotation) => {
+      if (originFilter === 'ai') return annotation.origin === 'ai';
+      if (originFilter === 'user') return annotation.origin !== 'ai';
+      return true;
+    };
+    const matchAspect = (annotation) => aspectFilter === null
+      || (typeof annotation.aspect === 'string' && annotation.aspect === aspectFilter);
+    const visibleNotes = notes.filter((annotation) => matchOrigin(annotation) && matchAspect(annotation));
+    const visibleStale = stale.filter((annotation) => matchOrigin(annotation) && matchAspect(annotation));
+    const shown = visibleNotes.length + visibleStale.length;
+    const filterActive = originFilter !== 'all' || aspectFilter !== null;
+    const clearFilters = () => {
+      setAspectFilter(null);
+      if (originFilter !== 'all' && typeof onNotesFilterChange === 'function') onNotesFilterChange('all');
+    };
+    if (total > 0) {
+      const chips = [
+        ['all', 'notes.filterAll', total],
+        ['ai', 'notes.filterAi', aiCount],
+        ['user', 'notes.filterUser', userCount],
+      ];
+      notesFilterNode = h('div', { className: 'mru-note-filter', role: 'group', 'aria-label': t('notes.filterLabel') },
+        h('div', { className: 'mru-note-filter__chips' },
+          chips.map(([value, labelKey, count]) => h('button', {
+            key: value,
+            type: 'button',
+            className: 'mru-note-filter__chip' + (originFilter === value ? ' mru-note-filter__chip--active' : ''),
+            'aria-pressed': originFilter === value ? 'true' : 'false',
+            'data-filter': value,
+            onClick: () => {
+              if (typeof onNotesFilterChange === 'function') {
+                onNotesFilterChange(originFilter === value && value !== 'all' ? 'all' : value);
+              }
+            },
+          }, t(labelKey), h('span', { className: 'mru-note-filter__count' }, String(count)))),
+          h('span', { key: 'aspects', className: 'mru-note-filter__aspects', role: 'group', 'aria-label': t('notes.filterAspect') },
+            MRU_ASPECT_LEGEND.map((entry) => h('button', {
+              key: entry.aspect,
+              type: 'button',
+              className: 'mru-note-filter__aspect mru-note-filter__aspect--' + entry.color
+                + (aspectFilter === entry.aspect ? ' mru-note-filter__aspect--active' : ''),
+              'data-aspect': entry.aspect,
+              'aria-pressed': aspectFilter === entry.aspect ? 'true' : 'false',
+              'aria-label': t(entry.labelKey),
+              title: t(entry.labelKey),
+              onClick: () => setAspectFilter((current) => (current === entry.aspect ? null : entry.aspect)),
+            }, h('span', {
+              className: 'mru-note-filter__dot mru-note-filter__dot--' + entry.aspect,
+              'aria-hidden': 'true',
+            }))))),
+        filterActive
+          ? h('div', { className: 'mru-note-filter__status' },
+              h('span', null, t('notes.filteredCount', { shown, total })),
+              h('button', {
+                type: 'button',
+                className: 'mru-note-filter__clear',
+                onClick: clearFilters,
+              }, t('notes.filterClear')))
+          : null);
+      legendNode = h('div', { className: 'mru-margin__legend' }, h(MruAspectLegend, { t }));
+    }
     const list = [];
     if (droppedCount > 0) {
       list.push(h('div', { key: 'notice', className: 'mru-margin__notice' }, t('margin.dropped', { count: droppedCount })));
     }
-    if (stale.length > 0) {
+    if (visibleStale.length > 0) {
       list.push(h('div', {
         key: 'stale-notice',
         className: 'mru-margin__notice mru-margin__notice--stale',
         role: 'status',
-      }, t('notes.staleNotice', { count: stale.length })));
+      }, t('notes.staleNotice', { count: visibleStale.length })));
     }
-    if (notes.length === 0 && stale.length === 0) {
+    if (total === 0) {
       list.push(h('div', { key: 'empty', className: 'mru-margin__empty' }, t('margin.empty')));
+    } else if (shown === 0) {
+      list.push(h('div', { key: 'filter-empty', className: 'mru-margin__empty mru-margin__empty--filtered' },
+        h('span', null, t('notes.filterEmpty')),
+        h('button', {
+          type: 'button',
+          className: 'mru-link-btn',
+          onClick: clearFilters,
+        }, t('notes.filterClear'))));
     } else {
-      notes.forEach((annotation) => {
+      visibleNotes.forEach((annotation) => {
         const active = activeAnnotationId !== null && activeAnnotationId === annotation.id;
+        const labelKey = aspectLabelKey(annotation.aspect);
+        const aiOrigin = annotation.origin === 'ai';
         list.push(h('article', {
           key: annotation.id,
-          className: 'mru-note' + (active ? ' mru-note--active' : ''),
+          className: 'mru-note' + (active ? ' mru-note--active' : '') + (aiOrigin ? ' mru-note--ai' : ''),
           'data-annotation-id': annotation.id,
+          'data-origin': annotation.origin || 'user',
           onClick: () => onNoteClick(annotation),
         },
           h('div', { className: 'mru-note__head' },
             h('span', { className: 'mru-note__swatch', 'data-color': annotation.color || 'yellow', 'aria-hidden': 'true' }),
+            aiOrigin
+              ? h('span', { className: 'mru-note__origin', title: t('notes.sparkTitle') },
+                  h(MruGlyph, { name: 'spark', size: 11 }),
+                  h('span', null, labelKey !== '' ? t('notes.aiOrigin', { aspect: t(labelKey) }) : t('notes.aiOriginPlain')))
+              : null,
             h('span', { className: 'mru-note__time' }, mruFormatNoteTime(annotation.updatedAt || annotation.createdAt, t)),
             h('button', {
               type: 'button',
@@ -3050,33 +3429,39 @@ function MruMargin(props) {
           h('blockquote', { className: 'mru-note__quote' }, mruDisplayText(annotation.quote)),
           annotation.note ? h('p', { className: 'mru-note__body' }, annotation.note) : null));
       });
-    }
-    if (stale.length > 0) {
-      list.push(h('section', { key: 'stale-section', className: 'mru-margin__stale' },
-        h('h3', { className: 'mru-margin__stale-title' }, t('notes.staleSection')),
-        stale.map((annotation) => h('article', {
-          key: `stale-${annotation.id}`,
-          className: 'mru-note mru-note--stale',
-          'data-annotation-id': annotation.id,
-          'data-stale': annotation.staleReason || 'true',
-          // No jump-to-text affordance: this anchor no longer resolves.
-        },
-          h('div', { className: 'mru-note__head' },
-            h('span', { className: 'mru-note__swatch', 'data-color': annotation.color || 'yellow', 'aria-hidden': 'true' }),
-            h('span', { className: 'mru-note__stale-tag' }, t('notes.staleTag')),
-            h('span', { className: 'mru-note__time' }, mruFormatNoteTime(annotation.updatedAt || annotation.createdAt, t)),
-            h('button', {
-              type: 'button',
-              className: 'mru-icon-btn mru-note__delete',
-              'aria-label': t('margin.noteDelete'),
-              title: t('margin.noteDelete'),
-              onClick: (event) => {
-                event.stopPropagation();
-                onNoteDelete(annotation);
-              },
-            }, h(MruGlyph, { name: 'trash' }))),
-          h('blockquote', { className: 'mru-note__quote' }, mruDisplayText(annotation.quote)),
-          annotation.note ? h('p', { className: 'mru-note__body' }, annotation.note) : null))));
+      if (visibleStale.length > 0) {
+        list.push(h('section', { key: 'stale-section', className: 'mru-margin__stale' },
+          h('h3', { className: 'mru-margin__stale-title' }, t('notes.staleSection')),
+          visibleStale.map((annotation) => h('article', {
+            key: `stale-${annotation.id}`,
+            className: 'mru-note mru-note--stale' + (annotation.origin === 'ai' ? ' mru-note--ai' : ''),
+            'data-annotation-id': annotation.id,
+            'data-origin': annotation.origin || 'user',
+            'data-stale': annotation.staleReason || 'true',
+            // No jump-to-text affordance: this anchor no longer resolves.
+          },
+            h('div', { className: 'mru-note__head' },
+              h('span', { className: 'mru-note__swatch', 'data-color': annotation.color || 'yellow', 'aria-hidden': 'true' }),
+              annotation.origin === 'ai'
+                ? h('span', { className: 'mru-note__origin', title: t('notes.sparkTitle') },
+                    h(MruGlyph, { name: 'spark', size: 11 }),
+                    h('span', null, t('notes.aiOriginPlain')))
+                : null,
+              h('span', { className: 'mru-note__stale-tag' }, t('notes.staleTag')),
+              h('span', { className: 'mru-note__time' }, mruFormatNoteTime(annotation.updatedAt || annotation.createdAt, t)),
+              h('button', {
+                type: 'button',
+                className: 'mru-icon-btn mru-note__delete',
+                'aria-label': t('margin.noteDelete'),
+                title: t('margin.noteDelete'),
+                onClick: (event) => {
+                  event.stopPropagation();
+                  onNoteDelete(annotation);
+                },
+              }, h(MruGlyph, { name: 'trash' }))),
+            h('blockquote', { className: 'mru-note__quote' }, mruDisplayText(annotation.quote)),
+            annotation.note ? h('p', { className: 'mru-note__body' }, annotation.note) : null))));
+      }
     }
     body = h('div', { className: 'mru-notes' }, list);
   }
@@ -3103,9 +3488,8 @@ function MruMargin(props) {
         'aria-selected': activeTab === 'ai' ? 'true' : 'false',
         onClick: () => onTabChange('ai'),
       }, h(MruGlyph, { name: 'spark', size: 13 }), h('span', { className: 'mru-tab__label' }, t('margin.ai')))),
-    activeTab === 'notes'
-      ? h('div', { className: 'mru-margin__legend' }, h(MruAspectLegend, { t }))
-      : null,
+    notesFilterNode,
+    legendNode,
     h('div', { className: 'mru-margin__body' }, body));
 }
 
@@ -3437,6 +3821,20 @@ function MruNoteEditor({ t, editor, onNoteChange, onColorChange, onCancel, onSav
     'aria-label': t('noteeditor.title'),
     style: { left: `${pos.left}px`, top: `${pos.top}px` },
   },
+    editor.origin === 'ai'
+      ? h('div', { className: 'mru-noteeditor__head' },
+          h('span', { className: 'mru-noteeditor__origin', title: t('notes.sparkTitle') },
+            h(MruGlyph, { name: 'spark', size: 11 }),
+            h('span', null, t('notes.aiOriginPlain'))),
+          editor.aspect && MRU_ASPECT_LEGEND.some((entry) => entry.aspect === editor.aspect)
+            ? h('span', { className: 'mru-noteeditor__aspect' },
+                h('span', {
+                  className: 'mru-noteeditor__aspect-dot mru-aspect-legend__dot--' + editor.aspect,
+                  'aria-hidden': 'true',
+                }),
+                t('aspect.' + editor.aspect))
+            : null)
+      : null,
     h('blockquote', { className: 'mru-noteeditor__quote' }, mruDisplayText(editor.quote)),
     h('textarea', {
       className: 'mru-textarea mru-noteeditor__input',
@@ -3497,6 +3895,7 @@ function MruSettingsModal(props) {
   const tokenConfigured = Boolean(status && status.tokenConfigured);
   const tokenPersistent = status ? status.tokenPersistent !== false : true;
   const prefs = props.prefs || MRU_DEFAULT_PREFS;
+  const aiGraphReady = Boolean(mruAiState(status).graph);
   const providerOptions = mruProviderOptions(settings);
   const configuredHint = tokenConfigured
     ? (tokenPersistent ? t('settings.tokenSaved') : t('settings.tokenMemory'))
@@ -3580,17 +3979,25 @@ function MruSettingsModal(props) {
               }
             },
           })),
-        h('div', { className: 'mru-toggle-row mru-toggle-row--plain' },
+      ),
+      h('section', { className: 'mru-section' },
+        h('h3', { className: 'mru-section__title' }, t('settings.sectionAi')),
+        h('div', { className: 'mru-toggle-row mru-toggle-row--plain' + (aiGraphReady ? '' : ' mru-toggle-row--disabled') },
           h('span', { className: 'mru-toggle-row__text' },
-            h('span', { className: 'mru-toggle-row__title' }, t('settings.graphAutoBuild'))),
+            h('span', { className: 'mru-toggle-row__title' }, t('settings.graphAutoBuild')),
+            h('span', { className: 'mru-toggle-row__hint' },
+              aiGraphReady ? t('settings.graphAutoBuildHint') : t('settings.graphAutoBuildUnavailable'))),
           h('span', {
-            className: 'mru-switch' + (prefs.graphAutoBuild ? ' mru-switch--on' : ''),
+            className: 'mru-switch' + (prefs.graphAutoBuild ? ' mru-switch--on' : '') + (aiGraphReady ? '' : ' mru-switch--disabled'),
             role: 'switch',
             'aria-checked': prefs.graphAutoBuild ? 'true' : 'false',
-            tabIndex: 0,
-            onClick: () => onUpdatePrefs({ graphAutoBuild: !prefs.graphAutoBuild }),
+            'aria-disabled': aiGraphReady ? undefined : 'true',
+            tabIndex: aiGraphReady ? 0 : -1,
+            onClick: () => {
+              if (aiGraphReady) onUpdatePrefs({ graphAutoBuild: !prefs.graphAutoBuild });
+            },
             onKeyDown: (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+              if (aiGraphReady && (event.key === 'Enter' || event.key === ' ')) {
                 event.preventDefault();
                 onUpdatePrefs({ graphAutoBuild: !prefs.graphAutoBuild });
               }
@@ -3734,6 +4141,7 @@ function mruNormalizePrefs(raw) {
   if (typeof prefs.translationProvider !== 'string' || prefs.translationProvider === '') prefs.translationProvider = 'auto';
   prefs.aiPanelOpen = prefs.aiPanelOpen === true;
   prefs.graphAutoBuild = prefs.graphAutoBuild === true;
+  prefs.notesFilter = MRU_NOTES_FILTERS.includes(prefs.notesFilter) ? prefs.notesFilter : 'all';
   prefs.libraryView = MRU_LIBRARY_VIEWS.includes(prefs.libraryView) ? prefs.libraryView : 'library';
   prefs.docView = MRU_DOC_VIEWS.includes(prefs.docView) ? prefs.docView : 'read';
   prefs.marginTab = MRU_MARGIN_TABS.includes(prefs.marginTab)
@@ -3808,6 +4216,7 @@ function MineruApp(props) {
   // AI upgrade (docs/AI-SPEC.md §6): view switches, margin conversation, graphs.
   const [libraryView, setLibraryView] = React.useState('library');
   const [docView, setDocView] = React.useState('read');
+  const [notesFilter, setNotesFilter] = React.useState('all');
   const [aiSelectionContext, setAiSelectionContext] = React.useState(null);
   const [aiParagraphContext, setAiParagraphContext] = React.useState(null);
   const [aiVisible, setAiVisible] = React.useState(null);
@@ -3830,6 +4239,10 @@ function MineruApp(props) {
   const apiRef = React.useRef({});
   const annotationsStoreRef = React.useRef([]);
   const staleAnnotationsRef = React.useRef([]);
+  // Ids this client is authoritative about for the additive annotation merge
+  // (docs/AI-SPEC.md §2 "concurrent writers"): loaded annotations plus every
+  // one created here; never ids that only arrived from another writer.
+  const annotationsBaseIdsRef = React.useRef(new Set());
   const translationsStoreRef = React.useRef({ targetLanguage: 'zh', entries: {} });
   const translationInflightRef = React.useRef(new Set());
   const translationFlashTimerRef = React.useRef(null);
@@ -3904,6 +4317,7 @@ function MineruApp(props) {
       viewsInitializedRef.current = true;
       setLibraryView(nextPrefs.libraryView);
       setDocView(nextPrefs.docView);
+      setNotesFilter(nextPrefs.notesFilter);
     }
   };
 
@@ -3927,14 +4341,7 @@ function MineruApp(props) {
           toast(mruDocErrorMessage({ error: doc.parse.repairError }), 'error');
         } else if (doc.status === 'parsed') toast(t('toast.parsed', { title: doc.title || doc.originalName || '' }));
         else if (doc.status === 'failed') toast(t('toast.parseFailed', { message: mruDocErrorMessage(doc) }), 'error');
-        if (doc.status === 'parsed' && previous !== 'parsed'
-          && latestRef.current.prefs.graphAutoBuild && mruAiState(latestRef.current.status).graph
-          && !autoBuiltGraphsRef.current.has(doc.id)) {
-          autoBuiltGraphsRef.current.add(doc.id);
-          window.setTimeout(() => {
-            if (mountedRef.current) void buildDocGraph(doc.id);
-          }, 800);
-        }
+        if (doc.status === 'parsed' && previous !== 'parsed') autoBuildGraphFor(doc);
       }
     }
     prevStatusesRef.current = nextStatuses;
@@ -3976,6 +4383,33 @@ function MineruApp(props) {
   };
 
   // --- persistence queues ------------------------------------------------
+  /** The three-way merge baseline sent with every whole-list annotation save. */
+  const annotationBaseIds = () => {
+    const set = annotationsBaseIdsRef.current;
+    return set instanceof Set ? Array.from(set) : [];
+  };
+  /**
+   * Send one whole-list annotation save. `baseIds` lets the host merge instead
+   * of replace: ids the client never saw (a concurrent Q&A/agent annotation)
+   * are kept, while ids the client knew and dropped stay deleted.
+   */
+  const postAnnotationsSave = (docId, list) => mruPost('annotations.save', {
+    id: docId,
+    annotations: list,
+    baseIds: annotationBaseIds(),
+  }).then((value) => {
+    if (!value || !Array.isArray(value.items) || latestRef.current.selectedId !== docId) return value;
+    const known = new Set();
+    for (const item of annotationsStoreRef.current) if (item && typeof item.id === 'string') known.add(item.id);
+    for (const item of staleAnnotationsRef.current) if (item && typeof item.id === 'string') known.add(item.id);
+    // A concurrent writer added an annotation we have never rendered: reload so
+    // it appears in the margin (and enters the merge baseline) instead of
+    // silently staying invisible.
+    if (value.items.some((item) => item && typeof item.id === 'string' && !known.has(item.id))) {
+      void reloadAnnotations(docId);
+    }
+    return value;
+  });
   const flushAnnotations = () => {
     if (annTimerRef.current) {
       clearTimeout(annTimerRef.current);
@@ -3984,7 +4418,7 @@ function MineruApp(props) {
     const pending = annPendingRef.current;
     annPendingRef.current = null;
     if (!pending || !pending.id) return;
-    void mruPost('annotations.save', { id: pending.id, annotations: pending.list }).catch((error) => {
+    void postAnnotationsSave(pending.id, pending.list).catch((error) => {
       if (latestRef.current.selectedId === pending.id) toast(mruErrorText(t, error), 'error');
     });
   };
@@ -3997,7 +4431,7 @@ function MineruApp(props) {
       const pending = annPendingRef.current;
       annPendingRef.current = null;
       if (!pending || !pending.id) return;
-      void mruPost('annotations.save', { id: pending.id, annotations: pending.list }).catch((error) => {
+      void postAnnotationsSave(pending.id, pending.list).catch((error) => {
         if (latestRef.current.selectedId === pending.id) toast(mruErrorText(t, error), 'error');
       });
     }, 800);
@@ -4037,6 +4471,7 @@ function MineruApp(props) {
   const clearDocumentState = (id) => {
     annotationsStoreRef.current = [];
     staleAnnotationsRef.current = [];
+    annotationsBaseIdsRef.current = new Set();
     setStaleAnnotations([]);
     translationsStoreRef.current = { targetLanguage: 'zh', entries: {} };
     setAnnotations([]);
@@ -4127,6 +4562,7 @@ function MineruApp(props) {
         translations: translationData,
       });
       annotationsStoreRef.current = [];
+      annotationsBaseIdsRef.current = new Set();
       if (document.status === 'parsed') {
         await loadReader(id, document);
       } else {
@@ -4255,18 +4691,38 @@ function MineruApp(props) {
     }
   };
 
+  /** Safe download filename for user-facing exports (keeps the extension). */
+  const mruSafeExportName = (name) => {
+    const raw = String(name || 'export.md').trim();
+    const cleaned = raw.replace(/[\\/:*?"<>|]/g, '_').trim();
+    return cleaned === '' ? 'export.md' : cleaned;
+  };
+
+  /** Trigger a client-side text download; returns whether the click happened. */
+  const mruDownloadText = (filename, text, mime) => {
+    try {
+      const blob = new Blob([String(text === undefined || text === null ? '' : text)], {
+        type: mime || 'text/markdown;charset=utf-8',
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = mruSafeExportName(filename);
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
   const exportDocument = async (doc) => {
     if (!doc) return;
     try {
       const value = await mruPost('document.markdown', { id: doc.id });
       const markdown = value && typeof value.markdown === 'string' ? value.markdown : '';
-      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = `${String(doc.title || doc.originalName || 'document').replace(/[\\/:*?"<>|]/g, '_')}.md`;
-      anchor.click();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      const filename = `${String(doc.title || doc.originalName || 'document')}.md`;
+      if (!mruDownloadText(filename, markdown)) throw new Error('download unavailable');
       toast(t('toast.exported'));
     } catch (error) {
       toast(mruErrorText(t, error), 'error');
@@ -4355,6 +4811,7 @@ function MineruApp(props) {
     };
     const next = annotationsStoreRef.current.concat([annotation]);
     annotationsStoreRef.current = next;
+    if (annotationsBaseIdsRef.current instanceof Set) annotationsBaseIdsRef.current.add(annotation.id);
     setAnnotations(next);
     queueAnnotationsSave(latestRef.current.selectedId, mruMergeAnnotations(next, staleAnnotationsRef.current));
     flashAnnotation(annotation.id);
@@ -4413,6 +4870,8 @@ function MineruApp(props) {
       quote: annotation.quote,
       note: annotation.note || '',
       color: annotation.color || 'yellow',
+      origin: annotation.origin || 'user',
+      aspect: annotation.aspect || '',
       rect,
     });
     flashAnnotation(id);
@@ -4786,6 +5245,14 @@ function MineruApp(props) {
     void updatePrefs({ marginTab: tab, aiPanelOpen: tab === 'ai' });
   };
 
+  /** Persist the margin-note origin filter ("全部 / AI 批注 / 我的批注"). */
+  const changeNotesFilter = (value) => {
+    const next = MRU_NOTES_FILTERS.includes(value) ? value : 'all';
+    if (latestRef.current.notesFilter === next) return;
+    setNotesFilter(next);
+    void updatePrefs({ notesFilter: next });
+  };
+
   /** Open the margin conversation (quick actions / Cmd-J). */
   const openAiPanel = () => {
     if (latestRef.current.libraryView === 'graph') {
@@ -5048,6 +5515,42 @@ function MineruApp(props) {
       if (docGraphAbortRef.current === controller) docGraphAbortRef.current = null;
     }
   };
+
+  /**
+   * Auto-build a paper graph once per session when the preference is on
+   * (docs/AI-SPEC.md §6/§9). The parse-transition watcher and the empty-graph
+   * view trigger share this guard, so a parse never kicks off two builds.
+   */
+  const autoBuildGraphFor = (doc) => {
+    const state = latestRef.current;
+    const id = doc && typeof doc.id === 'string' ? doc.id : '';
+    if (id === '' || !state.prefs.graphAutoBuild || !mruAiState(state.status).graph) return false;
+    if (autoBuiltGraphsRef.current.has(id)) return false;
+    autoBuiltGraphsRef.current.add(id);
+    toast(t('toast.autoGraph'));
+    window.setTimeout(() => {
+      if (mountedRef.current) void buildDocGraph(id);
+    }, 800);
+    return true;
+  };
+
+  // Auto-build switch: opening a parsed paper whose graph is still empty also
+  // triggers the build (covers a reload while the paper was being parsed).
+  // Reads the latest state through the ref so it can stay above the derived
+  // state declarations in this component.
+  React.useEffect(() => {
+    const state = latestRef.current || {};
+    if (state.docView !== 'graph') return;
+    const list = Array.isArray(state.docs) ? state.docs : [];
+    const detailDoc = state.detail && state.detail.document ? state.detail.document : null;
+    const doc = list.find((item) => item && item.id === state.selectedId)
+      || (detailDoc && detailDoc.id === state.selectedId ? detailDoc : null);
+    const graphState = state.docGraph || {};
+    if (!doc || doc.status !== 'parsed') return;
+    if (graphState.phase !== 'ready' || graphState.building || !graphState.graph) return;
+    if (Array.isArray(graphState.graph.nodes) && graphState.graph.nodes.length > 0) return;
+    autoBuildGraphFor(doc);
+  }, [docView, docGraph]);
 
   const loadLibraryGraph = async () => {
     if (!docGraphEnabled()) {
@@ -5436,6 +5939,7 @@ function MineruApp(props) {
     katexReady,
     libraryView,
     docView,
+    notesFilter,
     aiSelectionContext,
     aiParagraphContext,
     aiVisible,
@@ -5604,6 +6108,10 @@ function MineruApp(props) {
     }
     annotationsStoreRef.current = normalized;
     staleAnnotationsRef.current = stale;
+    const baseIds = new Set();
+    for (const annotation of normalized) if (annotation && typeof annotation.id === 'string') baseIds.add(annotation.id);
+    for (const annotation of stale) if (annotation && typeof annotation.id === 'string') baseIds.add(annotation.id);
+    annotationsBaseIdsRef.current = baseIds;
     setAnnotations(normalized);
     setStaleAnnotations(stale);
     setDroppedAnnotations(dropped);
@@ -5821,7 +6329,11 @@ function MineruApp(props) {
       const pendingAnnotations = annPendingRef.current;
       annPendingRef.current = null;
       if (pendingAnnotations && pendingAnnotations.id) {
-        void mruPost('annotations.save', { id: pendingAnnotations.id, annotations: pendingAnnotations.list }).catch(() => {});
+        void mruPost('annotations.save', {
+          id: pendingAnnotations.id,
+          annotations: pendingAnnotations.list,
+          baseIds: annotationBaseIds(),
+        }).catch(() => {});
       }
       const pendingTranslations = transPendingRef.current;
       transPendingRef.current = null;
@@ -5985,6 +6497,7 @@ function MineruApp(props) {
       signal: handlers && handlers.signal,
     }),
     onNotify: (text, kind) => toast(text, kind),
+    onExportConversation: (markdown, filename) => mruDownloadText(filename, markdown),
     onClearContext: (kind) => clearAiContext(kind),
     focusSeq: aiFocusSeq,
     onOpenSettings: openSettings,
@@ -6006,16 +6519,30 @@ function MineruApp(props) {
       const id = latestRef.current.selectedId;
       if (id) void loadDocGraph(id);
     },
-    onUpdateGraph: (nodes, edges) => {
+    // Graph curation (rename / merge / pin): patch = { nodes?, edges?, merge? }.
+    // Keeps the legacy (nodes, edges) call shape working; resolves the updated KG.
+    onUpdateGraph: (patch, legacyEdges) => {
       const id = latestRef.current.selectedId;
-      if (!id) return;
-      void mruPost('graph.update', { documentId: id, nodes: nodes || [], edges: edges || [] })
+      if (!id) return Promise.resolve(null);
+      const source = Array.isArray(patch)
+        ? { nodes: patch, edges: legacyEdges }
+        : (patch && typeof patch === 'object' ? patch : {});
+      const payload = { documentId: id };
+      if (Array.isArray(source.nodes)) payload.nodes = source.nodes;
+      if (Array.isArray(source.edges)) payload.edges = source.edges;
+      if (Array.isArray(source.merge)) payload.merge = source.merge;
+      return mruPost('graph.update', payload)
         .then((value) => {
-          if (value && value.graph) {
-            setDocGraph((previous) => ({ ...previous, graph: value.graph, phase: 'ready', available: true, error: '' }));
+          const graph = value && value.graph ? value.graph : null;
+          if (graph) {
+            setDocGraph((previous) => ({ ...previous, graph, phase: 'ready', available: true, error: '' }));
           }
+          return graph;
         })
-        .catch((error) => toast(mruErrorText(t, error), 'error'));
+        .catch((error) => {
+          toast(mruErrorText(t, error), 'error');
+          throw error;
+        });
     },
   };
   const libraryGraphViewProps = {
@@ -6196,6 +6723,8 @@ function MineruApp(props) {
         annotations,
         staleAnnotations,
         droppedCount: droppedAnnotations,
+        notesFilter,
+        onNotesFilterChange: changeNotesFilter,
         activeAnnotationId,
         activeHeadingKey,
         onOutlineClick: (item) => {

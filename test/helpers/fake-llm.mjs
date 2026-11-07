@@ -49,6 +49,7 @@
 export const ANSWER_FENCE = 'litnotes-json'
 export const GRAPH_FENCE = 'litnotes-graph'
 export const SUMMARY_FENCE = 'litnotes-summary'
+export const ENTAILMENT_FENCE = 'litnotes-entailment'
 
 const DEFAULT_CHUNK_SIZE = 24
 
@@ -126,6 +127,21 @@ export function summaryText(summary = {}) {
     },
     SUMMARY_FENCE,
   )}\n`
+}
+
+/**
+ * Citation–claim entailment model output: a ```litnotes-entailment fence.
+ * @param {{ index?: number, verdict?: string, reason?: string }[]} [results]
+ */
+export function entailmentText(results = []) {
+  const normalized = Array.isArray(results)
+    ? results.map((entry) => ({
+        index: entry?.index,
+        verdict: entry?.verdict,
+        reason: entry?.reason ?? '',
+      }))
+    : []
+  return `${jsonFence({ results: normalized }, ENTAILMENT_FENCE)}\n`
 }
 
 /**
@@ -249,6 +265,8 @@ function normalizeScript(script, chunkSize = DEFAULT_CHUNK_SIZE) {
  *   callCount(): number,
  *   lastCall(): object | undefined,
  *   lastPrompt(): string,
+ *   callsMatching(needle: string): object[],
+ *   lastCallMatching(needle: string): object | undefined,
  *   stream(request?: object): AsyncGenerator<object>,
  * }}
  */
@@ -377,6 +395,19 @@ export function createFakeLlm(options = {}) {
     },
     lastPrompt() {
       return calls.at(-1)?.prompt ?? ''
+    },
+    /**
+     * Recorded calls whose flattened system+prompt contains `needle`
+     * (in call order). Useful to separate the answer call from the entailment
+     * pass of one chat turn.
+     * @param {string} needle
+     */
+    callsMatching(needle) {
+      return calls.filter((call) => `${call.system}\n${call.prompt}`.includes(String(needle)))
+    },
+    /** Last recorded call matching `needle`, or undefined. */
+    lastCallMatching(needle) {
+      return llm.callsMatching(needle).at(-1)
     },
     stream(request) {
       return streamImpl(request ?? {})

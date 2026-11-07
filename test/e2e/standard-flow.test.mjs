@@ -120,7 +120,9 @@ test('service annotations, translations and document reads round-trip', async (t
       color: 'sage',
     },
   ]
-  assert.deepEqual(await harness.service.saveAnnotations(doc.id, annotations), { saved: true })
+  const savedAnnotations = await harness.service.saveAnnotations(doc.id, annotations)
+  assert.equal(savedAnnotations.saved, true)
+  assert.equal(savedAnnotations.items.length, 2, 'saveAnnotations returns the persisted merged list')
   const afterSave = await harness.service.getDocument(doc.id)
   assert.equal(afterSave.annotations.version, 1)
   assert.equal(afterSave.annotations.items.length, 2)

@@ -339,3 +339,74 @@ test('graph.doc rejects unknown documents with a not-found envelope', async (t) 
   assert.equal(response.body.ok, false)
   assert.equal(response.body.error.code, 'not-found')
 })
+
+test('graph.update applies a curation payload (rename/pin/merge) and persists it', async (t) => {
+  const harness = await createAiHarness(t)
+  if (!(await requireGraphEngine(t, harness))) return
+  scriptGraphLlm(harness)
+  const build = harness.startStream(AI_ROUTES.graphBuild, { documentId: harness.documentId, force: true })
+  await settleStream(build.settled)
+  assert.equal(frameOfType(build.frames, 'error'), undefined)
+
+  const before = envelopeValue(
+    await harness.invokeJson(AI_ROUTES.graphDoc, {
+      method: 'POST',
+      payload: { documentId: harness.documentId },
+    }),
+    'graph.doc',
+  ).graph
+  assert.ok(before.nodes.length >= 3, 'the scripted build yields at least three nodes')
+  const [first, second, third] = before.nodes
+
+  const updated = await harness.invokeJson(AI_ROUTES.graphUpdate, {
+    method: 'POST',
+    payload: {
+      documentId: harness.documentId,
+      nodes: [
+        { id: first.id, label: 'Curated Label', pinned: true, position: { x: 420.51, y: 860.23 } },
+        { id: second.id, pinned: true, position: { x: 120, y: 240 } },
+      ],
+      merge: [{ from: third.id, into: second.id }],
+    },
+  })
+  assert.equal(updated.status, 200)
+  const graph = envelopeValue(updated, 'graph.update').graph
+
+  const curated = graph.nodes.find((node) => node.id === first.id)
+  assert.ok(curated, 'the renamed node keeps its id')
+  assert.equal(curated.label, 'Curated Label')
+  assert.equal(curated.source, first.source, 'a node edit without source never clobbers provenance')
+  assert.equal(curated.curated, true)
+  assert.equal(curated.pinned, true)
+  assert.deepEqual(curated.position, { x: 420.5, y: 860.2 }, 'the pinned position is clamped/rounded')
+
+  const target = graph.nodes.find((node) => node.id === second.id)
+  assert.equal(target.pinned, true)
+  assert.deepEqual(target.position, { x: 120, y: 240 })
+
+  assert.equal(graph.nodes.some((node) => node.id === third.id), false, 'the merged source node is removed')
+  assert.equal(graph.nodes.length, before.nodes.length - 1)
+  assert.equal(graph.stats.nodes, graph.nodes.length)
+  assert.equal(graph.stats.edges, graph.edges.length)
+  assert.ok(graph.edges.every((edge) => edge.from !== edge.to), 'merge drops self-loops')
+  assert.ok(
+    graph.edges.every(
+      (edge) => graph.nodes.some((node) => node.id === edge.from)
+        && graph.nodes.some((node) => node.id === edge.to),
+    ),
+    'merge leaves no dangling edges',
+  )
+
+  const readBack = envelopeValue(
+    await harness.invokeJson(AI_ROUTES.graphDoc, {
+      method: 'POST',
+      payload: { documentId: harness.documentId },
+    }),
+    'graph.doc',
+  ).graph
+  const persisted = readBack.nodes.find((node) => node.id === first.id)
+  assert.equal(persisted.label, 'Curated Label')
+  assert.equal(persisted.pinned, true)
+  assert.deepEqual(persisted.position, { x: 420.5, y: 860.2 })
+  assert.equal(readBack.nodes.some((node) => node.id === third.id), false, 'the merge is persisted')
+})

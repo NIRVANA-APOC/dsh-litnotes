@@ -6075,6 +6075,563 @@ circle.mru-graph__node[data-related="true"] {
   }
 }
 
+/* --------------------------------------------------------------------------
+   18.6 Curation & trust round — AI margin filter, graph curation, exported
+   chats and the citation-claim check. Chrome reuses the desk's ink/rule
+   language; the four annotation inks stay the only chroma.
+   -------------------------------------------------------------------------- */
+
+/* Margin note filter — origin chips + aspect toggles above the note list. */
+.mru-note-filter {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 9px 16px;
+  border-bottom: 1px solid var(--mru-rule);
+}
+
+.mru-note-filter__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.mru-note-filter__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--mru-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.mru-note-filter__chip:hover {
+  border-color: var(--mru-rule-strong);
+  color: var(--mru-ink);
+}
+
+.mru-note-filter__chip--active {
+  border-color: color-mix(in srgb, var(--mru-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--mru-accent) 10%, transparent);
+  color: var(--mru-ink);
+  font-weight: 500;
+}
+
+.mru-note-filter__count {
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mru-note-filter__chip--active .mru-note-filter__count {
+  color: var(--mru-ink-soft);
+}
+
+.mru-note-filter__aspects {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--mru-rule);
+}
+
+.mru-note-filter__aspect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.mru-note-filter__aspect:hover {
+  border-color: var(--mru-rule-strong);
+}
+
+.mru-note-filter__aspect--active {
+  border-color: color-mix(in srgb, var(--mru-ink) 38%, transparent);
+  background: color-mix(in srgb, var(--mru-ink) 6%, transparent);
+}
+
+.mru-note-filter__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mru-ink) 14%, transparent);
+}
+
+.mru-note-filter__dot--definition,
+.mru-note-filter__dot--context {
+  background: var(--mru-hl-yellow);
+}
+
+.mru-note-filter__dot--method {
+  background: var(--mru-hl-sage);
+}
+
+.mru-note-filter__dot--result {
+  background: var(--mru-hl-sky);
+}
+
+.mru-note-filter__dot--limitation {
+  background: var(--mru-hl-rose);
+}
+
+.mru-note-filter__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.mru-note-filter__clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.mru-note-filter__clear:hover {
+  color: var(--mru-ink);
+}
+
+/* AI-origin marker on a margin note (spark + aspect label). */
+.mru-note--ai {
+  border-color: color-mix(in srgb, var(--mru-ink) 24%, var(--mru-rule-strong));
+}
+
+.mru-note__origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--mru-ink-soft);
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mru-note__origin > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mru-note__origin svg {
+  flex: none;
+  color: var(--mru-accent);
+}
+
+.mru-margin__empty--filtered {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.mru-margin__empty--filtered .mru-link-btn {
+  font-size: 11.5px;
+}
+
+/* Note editor: show where an AI note came from while editing it. */
+.mru-noteeditor__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.mru-noteeditor__origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mru-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.mru-noteeditor__origin svg {
+  color: var(--mru-accent);
+}
+
+.mru-noteeditor__aspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.mru-noteeditor__aspect-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* --------------------------------------------------------------------------
+   18.6.1 Graph curation — rename / merge / pin on the document graph card
+   -------------------------------------------------------------------------- */
+
+.mru-graph__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-graph__card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--mru-rule);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mru-ink-soft);
+  font-family: var(--mru-font-ui);
+  font-size: 10.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.mru-graph__card-action:hover {
+  border-color: var(--mru-rule-strong);
+  color: var(--mru-ink);
+}
+
+.mru-graph__card-action--active,
+.mru-graph__card-action[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--mru-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--mru-accent) 9%, transparent);
+  color: var(--mru-ink);
+}
+
+.mru-graph__card-action:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.mru-graph__rename {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mru-rule);
+}
+
+.mru-graph__rename-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--mru-rule-strong);
+  border-radius: 6px;
+  background: var(--mru-surface);
+  color: var(--mru-ink);
+  font-family: var(--mru-font-ui);
+  font-size: 12px;
+}
+
+.mru-graph__rename-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mru-accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.mru-graph__rename-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mru-graph__rename-error,
+.mru-graph__curation-error {
+  color: color-mix(in srgb, var(--mru-error) 72%, var(--mru-ink));
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.mru-graph__merge-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 8px 9px;
+  border: 1px dashed color-mix(in srgb, var(--mru-accent) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mru-accent) 5%, transparent);
+  color: var(--mru-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.mru-graph__merge-bar .mru-graph__card-action {
+  height: 22px;
+}
+
+.mru-graph__merge-target {
+  color: var(--mru-ink);
+  font-weight: 500;
+}
+
+.mru-graph__node--pinned .mru-graph__node-label {
+  font-weight: 600;
+}
+
+.mru-graph__node-pin {
+  color: var(--mru-ink-soft);
+  pointer-events: none;
+}
+
+.mru-graph__saving {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.mru-graph__curation-note {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* Curation interactions emitted by ui/graph.js: merge picking, pending/error
+   rows and the persisted-pin marker. */
+.mru-graph__node-pin-group {
+  pointer-events: none;
+}
+
+.mru-graph__node-pin {
+  fill: var(--mru-accent);
+  stroke: var(--mru-paper-bg);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.mru-graph__node--merge-source > circle:last-of-type,
+circle.mru-graph__node--merge-source {
+  stroke: var(--mru-accent);
+  stroke-width: 2.6;
+  stroke-dasharray: 4 2;
+}
+
+.mru-graph__node--merge-candidate {
+  cursor: copy;
+}
+
+.mru-graph__node--merge-candidate > circle:last-of-type,
+circle.mru-graph__node--merge-candidate {
+  fill: color-mix(in srgb, var(--mru-accent) 22%, var(--mru-paper-bg));
+  stroke: var(--mru-accent);
+  stroke-width: 2;
+  stroke-dasharray: 2 2;
+}
+
+.mru-graph__merge-hint {
+  color: var(--mru-ink-soft);
+}
+
+.mru-graph__merge-title {
+  color: var(--mru-ink-soft);
+  font-weight: 500;
+}
+
+.mru-graph__merge-labels {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  color: var(--mru-ink);
+}
+
+.mru-graph__merge-node {
+  overflow: hidden;
+  color: var(--mru-ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mru-graph__merge-arrow {
+  color: var(--mru-accent);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.mru-graph__merge-bar--hint {
+  border-style: dashed;
+}
+
+.mru-graph__merge-bar--confirm {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--mru-accent) 52%, transparent);
+  background: color-mix(in srgb, var(--mru-accent) 8%, transparent);
+}
+
+.mru-graph__card-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.mru-graph__card-pending::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--mru-ink) 22%, transparent);
+  border-top-color: var(--mru-accent);
+  border-radius: 50%;
+  animation: mru-spin 720ms linear infinite;
+}
+
+.mru-graph__card-error {
+  margin: 8px 0 0;
+  color: color-mix(in srgb, var(--mru-error) 72%, var(--mru-ink));
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.mru-graph__card-notice {
+  margin: 8px 0 0;
+  color: var(--mru-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-graph__card-pending::before {
+    animation: none;
+    border-top-color: color-mix(in srgb, var(--mru-ink) 32%, transparent);
+  }
+
+  .mru-graph__node--merge-source > circle:last-of-type,
+  .mru-graph__node--merge-candidate > circle:last-of-type {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   18.6.2 Citation-claim entailment states in the chat panel
+   -------------------------------------------------------------------------- */
+
+.mru-ai__citation--partial {
+  border-bottom: 1px dotted color-mix(in srgb, var(--mru-warn) 70%, transparent);
+  color: color-mix(in srgb, var(--mru-warn) 42%, var(--mru-ink-soft));
+}
+
+.mru-ai__citation--partial:hover,
+.mru-ai__citation--partial:focus-visible {
+  color: var(--mru-ink);
+}
+
+.mru-ai__claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.mru-ai__claim--partial {
+  color: color-mix(in srgb, var(--mru-warn) 40%, var(--mru-ink-soft));
+}
+
+.mru-ai__claim--unsupported {
+  color: color-mix(in srgb, var(--mru-error) 60%, var(--mru-ink));
+}
+
+.mru-ai__notice--entailment {
+  color: var(--mru-ink-soft);
+}
+
+/* --------------------------------------------------------------------------
+   18.6.3 Settings: disabled AI switch, and motion/responsive appendices
+   -------------------------------------------------------------------------- */
+
+.mru-switch--disabled,
+.mru-switch[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mru-toggle-row--disabled {
+  cursor: default;
+}
+
+.mru-toggle-row--disabled .mru-toggle-row__title {
+  color: var(--mru-ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mru-note-filter__chip,
+  .mru-note-filter__aspect,
+  .mru-graph__card-action {
+    transition: none;
+  }
+}
+
+@container mru-desk (max-width: 560px) {
+  .mru-note-filter {
+    padding-left: 12px;
+  }
+
+  .mru-note-filter__aspects {
+    margin-left: 2px;
+    padding-left: 6px;
+  }
+
+  .mru-graph__card-actions {
+    gap: 3px;
+  }
+
+  .mru-graph__card-action {
+    height: 22px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+}
+
 /* ==========================================================================
    19. UI polish round (docs/UI-POLISH-SPEC.md)
 

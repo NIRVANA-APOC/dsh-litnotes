@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseMarkdown, plainTextOfBlock } from '../../ui/markdown.js'
-import { createFakeLlm, litnotesAnswerText } from '../helpers/fake-llm.mjs'
+import { createFakeLlm, entailmentText, litnotesAnswerText } from '../helpers/fake-llm.mjs'
 import { createLlmGateway } from '../../lib/ai/llm.js'
 import { createRetriever } from '../../lib/ai/retrieval.js'
 import {
@@ -19,7 +19,7 @@ import {
   normalizeQuoteText,
   splitModelOutput,
 } from '../../lib/ai/chat.js'
-import { PROMPT_VERSION } from '../../lib/ai/prompts.js'
+import { ANSWER_FENCE_TAG, CHAT_SYSTEM, ENTAILMENT_FENCE_TAG, PROMPT_VERSION } from '../../lib/ai/prompts.js'
 
 const quietLogger = { debug() {}, warn() {}, error() {} }
 const DOC_ID = 'doc-1'
@@ -72,10 +72,26 @@ function blockWith(markdown, fragment) {
   return block
 }
 
-/** Build an in-memory store with aux + annotation support. */
+/**
+ * Build an in-memory store with aux + annotation support.
+ *
+ * Serializes annotation/aux read-modify-write operations on one promise chain,
+ * mirroring the host store's per-document write queue, so the concurrency tests
+ * are meaningful. `loadAnnotations`/`saveAnnotations` keep the legacy
+ * whole-list semantics; `mutateAnnotations`/`mutateAux` are the atomic helpers
+ * the chat engine prefers.
+ */
 function makeStore({ markdown = MARKDOWN, contentList = null, annotations = [], readCode = null, title } = {}) {
   const aux = new Map()
   const state = { annotations: { version: 1, items: structuredClone(annotations) } }
+  const clone = (value) => (value === undefined ? undefined : structuredClone(value))
+  let chain = Promise.resolve()
+  /** Serialize one task on the store's write chain (like the real per-doc queue). */
+  function serial(task) {
+    const run = chain.then(task, task)
+    chain = run.then(() => undefined, () => undefined)
+    return run
+  }
   const store = {
     aux,
     state,
@@ -90,26 +106,85 @@ function makeStore({ markdown = MARKDOWN, contentList = null, annotations = [], 
     get() {
       return { id: DOC_ID, title: title ?? 'Sparse Attention for Long Documents' }
     },
-    async readAux(id, name) {
-      const value = aux.get(`${id}/${name}`)
-      return value === undefined ? null : structuredClone(value)
+    readAux(id, name) {
+      return serial(async () => {
+        const value = aux.get(`${id}/${name}`)
+        return value === undefined ? null : clone(value)
+      })
     },
-    async writeAux(id, name, value) {
-      aux.set(`${id}/${name}`, structuredClone(value))
+    writeAux(id, name, value) {
+      return serial(async () => {
+        aux.set(`${id}/${name}`, clone(value))
+      })
     },
-    async loadAnnotations() {
-      return structuredClone(state.annotations)
+    loadAnnotations() {
+      return serial(async () => clone(state.annotations))
     },
-    async saveAnnotations(id, data) {
-      state.annotations = structuredClone(data)
-      return structuredClone(state.annotations)
+    saveAnnotations(id, data) {
+      return serial(async () => {
+        const normalized = {
+          version: 1,
+          items: (Array.isArray(data?.items) ? data.items : []).map((item) => clone(item)),
+        }
+        if (Array.isArray(data?.baseIds)) {
+          const base = new Set(data.baseIds)
+          const incoming = new Set(normalized.items.map((item) => item?.id))
+          for (const item of state.annotations.items) {
+            if (base.has(item.id) || incoming.has(item.id)) continue
+            normalized.items.push(clone(item))
+          }
+        }
+        state.annotations = normalized
+        return clone(normalized)
+      })
+    },
+    mutateAnnotations(id, mutate) {
+      return serial(async () => {
+        const draft = state.annotations.items.map((item) => clone(item))
+        const mutated = await mutate(draft)
+        const items = Array.isArray(mutated)
+          ? mutated
+          : mutated !== null && typeof mutated === 'object' && Array.isArray(mutated.items)
+            ? mutated.items
+            : draft
+        state.annotations = { version: 1, items: items.map((item) => clone(item)) }
+        return clone(state.annotations)
+      })
+    },
+    mutateAux(id, name, mutate) {
+      return serial(async () => {
+        const current = aux.has(`${id}/${name}`) ? clone(aux.get(`${id}/${name}`)) : null
+        const next = await mutate(current)
+        if (next === undefined) return undefined
+        aux.set(`${id}/${name}`, clone(next))
+        return clone(next)
+      })
     },
   }
   return store
 }
 
-/** Build a chat service over fakes. */
-function makeChat({ store = makeStore(), fake = createFakeLlm(), hostLlm, config = {}, onGraphDelta } = {}) {
+/**
+ * Build a chat service over fakes.
+ *
+ * The citation–claim entailment pass is a second model call per answer: a
+ * persistent fake-llm rule matched on its fence tag answers it (default: no
+ * verdicts → citations stay verified as `unchecked`), so queued scripts keep
+ * scripting the answer call. `mutate:false` omits the atomic store hooks to
+ * exercise the load/save fallback.
+ */
+function makeChat({
+  store = makeStore(),
+  fake = createFakeLlm(),
+  hostLlm,
+  config = {},
+  onGraphDelta,
+  mutate = true,
+  entailment = { text: entailmentText([]) },
+} = {}) {
+  if (entailment !== false && typeof fake?.match === 'function') {
+    fake.match(ENTAILMENT_FENCE_TAG, entailment)
+  }
   const llm = createLlmGateway({
     getLlm: () => hostLlm ?? fake,
     getDefaultModel: () => ({ provider: 'fake-provider', model: 'fake-model' }),
@@ -133,6 +208,12 @@ function makeChat({ store = makeStore(), fake = createFakeLlm(), hostLlm, config
     logger: quietLogger,
     loadAnnotations: (id) => store.loadAnnotations(id),
     saveAnnotations: (id, data) => store.saveAnnotations(id, data),
+    ...(mutate === false
+      ? {}
+      : {
+          mutateAnnotations: (id, fn) => store.mutateAnnotations(id, fn),
+          mutateAux: (id, name, fn) => store.mutateAux(id, name, fn),
+        }),
     onGraphDelta,
   })
   return { chat, store, fake }
@@ -143,6 +224,11 @@ async function collectFrames(chat, request) {
   const frames = []
   for await (const frame of chat.stream(request)) frames.push(frame)
   return frames
+}
+
+/** Prompt of the most recent grounded-answer call (never the entailment pass). */
+function chatPrompt(fake) {
+  return fake.lastCallMatching(ANSWER_FENCE_TAG)?.prompt ?? ''
 }
 
 /** Standard question payload. */
@@ -577,7 +663,7 @@ test('previous conversation turns are injected into the prompt and trimmed by hi
     store.aux.set(`${DOC_ID}/chat.json`, structuredClone({ version: 1, messages: seededMessages }))
     const { chat } = makeChat({ store, fake, config: { ai: { historyTurns } } })
     await collectFrames(chat, question())
-    return fake.lastPrompt()
+    return chatPrompt(fake)
   }
 
   const twoTurns = await promptFor(2)
@@ -605,7 +691,7 @@ test('the prompt carries the reading focus (block + selection)', async () => {
       focus: { blockKey: limitations.key, selectionQuote: 'requires a warm-up phase' },
     }),
   )
-  const prompt = fake.lastPrompt()
+  const prompt = chatPrompt(fake)
   assert.ok(prompt.includes('Reader focus'))
   assert.ok(prompt.includes(limitations.key))
   assert.ok(prompt.includes('requires a warm-up phase'))
@@ -760,7 +846,6 @@ test('chat forwards the configured reasoningEffort (low by default) to the host'
     }
   }
   await collectFrames(makeChat({ hostLlm: recordingHost(), store: makeStore() }).chat, question())
-  assert.equal(calls[0].reasoningEffort, 'low')
   await collectFrames(
     makeChat({
       hostLlm: recordingHost(),
@@ -769,7 +854,10 @@ test('chat forwards the configured reasoningEffort (low by default) to the host'
     }).chat,
     question(),
   )
-  assert.equal(calls[1].reasoningEffort, 'off')
+  const chatCalls = calls.filter((call) => call.system === CHAT_SYSTEM)
+  assert.equal(chatCalls.length, 2)
+  assert.equal(chatCalls[0].reasoningEffort, 'low')
+  assert.equal(chatCalls[1].reasoningEffort, 'off')
 })
 
 test('abort stops the turn without persisting or annotating', async () => {
@@ -801,6 +889,311 @@ test('an already-aborted request never reaches the model', async () => {
   assert.equal(frames.length, 1)
   assert.equal(frames[0].code, 'aborted')
   assert.equal(fake.callCount(), 0)
+})
+
+// ---------------------------------------------------------------------------
+// Citation–claim entailment second pass (docs/AI-SPEC.md §5)
+// ---------------------------------------------------------------------------
+
+test('entailment verdicts mark citations, keep partial, and drop unsupported evidence', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const results = blockWith(MARKDOWN, '2.4x')
+  const limitations = blockWith(MARKDOWN, 'Routing adds latency')
+  const graphCalls = []
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is block-sparse attention [1]. It improves throughput [2]. It has no limitations [3].',
+    citations: [
+      { index: 1, blockKey: method.key, quote: 'We propose block-sparse attention with learned routing.', aspect: 'method', note: 'The method is block-sparse attention.' },
+      { index: 2, blockKey: results.key, quote: 'improves throughput by 2.4x with equal accuracy', aspect: 'result', note: 'It improves throughput by 2.4x.' },
+      { index: 3, blockKey: limitations.key, quote: 'Routing adds latency on short sequences', aspect: 'limitation', note: 'The paper reports no limitations.' },
+    ],
+    knowledge: {
+      nodes: [
+        { type: 'method', label: 'block-sparse attention', summary: 'Sparse attention with routing.', blockKeys: [method.key] },
+        { type: 'finding', label: 'no limitations', summary: 'Fabricated claim.', blockKeys: [limitations.key] },
+      ],
+      edges: [{ from: 'block-sparse attention', to: 'no limitations', type: 'relates' }],
+    },
+  })
+  const entailment = {
+    text: entailmentText([
+      { index: 1, verdict: 'supported', reason: 'The quote states the method.' },
+      { index: 2, verdict: 'partial', reason: 'The quote gives the number but not the claim wording.' },
+      { index: 3, verdict: 'unsupported', reason: 'The quote says routing adds latency.' },
+    ]),
+  }
+  const store = makeStore()
+  const { chat } = makeChat({
+    store,
+    fake,
+    entailment,
+    onGraphDelta: async (documentId, delta) => {
+      graphCalls.push(delta)
+      return null
+    },
+  })
+  const frames = await collectFrames(chat, question())
+
+  // Phase frame: after the streamed answer, before the answer frame.
+  const phaseAt = frames.findIndex((frame) => frame.type === 'phase')
+  const answerAt = frames.findIndex((frame) => frame.type === 'answer')
+  const firstDeltaAt = frames.findIndex((frame) => frame.type === 'delta')
+  assert.ok(phaseAt !== -1, 'an entailment phase frame was emitted')
+  assert.equal(frames[phaseAt].phase, 'entailment')
+  assert.ok(phaseAt > firstDeltaAt, 'the phase frame follows the streamed answer')
+  assert.ok(phaseAt < answerAt, 'the phase frame precedes the answer frame')
+
+  const answer = frames[answerAt]
+  assert.equal(answer.citations.length, 2, 'supported + partial citations stay verified')
+  const [supported, partial] = answer.citations
+  assert.equal(supported.entailment, 'supported')
+  assert.equal(supported.verified, true)
+  assert.match(supported.entailmentReason, /states the method/)
+  assert.equal(partial.entailment, 'partial')
+  assert.equal(partial.verified, true)
+  assert.equal(answer.unverified.length, 1)
+  const rejected = answer.unverified[0]
+  assert.equal(rejected.index, 3)
+  assert.equal(rejected.blockKey, limitations.key)
+  assert.equal(rejected.verified, false)
+  assert.equal(rejected.reason, 'entailment-unsupported')
+  assert.equal(rejected.entailment, 'unsupported')
+  assert.match(rejected.entailmentReason, /latency/)
+  assert.equal(rejected.start, undefined, 'unverified entailment entries carry no offsets')
+  assert.equal(rejected.page, undefined)
+  assert.deepEqual(answer.entailment, { checked: true, supported: 1, partial: 1, unsupported: 1 })
+
+  // Annotations: supported + partial only; the unsupported citation never annotates.
+  assert.equal(answer.annotationIds.length, 2)
+  assert.equal(store.state.annotations.items.length, 2)
+
+  // Graph knowledge: evidence from the dropped citation is excluded.
+  assert.equal(graphCalls.length, 1)
+  assert.deepEqual(graphCalls[0].nodes.map((node) => node.label), ['block-sparse attention'])
+  assert.deepEqual(graphCalls[0].edges, [])
+
+  // The entailment call uses the dedicated prompt, fence tag and token budget.
+  const entailmentCall = fake.lastCallMatching(ENTAILMENT_FENCE_TAG)
+  assert.ok(entailmentCall !== undefined, 'the entailment model call happened')
+  assert.equal(entailmentCall.maxTokens, 600)
+  assert.match(entailmentCall.prompt, /\[3\] \(limitation\) claim: The paper reports no limitations\./)
+  assert.match(entailmentCall.prompt, /quote: "Routing adds latency on short sequences"/)
+
+  // Persistence + history normalization keep citation-level and summary fields.
+  const assistant = chatFile(store).messages.at(-1)
+  assert.deepEqual(assistant.entailment, { checked: true, supported: 1, partial: 1, unsupported: 1 })
+  assert.equal(assistant.citations[1].entailment, 'partial')
+  assert.equal(assistant.unverified[0].reason, 'entailment-unsupported')
+  const history = await chat.history(DOC_ID)
+  const persisted = history.at(-1)
+  assert.deepEqual(persisted.entailment, { checked: true, supported: 1, partial: 1, unsupported: 1 })
+  assert.equal(persisted.citations[0].entailment, 'supported')
+  assert.equal(persisted.citations[1].entailment, 'partial')
+  assert.equal(persisted.unverified[0].entailment, 'unsupported')
+  assert.match(persisted.unverified[0].entailmentReason, /latency/)
+})
+
+test('entailment fail-open: malformed output keeps citations verified as unchecked', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const { chat } = makeChat({
+    fake,
+    entailment: { text: 'I could not decide.\n\n```litnotes-entailment\n{not valid json}\n```' },
+  })
+  const frames = await collectFrames(chat, question())
+  assert.ok(frames.some((frame) => frame.type === 'phase' && frame.phase === 'entailment'))
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.equal(answer.citations.length, 1)
+  assert.equal(answer.citations[0].verified, true)
+  assert.equal(answer.citations[0].entailment, 'unchecked')
+  assert.equal(answer.unverified.length, 0)
+  assert.deepEqual(answer.entailment, { checked: false, supported: 0, partial: 0, unsupported: 0 })
+  assert.equal(answer.annotationIds.length, 1, 'the answer still annotates verified citations')
+  assert.equal(frames.at(-1).type, 'done')
+})
+
+test('entailment fail-open: a classifier model error never fails the answer', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake, entailment: { error: new Error('classifier exploded') } })
+  const frames = await collectFrames(chat, question())
+  assert.equal(frames.some((frame) => frame.type === 'error'), false)
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.equal(answer.citations[0].entailment, 'unchecked')
+  assert.equal(answer.citations[0].verified, true)
+  assert.deepEqual(answer.entailment, { checked: false, supported: 0, partial: 0, unsupported: 0 })
+  assert.equal(answer.annotationIds.length, 1)
+  assert.equal(chatFile(store).messages.length, 2, 'the turn persisted despite the entailment failure')
+  const history = await chat.history(DOC_ID)
+  assert.equal(history.length, 2)
+  assert.equal(history.at(-1).citations[0].entailment, 'unchecked')
+  assert.deepEqual(history.at(-1).entailment, { checked: false, supported: 0, partial: 0, unsupported: 0 })
+  assert.equal(frames.at(-1).type, 'done')
+})
+
+test('entailmentCheck:false skips the phase frame, the model call and citation fields', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake, config: { ai: { entailmentCheck: false } } })
+  const frames = await collectFrames(chat, question())
+  assert.equal(frames.some((frame) => frame.type === 'phase'), false)
+  assert.equal(fake.callCount(), 1, 'only the answer call was made')
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.equal(answer.citations[0].verified, true)
+  assert.equal('entailment' in answer.citations[0], false)
+  assert.equal('entailmentReason' in answer.citations[0], false)
+  assert.deepEqual(answer.entailment, { checked: false, supported: 0, partial: 0, unsupported: 0 })
+  assert.equal(answer.annotationIds.length, 1)
+  assert.equal(frames.at(-1).type, 'done')
+})
+
+test('annotation creation falls back to load/save when the atomic store helper is absent', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake, mutate: false })
+  const frames = await collectFrames(chat, question())
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.equal(answer.annotationIds.length, 1)
+  assert.equal(store.state.annotations.items.length, 1)
+  assert.deepEqual(answer.annotationIds, store.state.annotations.items.map((item) => item.id))
+  // The chat turn itself also persisted through the readAux/writeAux fallback.
+  assert.equal(chatFile(store).messages.length, 2)
+})
+
+// ---------------------------------------------------------------------------
+// Concurrent writers (docs/AI-SPEC.md §2; PLAN C3)
+// ---------------------------------------------------------------------------
+
+test('interleaved concurrent chat turns persist both conversations', async () => {
+  const fake = createFakeLlm()
+  fake.queueAnswer({ markdown: 'Answer alpha from the paper.' })
+  fake.queueAnswer({ markdown: 'Answer beta from the paper.' })
+  const store = makeStore()
+  const { chat } = makeChat({ store, fake })
+  const first = collectFrames(chat, question({ question: 'First question?' }))
+  const second = collectFrames(chat, question({ question: 'Second question?' }))
+  await Promise.all([first, second])
+
+  const file = chatFile(store)
+  assert.equal(file.messages.length, 4, 'both user + assistant pairs persisted')
+  const questions = file.messages.filter((message) => message.role === 'user').map((message) => message.question).sort()
+  assert.deepEqual(questions, ['First question?', 'Second question?'])
+  assert.equal(file.messages.filter((message) => message.role === 'assistant').length, 2)
+  assert.equal((await chat.history(DOC_ID)).length, 4)
+})
+
+test('an interleaved client annotation save keeps the user edit and the AI note', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const results = blockWith(MARKDOWN, '2.4x')
+  const userNote = {
+    id: 'user-note-1',
+    blockKey: method.key,
+    start: 0,
+    end: 10,
+    quote: 'We propose',
+    note: 'my note',
+    color: 'sage',
+    aspect: 'method',
+    origin: 'user',
+  }
+  const store = makeStore({ annotations: [userNote] })
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'It improves throughput by 2.4x [1].',
+    citations: [{ index: 1, blockKey: results.key, quote: 'improves throughput by 2.4x with equal accuracy', aspect: 'result', note: 'result claim' }],
+    knowledge: { nodes: [{ type: 'finding', label: 'throughput gain', summary: '2.4x', blockKeys: [results.key] }] },
+  })
+  const { chat } = makeChat({ store, fake })
+  const framesPromise = collectFrames(chat, question())
+  // The client saves its edited list with the base id set it had loaded.
+  const savePromise = store.saveAnnotations(DOC_ID, {
+    version: 1,
+    items: [{ ...userNote, note: 'my edited note' }],
+    baseIds: [userNote.id],
+  })
+  const [frames] = await Promise.all([framesPromise, savePromise])
+
+  const loaded = await store.loadAnnotations(DOC_ID)
+  assert.equal(loaded.items.length, 2, 'neither concurrent writer was lost')
+  const edited = loaded.items.find((item) => item.id === userNote.id)
+  assert.equal(edited.note, 'my edited note')
+  assert.equal(edited.origin, 'user')
+  const aiNote = loaded.items.find((item) => item.origin === 'ai')
+  assert.ok(aiNote !== undefined)
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.deepEqual(answer.annotationIds, [aiNote.id])
+
+  // Client-side deletes win for base ids; concurrent AI additions survive.
+  const afterDelete = await store.saveAnnotations(DOC_ID, { version: 1, items: [], baseIds: [userNote.id] })
+  assert.equal(afterDelete.items.length, 1)
+  assert.equal(afterDelete.items[0].id, aiNote.id)
+})
+
+test('aborting during the entailment pass aborts the turn without persisting', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const store = makeStore()
+  const { chat } = makeChat({
+    store,
+    fake,
+    // Slow classifier call so the abort lands inside the entailment request.
+    entailment: { text: entailmentText([{ index: 1, verdict: 'supported', reason: 'ok' }]), delayMs: 100 },
+  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 30)
+  const frames = await collectFrames(chat, question({ signal: controller.signal }))
+  clearTimeout(timer)
+  assert.ok(frames.some((frame) => frame.type === 'phase' && frame.phase === 'entailment'))
+  assert.equal(frames.some((frame) => frame.type === 'answer'), false, 'no answer frame after an abort')
+  assert.equal(frames.at(-1).type, 'error')
+  assert.equal(frames.at(-1).code, 'aborted')
+  assert.equal(chatFile(store), null, 'a half turn is never persisted')
+  assert.equal(store.state.annotations.items.length, 0)
+})
+
+test('an annotation save failure never fails the answer', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const store = makeStore()
+  store.mutateAnnotations = async () => {
+    throw new Error('disk full')
+  }
+  const { chat } = makeChat({ store, fake })
+  const frames = await collectFrames(chat, question())
+  const answer = frames.find((frame) => frame.type === 'answer')
+  assert.ok(answer !== undefined)
+  assert.deepEqual(answer.annotationIds, [], 'failed annotation writes report no ids')
+  assert.equal(frames.some((frame) => frame.type === 'error'), false)
+  assert.equal(frames.at(-1).type, 'done')
+  assert.equal(chatFile(store).messages.length, 2, 'the turn still persisted')
 })
 
 // ---------------------------------------------------------------------------

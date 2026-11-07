@@ -33,6 +33,13 @@ const MRU_GRAPH_EDGE_TYPES = [
   'leads_to', 'evolves_from', 'relates', 'answers', 'mentions',
 ];
 
+/** Known node provenance values (AI-SPEC §2); unknown sources stay verbatim. */
+const MRU_GRAPH_SOURCES = ['ai-summary', 'qa', 'user', 'aggregate'];
+
+/** Curation contract (PLAN C1): rename label cap and position precision/range. */
+const MRU_GRAPH_RENAME_MAX = 80;
+const MRU_GRAPH_POSITION_MAX = 2000;
+
 /** Fixed SVG user-space; the DOM canvas scales this with preserveAspectRatio. */
 const MRU_GRAPH_CANVAS_WIDTH = 1000;
 const MRU_GRAPH_CANVAS_HEIGHT = 680;
@@ -53,181 +60,10 @@ const MRU_GRAPH_MAX_ZOOM = 3.2;
 const MRU_GRAPH_WHEEL_ZOOM_SPEED = 0.0014;
 
 /**
- * Standalone copy. In the bundle app.js registers the real `graph.*` locale
- * keys, so `t()` wins; this table only covers the keys app.js does not know
- * (edge types, source labels, status hints) and keeps the module readable in
- * unit tests. Keep zh/en in sync when adding a key.
+ * All `graph.*` copy lives in the app dictionaries (`ZH`/`EN` in ui/app.js);
+ * `mruGraphText` interpolates `{param}` placeholders and falls back to the
+ * key itself, so a missing key shows the key instead of crashing the view.
  */
-const MRU_GRAPH_TEXT = {
-  zh: {
-    'graph.titleDoc': '本文知识图谱',
-    'graph.titleLibrary': '全景图谱',
-    'graph.build': 'AI 精读全文',
-    'graph.rebuild': '重建图谱',
-    'graph.refresh': '刷新',
-    'graph.building': '正在生成图谱…',
-    'graph.progress': '正在生成 · {done} / {total}',
-    'graph.reading': '正在阅读…',
-    'graph.extracting': '正在抽取概念…',
-    'graph.merging': '正在合并…',
-    'graph.emptyDoc': '这篇论文还没有知识图谱。',
-    'graph.emptyLibrary': '文献库还没有全景图谱。',
-    'graph.emptyHint': 'AI 精读全文后，会自动抽取概念、方法与结论。',
-    'graph.jump': '跳转到原文',
-    'graph.ask': '问 AI 关于此概念',
-    'graph.search': '搜索节点',
-    'graph.legend': '节点类型',
-    'graph.edgesTrimmed': '已聚焦 {shown}/{total} 条关系',
-    'graph.aspectLegend': '批注颜色',
-    'graph.aspect.definition': '定义/背景',
-    'graph.aspect.method': '方法',
-    'graph.aspect.result': '结果',
-    'graph.aspect.limitation': '局限',
-    'graph.filters': '筛选',
-    'graph.nodes': '{count} 个节点',
-    'graph.edges': '{count} 条关系',
-    'graph.loading': '正在载入图谱…',
-    'graph.close': '关闭',
-    'graph.collapseClusters': '折叠次要节点',
-    'graph.expandAll': '展开全部',
-    'graph.error': '知识图谱载入失败。',
-    'graph.retry': '重试',
-    'graph.unavailable': '知识图谱引擎不可用。',
-    'graph.concept': '概念',
-    'graph.method': '方法',
-    'graph.finding': '发现',
-    'graph.definition': '定义',
-    'graph.limitation': '局限',
-    'graph.section': '章节',
-    'graph.question': '问题',
-    'graph.insight': '洞见',
-    'graph.paper': '论文',
-    'graph.topic': '主题',
-    // graph-view-only copy
-    'graph.canvas': '知识图谱画布',
-    'graph.sources': '原文来源',
-    'graph.documents': '相关文献',
-    'graph.relations': '关系',
-    'graph.noSummary': '暂无摘要',
-    'graph.noSources': '暂无原文坐标',
-    'graph.noRelations': '暂无关系',
-    'graph.more': '还有 {count} 个',
-    'graph.filtered': '显示 {shown} / {total} 个节点',
-    'graph.collapsed': '已折叠 {count} 个节点',
-    'graph.zoom': '缩放 {percent}%',
-    'graph.zoomIn': '放大',
-    'graph.zoomOut': '缩小',
-    'graph.resetView': '重置视图',
-    'graph.hint': '滚轮缩放 · 拖动节点固定位置',
-    'graph.noMatches': '没有匹配的节点',
-    'graph.noMatchesHint': '换个关键词，或清除筛选条件。',
-    'graph.clearFilters': '清除筛选',
-    'graph.unavailableHint': '配置可用的模型后，即可生成和浏览知识图谱。',
-    'graph.clusterSummary': '{count} 个「{type}」节点折叠在这里',
-    'graph.members': '成员',
-    'graph.expandCluster': '展开这组节点',
-    'graph.degree': '{count} 条关系',
-    'graph.source.ai-summary': 'AI 精读',
-    'graph.source.qa': '问答补充',
-    'graph.source.user': '手动添加',
-    'graph.source.aggregate': '聚合',
-    'graph.edge.defines': '定义',
-    'graph.edge.uses': '使用',
-    'graph.edge.supports': '支持',
-    'graph.edge.contradicts': '反驳',
-    'graph.edge.part_of': '属于',
-    'graph.edge.leads_to': '引出',
-    'graph.edge.evolves_from': '演化自',
-    'graph.edge.relates': '相关',
-    'graph.edge.answers': '回答',
-    'graph.edge.mentions': '提及',
-    'graph.edge.shares': '共享主题',
-  },
-  en: {
-    'graph.titleDoc': 'Paper knowledge graph',
-    'graph.titleLibrary': 'Library graph',
-    'graph.build': 'Build with AI',
-    'graph.rebuild': 'Rebuild graph',
-    'graph.refresh': 'Refresh',
-    'graph.building': 'Building the graph…',
-    'graph.progress': 'Building · {done} / {total}',
-    'graph.reading': 'Reading…',
-    'graph.extracting': 'Extracting concepts…',
-    'graph.merging': 'Merging…',
-    'graph.emptyDoc': 'This paper has no knowledge graph yet.',
-    'graph.emptyLibrary': 'The library graph is empty.',
-    'graph.emptyHint': 'Building the graph extracts concepts, methods, and findings automatically.',
-    'graph.jump': 'Jump to source',
-    'graph.ask': 'Ask AI about this concept',
-    'graph.search': 'Search nodes',
-    'graph.legend': 'Node types',
-    'graph.edgesTrimmed': 'showing {shown}/{total} relations',
-    'graph.aspectLegend': 'Annotation colours',
-    'graph.aspect.definition': 'definition/context',
-    'graph.aspect.method': 'method',
-    'graph.aspect.result': 'result',
-    'graph.aspect.limitation': 'limitation',
-    'graph.filters': 'Filters',
-    'graph.nodes': '{count} nodes',
-    'graph.edges': '{count} edges',
-    'graph.loading': 'Loading graph…',
-    'graph.close': 'Close',
-    'graph.collapseClusters': 'Collapse minor nodes',
-    'graph.expandAll': 'Expand all',
-    'graph.error': 'The knowledge graph failed to load.',
-    'graph.retry': 'Retry',
-    'graph.unavailable': 'The knowledge-graph engine is unavailable.',
-    'graph.concept': 'Concept',
-    'graph.method': 'Method',
-    'graph.finding': 'Finding',
-    'graph.definition': 'Definition',
-    'graph.limitation': 'Limitation',
-    'graph.section': 'Section',
-    'graph.question': 'Question',
-    'graph.insight': 'Insight',
-    'graph.paper': 'Paper',
-    'graph.topic': 'Topic',
-    // graph-view-only copy
-    'graph.canvas': 'Knowledge graph canvas',
-    'graph.sources': 'Sources',
-    'graph.documents': 'Papers',
-    'graph.relations': 'Connections',
-    'graph.noSummary': 'No summary',
-    'graph.noSources': 'No source location',
-    'graph.noRelations': 'No connections',
-    'graph.more': '{count} more',
-    'graph.filtered': 'Showing {shown} / {total} nodes',
-    'graph.collapsed': '{count} nodes folded',
-    'graph.zoom': 'Zoom {percent}%',
-    'graph.zoomIn': 'Zoom in',
-    'graph.zoomOut': 'Zoom out',
-    'graph.resetView': 'Reset view',
-    'graph.hint': 'Scroll to zoom · drag a node to pin it',
-    'graph.noMatches': 'No matching nodes',
-    'graph.noMatchesHint': 'Try another keyword, or clear the filters.',
-    'graph.clearFilters': 'Clear filters',
-    'graph.unavailableHint': 'Set up an available model to build and explore knowledge graphs.',
-    'graph.clusterSummary': '{count} {type} nodes are folded here',
-    'graph.members': 'Members',
-    'graph.expandCluster': 'Expand this group',
-    'graph.degree': '{count} connections',
-    'graph.source.ai-summary': 'AI reading',
-    'graph.source.qa': 'Q&A',
-    'graph.source.user': 'Manual',
-    'graph.source.aggregate': 'Aggregate',
-    'graph.edge.defines': 'defines',
-    'graph.edge.uses': 'uses',
-    'graph.edge.supports': 'supports',
-    'graph.edge.contradicts': 'contradicts',
-    'graph.edge.part_of': 'part of',
-    'graph.edge.leads_to': 'leads to',
-    'graph.edge.evolves_from': 'evolves from',
-    'graph.edge.relates': 'relates',
-    'graph.edge.answers': 'answers',
-    'graph.edge.mentions': 'mentions',
-    'graph.edge.shares': 'shares topics',
-  },
-};
 
 // ===========================================================================
 // 2. Small pure helpers (values, ids, copy)
@@ -384,79 +220,200 @@ function mruGraphInterpolate(template, params) {
   ));
 }
 
-/** Pick the UI language; app.js dictionaries are the reliable probe. */
-function mruGraphLanguage(t) {
-  try {
-    if (typeof t === 'function') {
-      const probe = t('panel.label');
-      if (probe === 'Literature') return 'en';
-      if (probe === '文献库') return 'zh';
-      if (probe === '文献库 Literature') return 'zh';
-    }
-  } catch {
-    /* ignore probe failure */
-  }
-  try {
-    const language = typeof document !== 'undefined' && document.documentElement
-      ? mruGraphString(document.documentElement.lang)
-      : '';
-    const navigatorLanguage = typeof navigator !== 'undefined' ? mruGraphString(navigator.language) : '';
-    const tag = language || navigatorLanguage;
-    if (/^en\b|^en-/i.test(tag)) return 'en';
-    if (/^zh\b|^zh-/i.test(tag)) return 'zh';
-  } catch {
-    /* ignore environment failure */
-  }
-  return 'zh';
-}
-
-/** Locale text with app.js first, standalone fallback second. */
-function mruGraphText(t, key, params, lang) {
+/** Locale text from the app dictionaries: `t()` first, key-as-fallback last. */
+function mruGraphText(t, key, params) {
+  let template = key;
   if (typeof t === 'function') {
     try {
       const value = t(key, params);
-      if (typeof value === 'string' && value !== '' && value !== key) return value;
+      if (typeof value === 'string' && value !== '') template = value;
     } catch {
-      /* fall back below */
+      /* fall back to the key below */
     }
   }
-  const language = lang === 'en' ? 'en' : 'zh';
-  const table = MRU_GRAPH_TEXT[language];
-  const template = Object.prototype.hasOwnProperty.call(table, key)
-    ? table[key]
-    : (MRU_GRAPH_TEXT.zh[key] ?? key);
   return mruGraphInterpolate(template, params);
 }
 
 /** Label for a known node type; unknown types stay verbatim. */
-function mruGraphTypeLabel(t, type, lang) {
-  const key = `graph.${type}`;
+function mruGraphTypeLabel(t, type) {
   if (MRU_GRAPH_NODE_TYPES.indexOf(type) === -1) return type;
-  return mruGraphText(t, key, undefined, lang);
+  return mruGraphText(t, `graph.${type}`);
 }
 
-/** Label for an edge type (defines/uses/...). */
-function mruGraphEdgeTypeLabel(t, type, lang) {
+/** Label for an edge type (defines/uses/…). */
+function mruGraphEdgeTypeLabel(t, type) {
   if (MRU_GRAPH_EDGE_TYPES.indexOf(type) === -1) return type;
-  return mruGraphText(t, `graph.edge.${type}`, undefined, lang);
+  return mruGraphText(t, `graph.edge.${type}`);
 }
 
 /** Label for a node source (ai-summary/qa/user/aggregate). */
-function mruGraphSourceLabel(t, source, lang) {
-  const key = `graph.source.${source}`;
-  const table = MRU_GRAPH_TEXT[lang === 'en' ? 'en' : 'zh'];
-  if (!Object.prototype.hasOwnProperty.call(table, key)) return mruGraphString(source);
-  return mruGraphText(t, key, undefined, lang);
+function mruGraphSourceLabel(t, source) {
+  if (MRU_GRAPH_SOURCES.indexOf(source) === -1) return mruGraphString(source);
+  return mruGraphText(t, `graph.source.${source}`);
 }
 
 /** `graph.reading` / `graph.extracting` / `graph.merging` / phase fallback. */
-function mruGraphPhaseLabel(t, phase, lang) {
+function mruGraphPhaseLabel(t, phase) {
   const key = phase === 'reading' ? 'graph.reading'
     : phase === 'extracting' ? 'graph.extracting'
       : phase === 'merging' ? 'graph.merging'
         : '';
   if (key === '') return phase;
-  return mruGraphText(t, key, undefined, lang);
+  return mruGraphText(t, key);
+}
+
+// ===========================================================================
+// 2b. Curation helpers — user rename / merge / pin (PLAN C1/C2)
+// ===========================================================================
+
+/** Stable node id from a node object, an id string or `{ id }`. */
+function mruGraphCurationId(value) {
+  if (value !== null && value !== undefined && typeof value === 'object') {
+    return mruGraphString(value.id).trim();
+  }
+  return mruGraphString(value).trim();
+}
+
+/** Round to the 0.1 position precision persisted in graph.json (C1). */
+function mruGraphRound10(value) {
+  return Math.round(mruGraphNumber(value, 0) * 10) / 10;
+}
+
+/** Trim + cap a rename label to the C1 contract (80 characters). */
+export function mruGraphCurationLabel(value) {
+  const chars = [...mruGraphString(value).trim()];
+  return chars.slice(0, MRU_GRAPH_RENAME_MAX).join('');
+}
+
+/**
+ * Validate and round a canvas/user-space position for the C1 node upsert:
+ * finite `x`/`y` clamped to `[0, 2000]` and rounded to 0.1, matching the host
+ * sanitizer. Returns `null` when the value cannot be a position.
+ *
+ * @param {{x?: number, y?: number}} value
+ * @returns {{x: number, y: number} | null}
+ */
+export function mruGraphCurationPosition(value) {
+  const point = value !== null && typeof value === 'object' ? value : {};
+  // Strict numbers only: the positions come from the layout/simulation (or
+  // from JSON) and a coercible string would silently become (0, 0)-ish.
+  const x = typeof point.x === 'number' && Number.isFinite(point.x) ? point.x : NaN;
+  const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : NaN;
+  if (Number.isNaN(x) || Number.isNaN(y)) return null;
+  return {
+    x: mruGraphRound10(mruGraphClamp(x, 0, MRU_GRAPH_POSITION_MAX)),
+    y: mruGraphRound10(mruGraphClamp(y, 0, MRU_GRAPH_POSITION_MAX)),
+  };
+}
+
+/**
+ * Build the `onUpdateGraph(patch)` payload for one curation action (C1/C2).
+ *
+ * - `rename` → `{ nodes: [{ id, label }] }` (label trimmed, capped by C1)
+ * - `pin`    → `{ nodes: [{ id, pinned: true, position: { x, y } }] }`
+ * - `unpin`  → `{ nodes: [{ id, pinned: false }] }`
+ * - `merge`  → `{ merge: [{ from, into }] }`
+ *
+ * Pure and defensive: invalid input (missing ids, empty label, same-node
+ * merge, non-finite position) returns `null` so the component can refuse the
+ * action and show a localized error instead of calling the host.
+ *
+ * @param {'rename'|'pin'|'unpin'|'merge'} action
+ * @param {{node?: object|string, id?: string, label?: string,
+ *          position?: {x: number, y: number}, from?: object|string,
+ *          into?: object|string}} input
+ * @returns {object | null}
+ */
+export function mruGraphCurationPatch(action, input) {
+  const data = input !== null && typeof input === 'object' ? input : {};
+  const kind = mruGraphString(action).trim().toLowerCase();
+  if (kind === 'rename') {
+    const id = mruGraphCurationId(data.node !== undefined ? data.node : data.id);
+    const label = mruGraphCurationLabel(data.label);
+    if (id === '' || label === '') return null;
+    return { nodes: [{ id, label }] };
+  }
+  if (kind === 'pin') {
+    const id = mruGraphCurationId(data.node !== undefined ? data.node : data.id);
+    const position = mruGraphCurationPosition(data.position);
+    if (id === '' || position === null) return null;
+    return { nodes: [{ id, pinned: true, position }] };
+  }
+  if (kind === 'unpin') {
+    const id = mruGraphCurationId(data.node !== undefined ? data.node : data.id);
+    if (id === '') return null;
+    return { nodes: [{ id, pinned: false }] };
+  }
+  if (kind === 'merge') {
+    const from = mruGraphCurationId(data.from !== undefined ? data.from : data.node);
+    const into = mruGraphCurationId(data.into !== undefined ? data.into : data.target);
+    if (from === '' || into === '' || from === into) return null;
+    return { merge: [{ from, into }] };
+  }
+  return null;
+}
+
+/** Whether a persisted node carries a pin (C1: strict boolean `true`). */
+export function mruGraphNodeIsPinned(node) {
+  return Boolean(node !== null && typeof node === 'object' && node.pinned === true);
+}
+
+/**
+ * Pin map seeded from persisted `node.pinned` + `node.position` fields when a
+ * document graph loads (C1). Only pinned nodes with a valid position are kept;
+ * positions are validated/rounded like a curation patch.
+ *
+ * @param {object[]} nodes normalized KG nodes
+ * @returns {Record<string, {x: number, y: number}>}
+ */
+export function mruGraphStoredPins(nodes) {
+  const out = {};
+  if (!Array.isArray(nodes)) return out;
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (!mruGraphNodeIsPinned(node)) continue;
+    const id = mruGraphCurationId(node);
+    if (id === '' || id === '__proto__') continue;
+    const position = mruGraphCurationPosition(node.position);
+    if (position === null) continue;
+    out[id] = position;
+  }
+  return out;
+}
+
+/**
+ * Merge targets for `fromId`: every real (non-cluster) node except the source,
+ * in graph order and deduped by id. Empty/unknown input yields `[]`.
+ *
+ * @param {object[]} nodes visible/normalized KG nodes
+ * @param {object|string} fromId source node or its id
+ * @returns {object[]}
+ */
+export function mruGraphMergeCandidates(nodes, fromId) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  const sourceId = mruGraphCurationId(fromId);
+  const seen = new Set();
+  const out = [];
+  for (let index = 0; index < list.length; index += 1) {
+    const node = list[index];
+    if (!node || typeof node !== 'object' || node.cluster) continue;
+    const id = mruGraphString(node.id).trim();
+    if (id === '' || id === sourceId || seen.has(id)) continue;
+    seen.add(id);
+    out.push(node);
+  }
+  return out;
+}
+
+/** Run `onUpdateGraph(patch)` tolerantly: sync throws become rejections. */
+function mruGraphCurationRun(update, patch) {
+  if (patch === null || patch === undefined) return Promise.resolve(null);
+  if (typeof update !== 'function') return Promise.reject(new Error('graph curation unavailable'));
+  try {
+    return Promise.resolve(update(patch));
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 /** Element factory: keeps JSX out of the source while React stays external. */
@@ -1833,7 +1790,12 @@ function mruGraphNearestNode(nodes, positions, fromId, key) {
  *
  *   t, mode, graph, building, progress, error, available, loading,
  *   onJump(documentId?, blockKey), onAsk(node), onBuild(), onRefresh(),
- *   onUpdateGraph(nodes, edges)?
+ *   onUpdateGraph(patch)?
+ *
+ * `onUpdateGraph` is the C2 curation hook: doc mode only. It receives
+ * `{ nodes: [...] }` / `{ merge: [{ from, into }] }` patches and returns a
+ * Promise that resolves to the persisted KG (or rejects on failure). When the
+ * prop is missing the view stays read-only — library graphs are never edited.
  */
 export function MruGraphView(props) {
   const rawProps = props && typeof props === 'object' ? props : {};
@@ -1850,6 +1812,7 @@ export function MruGraphView(props) {
     onAsk,
     onBuild,
     onRefresh,
+    onUpdateGraph,
   } = rawProps;
 
   const mode = rawMode === 'library' ? 'library' : 'doc';
@@ -1858,9 +1821,9 @@ export function MruGraphView(props) {
   const available = rawAvailable !== false;
   const error = mruGraphString(rawError).trim();
   const t = typeof translate === 'function' ? translate : null;
-  const lang = mruGraphLanguage(t);
-  const tr = (key, params) => mruGraphText(t, key, params, lang);
+  const tr = (key, params) => mruGraphText(t, key, params);
   const initialCollapse = mode === 'library' ? 'auto' : 'none';
+  const canCurate = mode === 'doc' && typeof onUpdateGraph === 'function';
 
   const [selectedId, setSelectedId] = React.useState(null);
   const [query, setQuery] = React.useState('');
@@ -1870,6 +1833,13 @@ export function MruGraphView(props) {
   const [pins, setPins] = React.useState({});
   const [hoverEdgeId, setHoverEdgeId] = React.useState(null);
   const [cardPos, setCardPos] = React.useState(null);
+  // Curation state (PLAN C1/C2): inline rename, 2-step merge, pin save.
+  const [renameDraft, setRenameDraft] = React.useState(null);
+  const [mergeFromId, setMergeFromId] = React.useState(null);
+  const [mergeTargetId, setMergeTargetId] = React.useState(null);
+  const [curationPending, setCurationPending] = React.useState(null);
+  const [curationError, setCurationError] = React.useState('');
+  const [curationNotice, setCurationNotice] = React.useState('');
 
   const svgRef = React.useRef(null);
   const rootRef = React.useRef(null);
@@ -1881,12 +1851,73 @@ export function MruGraphView(props) {
   const dragRef = React.useRef(null);
   const liveRef = React.useRef(null);
   const rafRef = React.useRef(0);
+  const mountedRef = React.useRef(true);
+  const updateGraphRef = React.useRef(null);
+  const curationPendingRef = React.useRef(null);
+  const pendingPinRef = React.useRef(null);
   const [livePositions, setLivePositions] = React.useState(null);
 
   pinsRef.current = pins;
+  updateGraphRef.current = canCurate ? onUpdateGraph : null;
+  React.useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
+
+  /** Mirror the pending flag into state + ref (the ref guards stale closures). */
+  const markCurationPending = (kind) => {
+    curationPendingRef.current = kind;
+    setCurationPending(kind);
+  };
+
+  /** Apply one validated curation patch, surfacing failures inline (C2). */
+  const runCuration = (kind, patch, handlers) => {
+    const update = updateGraphRef.current;
+    const options = handlers !== null && typeof handlers === 'object' ? handlers : {};
+    if (typeof update !== 'function' || patch === null || curationPendingRef.current !== null) {
+      return false;
+    }
+    markCurationPending(kind);
+    setCurationError('');
+    setCurationNotice('');
+    mruGraphCurationRun(update, patch).then(
+      () => {
+        curationPendingRef.current = null;
+        if (mountedRef.current === false) return;
+        setCurationPending(null);
+        if (typeof options.success === 'function') options.success();
+      },
+      () => {
+        curationPendingRef.current = null;
+        if (mountedRef.current === false) return;
+        setCurationPending(null);
+        if (typeof options.error === 'function') options.error();
+      },
+    );
+    return true;
+  };
+
+  /** Write one local pin (null removes it), keeping the ref in sync. */
+  const writePin = (id, position) => {
+    if (typeof id !== 'string' || id === '') return;
+    const next = { ...pinsRef.current };
+    if (position === null || position === undefined) delete next[id];
+    else next[id] = position;
+    pinsRef.current = next;
+    setPins(next);
+  };
 
   const normalized = React.useMemo(() => mruGraphNormalizeGraph(rawGraph), [rawGraph]);
   const signature = React.useMemo(() => mruGraphSignature(normalized), [normalized]);
+
+  // Persisted `node.pinned` + `node.position` fields seed the local pin map
+  // when a document graph loads (C1); library graphs stay read-only.
+  const storedPins = React.useMemo(() => mruGraphStoredPins(normalized.nodes), [normalized]);
+  const storedPinKey = React.useMemo(() => JSON.stringify(storedPins), [storedPins]);
+  React.useEffect(() => {
+    if (mode !== 'doc') return;
+    pinsRef.current = storedPins;
+    setPins(storedPins);
+  }, [storedPinKey, mode, storedPins]);
 
   const visible = React.useMemo(() => mruGraphVisibleGraph(normalized, {
     types: typeFilter,
@@ -1899,6 +1930,11 @@ export function MruGraphView(props) {
       }
       : null),
   }), [normalized, typeFilter, query, collapseMode, mode]);
+
+  const mergeCandidateIds = React.useMemo(() => {
+    if (!canCurate || mergeFromId === null) return new Set();
+    return new Set(mruGraphMergeCandidates(visible.nodes, mergeFromId).map((node) => node.id));
+  }, [canCurate, visible, mergeFromId]);
 
   // Lay out exactly the visible subgraph: folded-in clusters get real positions
   // (instead of falling back to the canvas centre) and hidden nodes stop
@@ -1977,9 +2013,23 @@ export function MruGraphView(props) {
     }
     const draggedPoint = sim.positions[sim.draggedId];
     if (draggedPoint !== undefined) {
-      const pinned = { x: draggedPoint.x, y: draggedPoint.y };
+      const pinned = mruGraphCurationPosition(draggedPoint) || { x: draggedPoint.x, y: draggedPoint.y };
       pinsRef.current = { ...pinsRef.current, [sim.draggedId]: pinned };
       setPins((previous) => ({ ...previous, [sim.draggedId]: pinned }));
+    }
+    if (pendingPinRef.current !== null) {
+      // A drag release persists its pin when curation is available (C1).
+      const releasedId = pendingPinRef.current;
+      pendingPinRef.current = null;
+      const releasedPosition = mruGraphCurationPosition(sim.positions[releasedId]);
+      if (releasedId === sim.draggedId && releasedPosition !== null) {
+        const patch = mruGraphCurationPatch('pin', { node: releasedId, position: releasedPosition });
+        if (patch !== null) {
+          runCuration('pin', patch, {
+            error: () => setCurationError(tr('graph.pinFailed')),
+          });
+        }
+      }
     }
     liveRef.current = null;
     stopSimulationLoop();
@@ -2087,6 +2137,157 @@ export function MruGraphView(props) {
   }, []);
 
   const selected = selectedId ? visible.nodes.find((node) => node.id === selectedId) || null : null;
+  const mergeTarget = mergeTargetId !== null
+    ? normalized.nodes.find((node) => node.id === mergeTargetId) || null
+    : null;
+  const selectedPin = selected
+    ? (mruGraphNodeIsPinned(selected) || Boolean(pins[selected.id]))
+    : false;
+  const cardKey = [
+    selectedId || '',
+    renameDraft === null ? '' : 'rename',
+    mergeFromId || '',
+    mergeTargetId || '',
+    curationPending || '',
+    curationError,
+    curationNotice,
+  ].join('|');
+
+  // Merge/rename editors only exist for the selected node: leave them when the
+  // selection disappears (filter/search/graph refresh) so node clicks are not
+  // silently captured by a hidden merge mode.
+  React.useEffect(() => {
+    if (selected) return;
+    if (mergeFromId !== null) {
+      setMergeFromId(null);
+      setMergeTargetId(null);
+    }
+    if (renameDraft !== null) setRenameDraft(null);
+  }, [selected, mergeFromId, renameDraft]);
+  React.useEffect(() => {
+    if (mergeFromId === null) return;
+    if (normalized.nodes.some((node) => node.id === mergeFromId)) return;
+    setMergeFromId(null);
+    setMergeTargetId(null);
+  }, [normalized, mergeFromId]);
+
+  // --- curation actions (rename / merge / pin, PLAN C1/C2) ----------------
+  const closeCard = () => {
+    setSelectedId(null);
+    setRenameDraft(null);
+    setMergeFromId(null);
+    setMergeTargetId(null);
+    setCurationError('');
+    setCurationNotice('');
+  };
+
+  const startRename = () => {
+    if (!selected || !canCurate || curationPendingRef.current !== null) return;
+    setCurationError('');
+    setCurationNotice('');
+    setMergeFromId(null);
+    setMergeTargetId(null);
+    setRenameDraft(mruGraphString(selected.label || selected.id));
+  };
+
+  const cancelRename = () => {
+    setRenameDraft(null);
+    setCurationError('');
+  };
+
+  const saveRename = () => {
+    if (!selected || curationPendingRef.current !== null) return;
+    const label = mruGraphCurationLabel(renameDraft);
+    if (label === '') {
+      setCurationError(tr('graph.renameEmpty'));
+      return;
+    }
+    const patch = mruGraphCurationPatch('rename', { node: selected.id, label });
+    if (patch === null) {
+      setCurationError(tr('graph.renameEmpty'));
+      return;
+    }
+    runCuration('rename', patch, {
+      success: () => {
+        setRenameDraft(null);
+        setCurationNotice(tr('graph.curationSaved'));
+      },
+      error: () => setCurationError(tr('graph.renameFailed')),
+    });
+  };
+
+  const startMerge = () => {
+    if (!selected || !canCurate || curationPendingRef.current !== null) return;
+    setCurationError('');
+    setCurationNotice('');
+    setRenameDraft(null);
+    setMergeFromId(selected.id);
+    setMergeTargetId(null);
+  };
+
+  const pickMergeTarget = (node) => {
+    if (mergeFromId === null || !node || node.cluster) return false;
+    if (node.id === mergeFromId) return false;
+    setMergeTargetId(node.id);
+    setCurationError('');
+    return true;
+  };
+
+  const cancelMerge = () => {
+    setMergeFromId(null);
+    setMergeTargetId(null);
+    setCurationError('');
+  };
+
+  const confirmMerge = () => {
+    if (mergeFromId === null || mergeTargetId === null || curationPendingRef.current !== null) return;
+    const patch = mruGraphCurationPatch('merge', { from: mergeFromId, into: mergeTargetId });
+    if (patch === null) {
+      setCurationError(tr('graph.mergeFailed'));
+      return;
+    }
+    const targetId = mergeTargetId;
+    runCuration('merge', patch, {
+      success: () => {
+        setMergeFromId(null);
+        setMergeTargetId(null);
+        setSelectedId(targetId);
+        setCurationNotice(tr('graph.merged'));
+      },
+      error: () => setCurationError(tr('graph.mergeFailed')),
+    });
+  };
+
+  const togglePin = () => {
+    if (!selected || !canCurate || curationPendingRef.current !== null) return;
+    setCurationError('');
+    setCurationNotice('');
+    const id = selected.id;
+    if (selectedPin) {
+      const patch = mruGraphCurationPatch('unpin', { node: id });
+      if (patch === null) return;
+      const previous = mruGraphCurationPosition(storedPins[id] || positions[id]);
+      writePin(id, null);
+      runCuration('unpin', patch, {
+        error: () => {
+          if (previous !== null) writePin(id, previous);
+          setCurationError(tr('graph.pinFailed'));
+        },
+      });
+      return;
+    }
+    const position = mruGraphCurationPosition(positions[id] || storedPins[id]);
+    if (position === null) return;
+    const patch = mruGraphCurationPatch('pin', { node: id, position });
+    if (patch === null) return;
+    writePin(id, position);
+    runCuration('pin', patch, {
+      error: () => {
+        writePin(id, null);
+        setCurationError(tr('graph.pinFailed'));
+      },
+    });
+  };
 
   /**
    * Measure the selected node on screen and place its card next to it.
@@ -2194,7 +2395,7 @@ export function MruGraphView(props) {
 
   const progress = mruGraphProgress(rawProgress);
   const progressPercent = progress.percent;
-  const phaseLabel = building && progress.phase !== '' ? mruGraphPhaseLabel(t, progress.phase, lang) : '';
+  const phaseLabel = building && progress.phase !== '' ? mruGraphPhaseLabel(t, progress.phase) : '';
   let progressText = '';
   if (building) {
     const baseProgress = progress.total > 0
@@ -2222,7 +2423,7 @@ export function MruGraphView(props) {
   // or re-laying out; cardPos in the deps re-measures once the card has size.
   React.useLayoutEffect(() => {
     placeCard();
-  }, [placeCard, view.x, view.y, view.k, layout, visible.nodes.length, cardPos, livePositions]);
+  }, [placeCard, view.x, view.y, view.k, layout, visible.nodes.length, cardPos, livePositions, cardKey]);
 
   React.useEffect(() => {
     const root = rootRef.current;
@@ -2242,7 +2443,7 @@ export function MruGraphView(props) {
       const target = event && event.target;
       if (!target || typeof target.closest !== 'function') return;
       if (target.closest('.mru-graph__card')) return;
-      if (!target.closest('.mru-graph')) setSelectedId(null);
+      if (!target.closest('.mru-graph')) closeCard();
     };
     document.addEventListener('pointerdown', onPointerDown, true);
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
@@ -2288,9 +2489,11 @@ export function MruGraphView(props) {
 
   const resetView = () => {
     setView({ x: 0, y: 0, k: 1 });
-    setPins({});
-    pinsRef.current = {};
-    setSelectedId(null);
+    // Persisted pins survive "reset view"; transient drag pins do not.
+    const seeded = mode === 'doc' ? storedPins : {};
+    setPins(seeded);
+    pinsRef.current = seeded;
+    closeCard();
     setHoverEdgeId(null);
   };
 
@@ -2321,8 +2524,8 @@ export function MruGraphView(props) {
     setQuery('');
     setTypeFilter(null);
     const members = Array.isArray(node.members) ? node.members : [];
-    if (members.length > 0) setSelectedId(members[0]);
-    else setSelectedId(null);
+    if (members.length > 0) selectNode(members[0]);
+    else closeCard();
   };
 
   const jumpToBlock = (node, blockKey) => {
@@ -2339,15 +2542,26 @@ export function MruGraphView(props) {
     else onJump(documentId);
   };
 
+  /** Select a node; while merging, another node becomes the merge target. */
   const selectNode = (node) => {
     if (!node) return;
+    if (mergeFromId !== null && node.id !== mergeFromId && !node.cluster) {
+      pickMergeTarget(node);
+      return;
+    }
+    if (mergeFromId !== null && node.cluster) cancelMerge();
+    if (node.id !== selectedId) {
+      setRenameDraft(null);
+      setCurationError('');
+      setCurationNotice('');
+    }
     setSelectedId(node.id);
   };
 
   const onCanvasPointerDown = (event) => {
     if (event && event.button !== undefined && event.button !== 0) return;
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
-    setSelectedId(null);
+    closeCard();
     setHoverEdgeId(null);
     if (!event) return;
     const point = mruGraphEventViewPoint(event, svgRef.current);
@@ -2394,8 +2608,14 @@ export function MruGraphView(props) {
   const onNodePointerDown = (event, node) => {
     if (event && event.button !== undefined && event.button !== 0) return;
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    if (mergeFromId !== null && node.id !== mergeFromId && !node.cluster) {
+      // Merge mode: clicking any other node picks it as the merge target.
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      pickMergeTarget(node);
+      return;
+    }
     if (liveRef.current !== null) persistSimulation();
-    setSelectedId(node.id);
+    selectNode(node);
     if (node.cluster) return;
     if (!event) return;
     const origin = positions[node.id];
@@ -2460,6 +2680,11 @@ export function MruGraphView(props) {
     } catch {
       /* ignore */
     }
+    if (wasDragging) {
+      // Persist the released pin once the simulation settles (C1); the
+      // reduced-motion branch below settles immediately.
+      pendingPinRef.current = node.id;
+    }
     if (wasDragging && liveRef.current !== null && (
       mruGraphReducedMotion() || typeof requestAnimationFrame !== 'function'
     )) {
@@ -2479,7 +2704,7 @@ export function MruGraphView(props) {
     }
     if (key === 'Escape') {
       if (typeof event.preventDefault === 'function') event.preventDefault();
-      setSelectedId(null);
+      closeCard();
       return;
     }
     if (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown') {
@@ -2496,7 +2721,7 @@ export function MruGraphView(props) {
     const key = event.key;
     if (key === 'Escape') {
       if (typeof event.preventDefault === 'function') event.preventDefault();
-      setSelectedId(null);
+      closeCard();
       return;
     }
     if (key === '+' || key === '=') {
@@ -2518,7 +2743,7 @@ export function MruGraphView(props) {
   const onCardKeyDown = (event) => {
     if (event && event.key === 'Escape') {
       if (typeof event.preventDefault === 'function') event.preventDefault();
-      setSelectedId(null);
+      closeCard();
     }
   };
 
@@ -2594,10 +2819,10 @@ export function MruGraphView(props) {
       className: 'mru-graph__legend-item',
       'data-type': type,
       'aria-pressed': active ? 'true' : 'false',
-      title: `${mruGraphTypeLabel(t, type, lang)} · ${mruGraphFormatCount(count)}`,
+      title: `${mruGraphTypeLabel(t, type)} · ${mruGraphFormatCount(count)}`,
       onClick: () => toggleType(type),
     },
-    mruGraphH('span', { key: 'label' }, mruGraphTypeLabel(t, type, lang)),
+    mruGraphH('span', { key: 'label' }, mruGraphTypeLabel(t, type)),
     mruGraphH('span', { key: 'count', className: 'mru-graph__legend-count' }, mruGraphFormatCount(count)));
   });
   const collapseThreshold = mode === 'library'
@@ -2656,7 +2881,7 @@ export function MruGraphView(props) {
     const dimmed = hasSelection && !isSelected && !inPath && !related;
     const radius = mruGraphNodeRadius(node, nodeDegree, isSelected);
     const typeClass = MRU_GRAPH_NODE_TYPES.indexOf(node.type) === -1 ? 'unknown' : node.type;
-    const typeLabel = mruGraphTypeLabel(t, node.type, lang);
+    const typeLabel = mruGraphTypeLabel(t, node.type);
     const label = node.cluster
       ? `${typeLabel} · ${mruGraphFormatCount(node.count || 0)}`
       : mruGraphDisplay(node.label || node.id);
@@ -2666,8 +2891,14 @@ export function MruGraphView(props) {
       || isSelected
       || inPath
       || related;
+    const pinned = node.cluster ? false : (mruGraphNodeIsPinned(node) || Boolean(pins[node.id]));
+    const isMergeSource = mergeFromId !== null && mergeFromId === node.id;
+    const isMergeCandidate = mergeFromId !== null && mergeCandidateIds.has(node.id);
     const className = 'mru-graph__node mru-graph__node--' + typeClass
-      + (isSelected ? ' mru-graph__node--active' : '');
+      + (isSelected ? ' mru-graph__node--active' : '')
+      + (pinned ? ' mru-graph__node--pinned' : '')
+      + (isMergeSource ? ' mru-graph__node--merge-source' : '')
+      + (isMergeCandidate ? ' mru-graph__node--merge-candidate' : '');
     const clusterCount = node.cluster ? String(mruGraphFormatCount(node.count || 0)) : '';
     return mruGraphH('g', {
       key: node.id,
@@ -2676,12 +2907,15 @@ export function MruGraphView(props) {
       transform: `translate(${point.x} ${point.y})`,
       tabIndex: 0,
       role: 'button',
-      'aria-label': `${label} · ${typeLabel} · ${tr('graph.degree', { count: mruGraphFormatCount(nodeDegree) })}`,
+      'aria-label': `${label} · ${typeLabel} · ${tr('graph.degree', { count: mruGraphFormatCount(nodeDegree) })}`
+        + (pinned ? ` · ${tr('graph.pinned')}` : ''),
       'aria-pressed': isSelected ? 'true' : 'false',
       'data-node-id': node.id,
       'data-type': node.type,
       'data-cluster': node.cluster ? 'true' : undefined,
-      'data-pinned': pins[node.id] ? 'true' : undefined,
+      'data-pinned': pinned ? 'true' : undefined,
+      'data-merge-source': isMergeSource ? 'true' : undefined,
+      'data-merge-candidate': isMergeCandidate ? 'true' : undefined,
       'data-active': isSelected ? 'true' : undefined,
       'data-path': inPath ? 'true' : undefined,
       'data-related': related ? 'true' : undefined,
@@ -2715,6 +2949,17 @@ export function MruGraphView(props) {
       }, clusterCount)
       : null,
     mruGraphH('circle', { key: 'dot', r: radius, ...(node.cluster ? { strokeDasharray: '3 2' } : {}) }),
+    pinned
+      ? mruGraphH('g', { key: 'pin', className: 'mru-graph__node-pin-group', 'aria-hidden': 'true' },
+        mruGraphH('title', { key: 'title' }, tr('graph.pinned')),
+        mruGraphH('circle', {
+          key: 'dot',
+          className: 'mru-graph__node-pin',
+          cx: mruGraphRound10(radius * 0.72),
+          cy: mruGraphRound10(-radius * 0.72),
+          r: 3.4,
+        }))
+      : null,
     showLabel
       ? mruGraphH('text', {
         key: 'label',
@@ -2732,9 +2977,9 @@ export function MruGraphView(props) {
     const hovered = hoverEdgeId === edge.id;
     const fromNode = visible.nodes.find((node) => node.id === edge.from);
     const toNode = visible.nodes.find((node) => node.id === edge.to);
-    const fromLabel = fromNode ? (fromNode.cluster ? mruGraphTypeLabel(t, fromNode.type, lang) : fromNode.label) : edge.from;
-    const toLabel = toNode ? (toNode.cluster ? mruGraphTypeLabel(t, toNode.type, lang) : toNode.label) : edge.to;
-    const edgeLabel = edge.label || mruGraphEdgeTypeLabel(t, edge.type, lang);
+    const fromLabel = fromNode ? (fromNode.cluster ? mruGraphTypeLabel(t, fromNode.type) : fromNode.label) : edge.from;
+    const toLabel = toNode ? (toNode.cluster ? mruGraphTypeLabel(t, toNode.type) : toNode.label) : edge.to;
+    const edgeLabel = edge.label || mruGraphEdgeTypeLabel(t, edge.type);
     const hoverLabel = mruGraphTruncate(
       mruGraphNumber(edge.count, 0) > 1 ? `${edgeLabel} ×${edge.count}` : edgeLabel,
       28,
@@ -2941,13 +3186,13 @@ export function MruGraphView(props) {
       statusBits.map((text, index) => mruGraphH('span', { key: `status-${index}` }, text)),
       zoomControls)
     : null;
-  const liveText = building ? progressText : selected ? (selected.cluster ? `${mruGraphTypeLabel(t, selected.type, lang)} ×${selected.count || 0}` : selected.label) : '';
+  const liveText = building ? progressText : selected ? (selected.cluster ? `${mruGraphTypeLabel(t, selected.type)} ×${selected.count || 0}` : selected.label) : '';
   const live = mruGraphH('span', { className: 'mru-sr-only', 'aria-live': 'polite' }, liveText);
 
   // --- details card -------------------------------------------------------
   let card = null;
   if (selected) {
-    const typeLabel = mruGraphTypeLabel(t, selected.type, lang);
+    const typeLabel = mruGraphTypeLabel(t, selected.type);
     const nodeDegree = degree.get(selected.id) || 0;
     const title = selected.cluster
       ? `${typeLabel} × ${mruGraphFormatCount(selected.count || 0)}`
@@ -2983,7 +3228,7 @@ export function MruGraphView(props) {
     const meta = [];
     meta.push(mruGraphH('span', { key: 'type' }, typeLabel));
     if (!selected.cluster && selected.source) {
-      meta.push(mruGraphH('span', { key: 'source' }, mruGraphSourceLabel(t, selected.source, lang)));
+      meta.push(mruGraphH('span', { key: 'source' }, mruGraphSourceLabel(t, selected.source)));
     }
     meta.push(mruGraphH('span', { key: 'degree' }, tr('graph.degree', { count: mruGraphFormatCount(nodeDegree) })));
     if (selected.aspect) meta.push(mruGraphH('span', { key: 'aspect' }, mruGraphDisplay(selected.aspect)));
@@ -2997,7 +3242,7 @@ export function MruGraphView(props) {
         'aria-label': tr('graph.close'),
         title: tr('graph.close'),
         style: { position: 'absolute', top: 8, right: 8 },
-        onClick: () => setSelectedId(null),
+        onClick: () => closeCard(),
       }, mruGraphGlyph('close', 14)),
       mruGraphH('div', { key: 'title', className: 'mru-graph__card-title' }, title),
       mruGraphH('p', { key: 'summary', className: 'mru-graph__card-summary' }, summary),
@@ -3019,7 +3264,7 @@ export function MruGraphView(props) {
             setCollapseMode('none');
             setQuery('');
             setTypeFilter(null);
-            setSelectedId(member.id);
+            selectNode(member);
           },
         }, mruGraphTruncate(mruGraphDisplay(member.label || member.id), 20)));
         cardChildren.push(mruGraphH('div', { key: 'members', className: 'mru-graph__card-meta' },
@@ -3080,8 +3325,8 @@ export function MruGraphView(props) {
           className: 'mru-link-btn',
           'data-neighbor-id': entry.other.id,
           title: entry.other.label || entry.other.id,
-          onClick: () => setSelectedId(entry.other.id),
-        }, `${entry.direction === 'out' ? '→' : '←'} ${mruGraphEdgeTypeLabel(t, entry.edge.type, lang)} · ${mruGraphTruncate(entry.other.cluster ? mruGraphTypeLabel(t, entry.other.type, lang) : (entry.other.label || entry.other.id), 16)}`));
+          onClick: () => selectNode(entry.other),
+        }, `${entry.direction === 'out' ? '→' : '←'} ${mruGraphEdgeTypeLabel(t, entry.edge.type)} · ${mruGraphTruncate(entry.other.cluster ? mruGraphTypeLabel(t, entry.other.type) : (entry.other.label || entry.other.id), 16)}`));
         cardChildren.push(mruGraphH('div', { key: 'relations', className: 'mru-graph__card-meta' },
           mruGraphH('span', { key: 'label' }, tr('graph.relations')),
           neighbourButtons,
@@ -3092,14 +3337,194 @@ export function MruGraphView(props) {
         cardChildren.push(mruGraphH('div', { key: 'no-relations', className: 'mru-graph__card-meta' },
           mruGraphH('span', { key: 'label' }, tr('graph.noRelations'))));
       }
-      if (typeof onAsk === 'function') {
-        cardChildren.push(mruGraphH('button', {
+      // Curation actions: doc mode with the C2 `onUpdateGraph` hook only.
+      const askButton = typeof onAsk === 'function'
+        ? mruGraphH('button', {
           key: 'ask',
           type: 'button',
-          className: 'mru-btn mru-btn--primary mru-btn--sm',
+          className: 'mru-btn mru-btn--primary mru-btn--sm'
+            + (canCurate ? ' mru-graph__card-action' : ''),
           'data-action': 'graph-ask',
           onClick: () => onAsk(selected),
-        }, tr('graph.ask')));
+        }, tr('graph.ask'))
+        : null;
+      if (canCurate) {
+        const pending = curationPending !== null;
+        if (renameDraft !== null) {
+          const renameInput = mruGraphH('input', {
+            key: 'input',
+            type: 'text',
+            className: 'mru-graph__rename-input',
+            value: renameDraft,
+            maxLength: MRU_GRAPH_RENAME_MAX,
+            placeholder: tr('graph.renamePlaceholder'),
+            'aria-label': tr('graph.renameTitle'),
+            'data-action': 'graph-rename-input',
+            autoFocus: true,
+            disabled: pending,
+            onChange: (event) => {
+              const raw = mruGraphString(event && event.target ? event.target.value : '');
+              setRenameDraft([...raw].slice(0, MRU_GRAPH_RENAME_MAX).join(''));
+            },
+            onKeyDown: (event) => {
+              if (!event) return;
+              if (event.key === 'Enter') {
+                if (typeof event.preventDefault === 'function') event.preventDefault();
+                if (typeof event.stopPropagation === 'function') event.stopPropagation();
+                saveRename();
+              } else if (event.key === 'Escape') {
+                if (typeof event.preventDefault === 'function') event.preventDefault();
+                if (typeof event.stopPropagation === 'function') event.stopPropagation();
+                cancelRename();
+              }
+            },
+          });
+          const renameSave = mruGraphH('button', {
+            key: 'save',
+            type: 'button',
+            className: 'mru-btn mru-btn--primary mru-btn--sm mru-graph__card-action',
+            'data-action': 'graph-rename-save',
+            disabled: pending,
+            onClick: saveRename,
+          }, tr('graph.renameSave'));
+          const renameCancel = mruGraphH('button', {
+            key: 'cancel',
+            type: 'button',
+            className: 'mru-btn mru-btn--ghost mru-btn--sm mru-graph__card-action',
+            'data-action': 'graph-rename-cancel',
+            disabled: pending,
+            onClick: cancelRename,
+          }, tr('graph.renameCancel'));
+          cardChildren.push(mruGraphH('div', {
+            key: 'rename',
+            className: 'mru-graph__rename',
+            role: 'group',
+            'aria-label': tr('graph.renameTitle'),
+            'data-action': 'graph-rename-editor',
+          }, renameInput, renameSave, renameCancel));
+        } else if (mergeFromId !== null) {
+          const fromLabel = mruGraphTruncate(mruGraphDisplay(selected.label || selected.id), 24);
+          if (mergeTarget === null) {
+            // Step 1 of the merge: pick a target node on the canvas.
+            const mergeHint = mruGraphH('span', {
+              key: 'hint',
+              className: 'mru-graph__merge-hint',
+            }, tr('graph.mergeHint'));
+            const mergeSource = mruGraphH('span', {
+              key: 'source',
+              className: 'mru-graph__merge-node',
+            }, fromLabel);
+            const mergeCancel = mruGraphH('button', {
+              key: 'cancel',
+              type: 'button',
+              className: 'mru-link-btn mru-graph__card-action',
+              'data-action': 'graph-merge-cancel',
+              onClick: cancelMerge,
+            }, tr('graph.mergeCancel'));
+            cardChildren.push(mruGraphH('div', {
+              key: 'merge',
+              className: 'mru-graph__merge-bar mru-graph__merge-bar--hint',
+              role: 'group',
+              'aria-label': tr('graph.mergeTitle'),
+              'data-action': 'graph-merge-bar',
+            }, mergeHint, mergeSource, mergeCancel));
+          } else {
+            // Step 2: the clicked target is shown before the patch is sent.
+            const intoLabel = mruGraphTruncate(mruGraphDisplay(mergeTarget.label || mergeTarget.id), 24);
+            const mergeTitle = mruGraphH('span', {
+              key: 'title',
+              className: 'mru-graph__merge-title',
+            }, tr('graph.mergeTitle'));
+            const mergeLabels = mruGraphH('span', {
+              key: 'labels',
+              className: 'mru-graph__merge-labels',
+            },
+            mruGraphH('span', { key: 'from', className: 'mru-graph__merge-node' }, fromLabel),
+            mruGraphH('span', { key: 'arrow', className: 'mru-graph__merge-arrow', 'aria-hidden': 'true' }, '→'),
+            mruGraphH('span', { key: 'into', className: 'mru-graph__merge-node' }, intoLabel));
+            const mergeConfirm = mruGraphH('button', {
+              key: 'confirm',
+              type: 'button',
+              className: 'mru-btn mru-btn--primary mru-btn--sm mru-graph__card-action',
+              'data-action': 'graph-merge-confirm',
+              disabled: pending,
+              onClick: confirmMerge,
+            }, tr('graph.mergeConfirm'));
+            const mergeCancel = mruGraphH('button', {
+              key: 'cancel',
+              type: 'button',
+              className: 'mru-link-btn mru-graph__card-action',
+              'data-action': 'graph-merge-cancel',
+              disabled: pending,
+              onClick: cancelMerge,
+            }, tr('graph.mergeCancel'));
+            cardChildren.push(mruGraphH('div', {
+              key: 'merge-confirm',
+              className: 'mru-graph__merge-bar mru-graph__merge-bar--confirm',
+              role: 'group',
+              'aria-label': tr('graph.mergeTitle'),
+              'data-action': 'graph-merge-confirm-bar',
+            }, mergeTitle, mergeLabels, mergeConfirm, mergeCancel));
+          }
+        } else {
+          const renameAction = mruGraphH('button', {
+            key: 'rename',
+            type: 'button',
+            className: 'mru-btn mru-btn--ghost mru-btn--sm mru-graph__card-action',
+            'data-action': 'graph-rename',
+            title: tr('graph.renameTitle'),
+            disabled: pending,
+            onClick: startRename,
+          }, mruGraphGlyph('edit', 14), tr('graph.rename'));
+          const mergeAction = mruGraphH('button', {
+            key: 'merge',
+            type: 'button',
+            className: 'mru-btn mru-btn--ghost mru-btn--sm mru-graph__card-action',
+            'data-action': 'graph-merge',
+            title: tr('graph.mergeTitle'),
+            disabled: pending,
+            onClick: startMerge,
+          }, mruGraphGlyph('merge', 14), tr('graph.merge'));
+          const pinAction = mruGraphH('button', {
+            key: 'pin',
+            type: 'button',
+            className: 'mru-btn mru-btn--ghost mru-btn--sm mru-graph__card-action',
+            'data-action': selectedPin ? 'graph-unpin' : 'graph-pin',
+            'aria-pressed': selectedPin ? 'true' : 'false',
+            disabled: pending,
+            onClick: togglePin,
+          }, mruGraphGlyph('pin', 14), selectedPin ? tr('graph.unpin') : tr('graph.pin'));
+          const actionButtons = [renameAction, mergeAction, pinAction];
+          if (askButton !== null) actionButtons.push(askButton);
+          cardChildren.push(mruGraphH('div', {
+            key: 'actions',
+            className: 'mru-graph__card-actions',
+            role: 'group',
+            'aria-label': tr('graph.curate'),
+          }, actionButtons));
+        }
+        if (curationPending !== null) {
+          cardChildren.push(mruGraphH('span', {
+            key: 'pending',
+            className: 'mru-graph__card-pending',
+            role: 'status',
+          }, tr('graph.saving')));
+        }
+        if (curationError !== '') {
+          cardChildren.push(mruGraphH('p', {
+            key: 'error',
+            className: 'mru-graph__card-error',
+            role: 'alert',
+          }, curationError));
+        } else if (curationNotice !== '') {
+          cardChildren.push(mruGraphH('p', {
+            key: 'notice',
+            className: 'mru-graph__card-notice',
+            role: 'status',
+          }, curationNotice));
+        }
+      } else if (askButton !== null) {
+        cardChildren.push(askButton);
       }
     }
     card = mruGraphH('div', {
@@ -3112,6 +3537,9 @@ export function MruGraphView(props) {
       role: 'region',
       'aria-label': title,
       'data-node-id': selected.id,
+      'data-pending': curationPending !== null ? curationPending : undefined,
+      'data-merging': mergeFromId !== null ? 'true' : undefined,
+      'aria-busy': curationPending !== null ? 'true' : undefined,
       onKeyDown: onCardKeyDown,
     }, cardChildren);
   }
@@ -3125,6 +3553,7 @@ export function MruGraphView(props) {
     'data-available': available ? 'true' : 'false',
     'data-collapsed': visible.collapsed ? 'true' : undefined,
     'data-selected-id': selected ? selected.id : undefined,
+    'data-merge-mode': mergeFromId !== null ? 'true' : undefined,
     'aria-busy': building || loading ? 'true' : undefined,
   },
   header,

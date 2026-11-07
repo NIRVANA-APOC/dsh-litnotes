@@ -22,7 +22,7 @@ import { useUiStore } from '../../src/client/state/ui.ts'
 import { zh } from '../../src/client/i18n/index.ts'
 import { LocaleContext, type LitnotesTranslate } from '../../src/client/shell/locale-context.ts'
 import { DEFAULT_PREFERENCES } from '../../src/shared/preferences.ts'
-import { makeDocGraph, makeDocument, makeFakeClient, makeLibraryGraph } from './graph-fixtures.ts'
+import { makeDocGraph, makeDocument, makeFakeClient, makeLibraryGraph, makeStatus } from './graph-fixtures.ts'
 
 /** Translate through the zh dictionary (key fallback keeps assertions readable). */
 const t: LitnotesTranslate = ((key: string, params?: Record<string, unknown>) => {
@@ -96,7 +96,7 @@ beforeEach(() => {
   useGraphStore.getState().reset()
   useUiStore.setState({ currentDocumentId: 'doc-1', marginOpen: true, scene: 'graph' })
   useSettingsStore.setState({ preferences: { ...DEFAULT_PREFERENCES } })
-  useLibraryStore.setState({ documents: [makeDocument()], status: null })
+  useLibraryStore.setState({ documents: [makeDocument()], status: makeStatus() })
 })
 
 afterEach(() => {
@@ -186,7 +186,7 @@ describe('selection and the node card', () => {
     const container = mountScene()
     selectNode(container, 'n-concept')
     clickButton(container, zh['graph.action.jump'])
-    expect(jump).toHaveBeenCalledWith('b0:aaaa1111', { flash: true })
+    expect(jump).toHaveBeenCalledWith('b0:aaaa1111', { flash: true, documentId: 'doc-1' })
     expect(useUiStore.getState().scene).toBe('read')
   })
 
@@ -216,7 +216,9 @@ describe('selection and the node card', () => {
     expect(input).not.toBeNull()
     if (input === null) return
     act(() => {
-      ;(input as HTMLInputElement).value = 'Learned router'
+      // React tracks the native value setter; assign through it so onChange fires.
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, 'Learned router')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {

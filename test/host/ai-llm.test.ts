@@ -141,6 +141,7 @@ describe('streamText normalization', () => {
     expect(call?.system).toBe('system prompt')
     expect(call?.maxTokens).toBe(16384)
     expect(call?.temperature).toBe(2)
+    expect(call?.purpose).toBe('chat')
     expect(call?.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'hello model' }] }])
   })
 
@@ -375,5 +376,21 @@ describe('streamText host chunk aliases', () => {
       usage: { inputTokens: 3, outputTokens: 2 },
     })
     expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+  })
+})
+
+
+describe('purpose forwarding', () => {
+  test('forwards the call purpose to the Host llm.stream options (and omits it when unset)', async () => {
+    const fake = createFakeLlm()
+    fake.setDefault('ok')
+    const gateway = makeGateway({ fake })
+    await collect(gateway.streamText(streamRequest({ purpose: 'graph-extract' })))
+    expect(fake.lastCall()?.purpose).toBe('graph-extract')
+    await collect(gateway.streamText(streamRequest()))
+    expect(fake.lastCall()?.purpose).toBeUndefined()
+    // completeText forwards the purpose too (it delegates to streamText).
+    await gateway.completeText(streamRequest({ purpose: 'entailment' }))
+    expect(fake.lastCall()?.purpose).toBe('entailment')
   })
 })

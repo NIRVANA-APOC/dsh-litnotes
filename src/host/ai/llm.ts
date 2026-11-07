@@ -461,6 +461,11 @@ export function createLlmGateway(deps: LlmGatewayDeps = {}): LlmGateway {
       messages,
     }
     if (system !== '') options.system = system
+    if (typeof request.purpose === 'string' && request.purpose !== '') {
+      // Forward the call purpose to the Host adapter (routing/observability:
+      // e.g. distinguish reading turns from entailment/graph utility calls).
+      options.purpose = request.purpose
+    }
     const maxTokens = clampInt(request.maxTokens, 1, MAX_OUTPUT_TOKENS, undefined)
     if (maxTokens !== undefined) options.maxTokens = maxTokens
     const temperature = clampNumber(request.temperature, 0, 2, undefined)

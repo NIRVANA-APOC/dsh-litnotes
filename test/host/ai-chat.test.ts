@@ -1454,3 +1454,21 @@ test('the route-owned abort signal (second argument) aborts the turn', async () 
   expect(fake.callCount()).toBe(0)
   expect(chatFile(store)).toBeNull()
 })
+
+
+test('forwards the call purpose to the Host adapter (chat answer vs entailment pass)', async () => {
+  const method = blockWith(MARKDOWN, 'We propose block-sparse attention')
+  const fake = createFakeLlm()
+  fake.queueAnswer({
+    markdown: 'The method is sparse routing [1].',
+    citations: [{ index: 1, blockKey: method.key, quote: 'We propose block-sparse attention', aspect: 'method', note: 'method' }],
+  })
+  const { chat } = makeChat({ fake })
+  await collectFrames(chat, question())
+  const purposes = fake.calls.map((call) => call.purpose)
+  expect(purposes).toContain('chat')
+  expect(purposes).toContain('entailment')
+  // The grounded answer call is scripted by the queued answer; the entailment
+  // rule matches the verdict fence, so exactly two model calls happen.
+  expect(fake.callCount()).toBe(2)
+})

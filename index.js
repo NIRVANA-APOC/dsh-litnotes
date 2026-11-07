@@ -1066,6 +1066,9 @@ function createLlmGateway(deps = {}) {
       messages
     };
     if (system !== "") options.system = system;
+    if (typeof request.purpose === "string" && request.purpose !== "") {
+      options.purpose = request.purpose;
+    }
     const maxTokens = clampInt(request.maxTokens, 1, MAX_OUTPUT_TOKENS, void 0);
     if (maxTokens !== void 0) options.maxTokens = maxTokens;
     const temperature = clampNumber(request.temperature, 0, 2, void 0);

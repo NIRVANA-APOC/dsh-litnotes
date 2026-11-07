@@ -31,9 +31,7 @@ export const zh = {
   'read.loadFailed': '解析稿没能载入。',
   'read.emptyDoc': '这篇解析稿还没有内容。',
   'read.retry': '重新载入',
-  'read.droppedAnnotations': '{count} 条批注与当前解析稿不匹配，已保留。',
   'read.unknownSymbol': 'MinerU 未能识别此符号（源 PDF 字体或数学斜体字形导致）',
-  'read.unknownNotice': 'MinerU 未能识别本文中的 {count} 处符号，多为数学斜体字形。可以尝试更换解析模型或开启 OCR 重新解析。',
 
   /* Outline popover */
   'read.outline.title': '大纲',
@@ -44,7 +42,6 @@ export const zh = {
   'read.block.translating': '翻译中…',
   'read.block.annotate': '批注本段',
   'read.block.ask': '问 AI 本段',
-  'read.block.translateDone': '已翻译，点击重译',
 
   /* Translation states */
   'read.translation.pending': '翻译中…',
@@ -71,7 +68,6 @@ export const zh = {
   'margin.staleSection': '未能定位的批注',
   'margin.staleTag': '位置丢失',
   'margin.dropped': '{count} 条批注与解析稿不匹配，已保留在保存列表中。',
-  'margin.notesEmptyFiltered': '当前筛选下没有批注。',
 
   /* Selection toolbar */
   'sel.toolbar': '选区操作',
@@ -103,7 +99,6 @@ export const zh = {
   'note.delete': '删除',
 
   /* Model load errors */
-  'read.error.document': '这篇解析稿无法载入。',
   'read.error.annotations': '批注保存失败，稍后会自动重试。',
   'read.error.translation': '翻译请求失败。',
 } as const
@@ -127,16 +122,13 @@ export const en: Record<keyof typeof zh, string> = {
   'read.loadFailed': "Couldn't load the parsed draft.",
   'read.emptyDoc': 'This draft has no content yet.',
   'read.retry': 'Load again',
-  'read.droppedAnnotations': '{count} annotations do not match the current parse and were kept.',
   'read.unknownSymbol': 'MinerU could not recognize this symbol (source PDF font or italic math glyph)',
-  'read.unknownNotice': 'MinerU could not recognize {count} symbols in this paper, mostly italic math glyphs. Try another parse model or enable OCR and reparse.',
   'read.outline.title': 'Outline',
   'read.outline.empty': 'This paper has no section headings.',
   'read.block.translate': 'Translate this paragraph',
   'read.block.translating': 'Translating…',
   'read.block.annotate': 'Annotate this paragraph',
   'read.block.ask': 'Ask AI about this paragraph',
-  'read.block.translateDone': 'Translated — click to redo',
   'read.translation.pending': 'Translating…',
   'read.translation.failed': 'This paragraph was not translated.',
   'read.translation.retry': 'Retry',
@@ -159,7 +151,6 @@ export const en: Record<keyof typeof zh, string> = {
   'margin.staleSection': 'Annotations without a position',
   'margin.staleTag': 'Lost position',
   'margin.dropped': '{count} annotations do not match the draft and are kept in the saved list.',
-  'margin.notesEmptyFiltered': 'No notes match the current filter.',
   'sel.toolbar': 'Selection actions',
   'sel.highlight': 'Highlight',
   'sel.colors': 'Highlight color',
@@ -183,7 +174,6 @@ export const en: Record<keyof typeof zh, string> = {
   'note.save': 'Save',
   'note.cancel': 'Cancel',
   'note.delete': 'Delete',
-  'read.error.document': 'This draft could not be loaded.',
   'read.error.annotations': 'Saving annotations failed; it will retry automatically.',
   'read.error.translation': 'The translation request failed.',
 }

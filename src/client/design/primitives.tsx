@@ -20,7 +20,7 @@ import {
   type Placement,
 } from '@floating-ui/react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { forwardRef, useEffect, useId, useRef, useState } from 'react'
 import { Icon, type IconName } from './icons.tsx'
 
 /** Join class names, dropping falsy entries. */
@@ -42,10 +42,14 @@ interface ButtonBase extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chil
   children?: ReactNode
 }
 
-/** One labelled button. */
-export function Button({ variant = 'default', size = 'md', icon, children, className, ...rest }: ButtonBase): ReactElement {
+/** One labelled button (ref-forwarding so anchored menus can target it). */
+export const Button = forwardRef<HTMLButtonElement, ButtonBase>(function Button(
+  { variant = 'default', size = 'md', icon, children, className, ...rest },
+  ref,
+): ReactElement {
   return (
     <button
+      ref={ref}
       type="button"
       className={cx('ln-btn', `ln-btn--${variant}`, size === 'sm' && 'ln-btn--sm', className)}
       {...rest}
@@ -54,7 +58,7 @@ export function Button({ variant = 'default', size = 'md', icon, children, class
       {children === undefined ? null : <span className="ln-btn__label">{children}</span>}
     </button>
   )
-}
+})
 
 /** Props of the square icon button. */
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
@@ -67,9 +71,13 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
 }
 
 /** One square icon-only button with a mandatory accessible name. */
-export function IconButton({ icon, label, size = 18, pressed, tone = 'default', className, ...rest }: IconButtonProps): ReactElement {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { icon, label, size = 18, pressed, tone = 'default', className, ...rest },
+  ref,
+): ReactElement {
   return (
     <button
+      ref={ref}
       type="button"
       className={cx('ln-iconbtn', tone !== 'default' && `ln-iconbtn--${tone}`, pressed && 'is-pressed', className)}
       aria-label={label}
@@ -80,7 +88,7 @@ export function IconButton({ icon, label, size = 18, pressed, tone = 'default', 
       <Icon name={icon} size={size} />
     </button>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Segmented control
@@ -436,7 +444,7 @@ export function Dialog({ open, onClose, title, description, width, children, foo
     <dialog
       ref={ref}
       className="ln-dialog"
-      style={width === undefined ? undefined : { width }}
+      style={{ width: width ?? 'min(560px, calc(100vw - 48px))' }}
       onClose={onClose}
       onCancel={(event) => {
         event.preventDefault()

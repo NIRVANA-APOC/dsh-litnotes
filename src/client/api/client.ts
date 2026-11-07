@@ -218,7 +218,7 @@ export function createHostClient(base?: string | URL): HostClient {
     source: (documentId, download) => sourceUrl(documentId, { download }, resolvedBase),
     vendor: (relativePath) => vendorAssetUrl(relativePath, resolvedBase),
     ping: (event, detail) => {
-      void call('health.ping', { clientVersion: '2.0.0', event, detail }).catch(() => {})
+      void call('health.ping', { clientVersion: '2.0.1', event, detail }).catch(() => {})
     },
   }
 }

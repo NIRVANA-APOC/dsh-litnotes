@@ -42,6 +42,7 @@ import { SelectionToolbar } from './selection-bar.tsx'
 import { SelectionTranslationCard } from './translation.tsx'
 import type { SelectionTranslationState } from './translation.tsx'
 import { Tethers } from './tethers.tsx'
+import { AnnotationCard } from './annotation-card.tsx'
 import { AiMarginEntries } from './margin-ai.tsx'
 import { askAI } from './api.ts'
 import { orderOf, refreshAnnotations, useReaderStore } from './store.ts'
@@ -121,6 +122,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   /* ---- transient UI state -------------------------------------------- */
   const [selection, setSelection] = useState<ReaderSelection | null>(null)
   const [selCard, setSelCard] = useState<SelectionTranslationState | null>(null)
+  const [markCard, setMarkCard] = useState<{ annotationId: string; anchor: HTMLElement } | null>(null)
   const [noteEditor, setNoteEditor] = useState<NoteEditorState | null>(null)
   const [flashBlockKey, setFlashBlockKey] = useState<string | null>(null)
   const [hovered, setHovered] = useState<{ annotationId: string | null; blockKey: string | null }>({
@@ -408,8 +410,10 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
     askAI({ blockKey, quote: block.plainText.slice(0, 2000), text: block.plainText })
   }, [])
 
-  const handleMarkClick = useCallback((annotationId: string): void => {
+  const handleMarkClick = useCallback((annotationId: string, event?: { currentTarget: EventTarget | null }): void => {
     useReaderStore.getState().setActiveAnnotation(annotationId)
+    const anchor = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    if (anchor !== null) setMarkCard({ annotationId, anchor })
     const margin = marginRef.current
     if (margin === null) return
     try {
@@ -945,6 +949,22 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
           onRetry={retrySelectionTranslation}
           onClose={() => setSelCard(null)}
           onCopy={copyTranslation}
+        />
+      ) : null}
+
+      {markCard !== null ? (
+        <AnnotationCard
+          annotation={annotations.find((annotation) => annotation.id === markCard.annotationId) ?? null}
+          anchor={markCard.anchor}
+          onClose={() => setMarkCard(null)}
+          onEdit={(annotation) => {
+            setMarkCard(null)
+            editAnnotation(annotation)
+          }}
+          onDelete={(annotation) => {
+            setMarkCard(null)
+            deleteAnnotation(annotation)
+          }}
         />
       ) : null}
 

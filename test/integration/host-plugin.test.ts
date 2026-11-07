@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url))
+const PACKAGE_VERSION = (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version: string }).version
 
 /** One registered route (only the shapes this plugin uses). */
 interface RegisteredRoute {
@@ -186,8 +187,8 @@ describe('host plugin composition', () => {
     expect(status).toBe(200)
     const typed = envelope as { ok: true; value: Record<string, unknown> }
     expect(typed.ok).toBe(true)
-    expect(typed.value.version).toBe('2.0.0+host')
-    expect(typed.value.hostVersion).toBe('2.0.0+host')
+    expect(typed.value.version).toBe(`${PACKAGE_VERSION}+host`)
+    expect(typed.value.hostVersion).toBe(`${PACKAGE_VERSION}+host`)
     expect(typed.value.counts).toEqual({ total: 0, parsed: 0, parsing: 0, failed: 0 })
     expect(typed.value.preferences).toMatchObject({ readingMode: 'original', targetLanguage: 'zh' })
     expect(typed.value.ai).toMatchObject({ available: false })
@@ -198,7 +199,7 @@ describe('host plugin composition', () => {
     const list = await callApi(mounted, 'library.list')
     expect((list.envelope as { value: { documents: unknown[] } }).value.documents).toEqual([])
     const ping = await callApi(mounted, 'health.ping', { event: 'test' })
-    expect((ping.envelope as { value: { hostVersion: string } }).value.hostVersion).toBe('2.0.0+host')
+    expect((ping.envelope as { value: { hostVersion: string } }).value.hostVersion).toBe(`${PACKAGE_VERSION}+host`)
   })
 
   it('rejects unknown methods with the not-found envelope', async () => {

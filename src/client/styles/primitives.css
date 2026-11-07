@@ -412,8 +412,10 @@
 .ln-dialog__surface {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
   max-height: calc(100vh - 64px);
-  min-width: min(560px, calc(100vw - 48px));
+  overflow-wrap: anywhere;
 }
 .ln-dialog__head {
   display: flex;

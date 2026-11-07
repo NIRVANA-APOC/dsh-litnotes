@@ -101,6 +101,13 @@ export const zh = {
   /* Model load errors */
   'read.error.annotations': '批注保存失败，稍后会自动重试。',
   'read.error.translation': '翻译请求失败。',
+
+  /* Anchored annotation card (highlight click) */
+  'read.annCard.label': '批注',
+  'read.annCard.ai': 'AI 批注',
+  'read.annCard.user': '我的批注',
+  'read.annCard.edit': '编辑',
+  'read.annCard.delete': '删除',
 } as const
 
 export const en: Record<keyof typeof zh, string> = {
@@ -176,4 +183,11 @@ export const en: Record<keyof typeof zh, string> = {
   'note.delete': 'Delete',
   'read.error.annotations': 'Saving annotations failed; it will retry automatically.',
   'read.error.translation': 'The translation request failed.',
+
+  /* Anchored annotation card (highlight click) */
+  'read.annCard.label': 'Annotation',
+  'read.annCard.ai': 'AI annotation',
+  'read.annCard.user': 'My annotation',
+  'read.annCard.edit': 'Edit',
+  'read.annCard.delete': 'Delete',
 }

@@ -385,7 +385,10 @@ await check('dsh client entry files', () => {
 // ---------------------------------------------------------------------------
 
 await transitionCheck('legacy trees removed', () => {
-  const present = LEGACY_TREES.filter((prefix) => ALL_FILES.some((file) => file.startsWith(prefix)))
+  // `lib/client.js` is the generated client artifact, not legacy code.
+  const present = LEGACY_TREES.filter((prefix) =>
+    ALL_FILES.some((file) => file.startsWith(prefix) && file !== 'lib/client.js'),
+  )
   if (present.length > 0) throw new Error(`legacy files still present: ${present.join(', ')}`)
   return 'no legacy JS trees'
 })

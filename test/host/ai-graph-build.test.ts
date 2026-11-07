@@ -1069,3 +1069,39 @@ test('buildDocGraph truncates over-long sources to maxGraphSourceChars plus head
   expect(prompts).not.toMatch(/later body 7/)
   for (const call of calls) expect(call.prompt.length).toBeLessThan(6000)
 })
+
+test('mergeDocKnowledge tolerates the 1.0 `{ knowledge: {...} }` wrapper shape', async () => {
+  const documentId = 'doc-merge-wrapper'
+  const env = createFakeStore({
+    docs: [{ id: documentId, title: 'Wrapper Paper' }],
+    markdown: { [documentId]: '## W\n\nBody text.' },
+  })
+  const service = makeService(env, createFakeGateway({}))
+  const merged = await service.mergeDocKnowledge(documentId, {
+    knowledge: {
+      nodes: [{ type: 'insight', label: 'Wrapped insight', summary: '', blockKeys: [] }],
+      edges: [],
+    },
+  })
+  expect(merged.nodes.some((node) => node.label === 'Wrapped insight' && node.source === 'qa')).toBe(true)
+  expect(merged.overview).toMatch(/No concepts were extracted|Wrapper Paper|Knowledge graph/)
+})
+
+test('updateDocGraph upserts manual edges by id and keeps the rest of the graph intact', async () => {
+  const documentId = 'doc-edge-upsert'
+  const { env, service } = curationService(documentId)
+  seedGraph(
+    env,
+    documentId,
+    [seedNode({ id: 'n-x', label: 'X' }), seedNode({ id: 'n-y', label: 'Y' })],
+    [{ id: 'e-xy', from: 'n-x', to: 'n-y', type: 'relates', source: 'ai-summary', weight: 1 }],
+  )
+  const updated = await service.updateDocGraph(documentId, {
+    edges: [{ id: 'e-xy', from: 'n-x', to: 'n-y', type: 'supports', weight: 4, source: 'user' }],
+  })
+  const edge = updated.edges.find((item) => item.id === 'e-xy')
+  expect(edge?.type).toBe('supports')
+  expect(edge?.weight).toBe(4)
+  expect(edge?.source).toBe('user')
+  expect(updated.nodes.length).toBe(2)
+})

@@ -63,6 +63,8 @@ const STOPWORDS: ReadonlySet<string> = new Set([
 /** Context defaults (`ai.maxContextChars` mirrors `DEFAULT_BUDGET_CHARS`). */
 const DEFAULT_TOP_K = 12
 const DEFAULT_BUDGET_CHARS = 9000
+/** Whole-document coverage cap: first body of every section, budget permitting. */
+const MAX_COVERAGE_BLOCKS = 16
 /** Snippet length returned by {@link Retriever.search}. */
 const SNIPPET_CHARS = 360
 /** Upper bound for returned outline/section entries. */
@@ -518,6 +520,7 @@ export function createRetriever(deps: RetrieverDeps = {}): Retriever {
       totalBlocks: index.entries.length,
     }
     if (index.entries.length === 0) return empty
+    const indexEntries = index.entries
 
     const question = typeof input.question === 'string' ? input.question : ''
     /** order → picked entry with its score/reason. */
@@ -575,6 +578,60 @@ export function createRetriever(deps: RetrieverDeps = {}): Retriever {
         section: entry.section,
       })
     }
+    // Whole-document coverage: lexical ranking cannot answer an overview
+    // question (a Chinese "总结全文" prompt matches no English body terms), so
+    // fill the remaining budget with the first body block of every section.
+    // This pass runs after the ranked selection and never displaces it.
+    const coveredKeys = new Set(selected.map((block) => block.key))
+    const coverage: IndexedBlock[] = []
+    const pushCoverage = (entry: IndexedBlock | undefined): void => {
+      if (entry === undefined || coveredKeys.has(entry.key)) return
+      if (coverage.some((item) => item.order === entry.order)) return
+      coverage.push(entry)
+    }
+    let firstBody = true
+    for (let index = 0; index < indexEntries.length && coverage.length < MAX_COVERAGE_BLOCKS; index += 1) {
+      const entry = indexEntries[index]
+      if (entry === undefined) continue
+      if (entry.kind === 'heading') {
+        for (let probe = index + 1; probe < indexEntries.length; probe += 1) {
+          const body = indexEntries[probe]
+          if (body === undefined) continue
+          if (body.kind === 'heading') break
+          if (body.text.trim() === '') continue
+          pushCoverage(body)
+          break
+        }
+        continue
+      }
+      if (firstBody && entry.text.trim() !== '') {
+        pushCoverage(entry)
+        firstBody = false
+      }
+    }
+    for (const entry of coverage) {
+      let text = entry.text
+      if (text.length > MAX_CONTEXT_BLOCK_CHARS) text = text.slice(0, MAX_CONTEXT_BLOCK_CHARS).trimEnd()
+      const overhead = (entry.key.length + 24) | 0
+      if (usedChars + text.length + overhead > budgetChars) {
+        const remaining = budgetChars - usedChars - overhead
+        if (remaining < 160) continue
+        text = text.slice(0, remaining).trimEnd()
+      }
+      if (text === '') continue
+      usedChars += text.length
+      selected.push({
+        key: entry.key,
+        page: entry.page,
+        index: entry.index,
+        text,
+        kind: entry.kind,
+        score: 250,
+        section: entry.section,
+      })
+    }
+    selected.sort((left, right) => left.index - right.index)
+
     if (selected.length === 0) {
       // Degenerate budget: always return the first block so the model sees text.
       const first = index.entries[0]

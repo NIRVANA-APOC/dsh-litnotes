@@ -394,8 +394,13 @@ policy (what to include and in which order) stays ours.
      always included;
   3. the top `topK` lexical matches (`topK` clamped 1–40, default 12);
   4. both neighbours of the four strongest matches;
-  5. blocks are ordered by document position (prompt stability);
-  6. a per-block cap (4000 chars) and the total character budget (`budgetChars` clamped
+  5. **whole-document coverage**: after the ranked selection, the remaining budget is filled
+     with the first body block of every section (at most 16 blocks), so overview questions —
+     including a Chinese "总结全文" prompt against an English paper, which has no lexical hits —
+     always see real body text instead of only the title/author head. Coverage never displaces
+     the ranked selection;
+  6. blocks are ordered by document position (prompt stability);
+  7. a per-block cap (4000 chars) and the total character budget (`budgetChars` clamped
      500–64000, default 9000; per-block prompt overhead counted as `key.length + 24`) enforce
      the window; match/neighbour blocks are dropped rather than truncated when over budget,
      head/focus/selection blocks may be truncated, and a degenerate budget still returns the

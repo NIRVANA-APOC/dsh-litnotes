@@ -11939,6 +11939,7 @@ var STOPWORDS = /* @__PURE__ */ new Set([
 ]);
 var DEFAULT_TOP_K = 12;
 var DEFAULT_BUDGET_CHARS = 9e3;
+var MAX_COVERAGE_BLOCKS = 16;
 var SNIPPET_CHARS = 360;
 var MAX_STRUCTURE_ENTRIES = 60;
 var CJK_SEGMENTER = new Intl.Segmenter(void 0, { granularity: "word" });
@@ -12223,6 +12224,7 @@ function createRetriever(deps = {}) {
       totalBlocks: index.entries.length
     };
     if (index.entries.length === 0) return empty;
+    const indexEntries = index.entries;
     const question = typeof input.question === "string" ? input.question : "";
     const picked = /* @__PURE__ */ new Map();
     const add = (entry, score, reason) => {
@@ -12270,6 +12272,55 @@ function createRetriever(deps = {}) {
         section: entry.section
       });
     }
+    const coveredKeys = new Set(selected.map((block2) => block2.key));
+    const coverage = [];
+    const pushCoverage = (entry) => {
+      if (entry === void 0 || coveredKeys.has(entry.key)) return;
+      if (coverage.some((item) => item.order === entry.order)) return;
+      coverage.push(entry);
+    };
+    let firstBody = true;
+    for (let index2 = 0; index2 < indexEntries.length && coverage.length < MAX_COVERAGE_BLOCKS; index2 += 1) {
+      const entry = indexEntries[index2];
+      if (entry === void 0) continue;
+      if (entry.kind === "heading") {
+        for (let probe = index2 + 1; probe < indexEntries.length; probe += 1) {
+          const body = indexEntries[probe];
+          if (body === void 0) continue;
+          if (body.kind === "heading") break;
+          if (body.text.trim() === "") continue;
+          pushCoverage(body);
+          break;
+        }
+        continue;
+      }
+      if (firstBody && entry.text.trim() !== "") {
+        pushCoverage(entry);
+        firstBody = false;
+      }
+    }
+    for (const entry of coverage) {
+      let text3 = entry.text;
+      if (text3.length > MAX_CONTEXT_BLOCK_CHARS) text3 = text3.slice(0, MAX_CONTEXT_BLOCK_CHARS).trimEnd();
+      const overhead = entry.key.length + 24 | 0;
+      if (usedChars + text3.length + overhead > budgetChars) {
+        const remaining = budgetChars - usedChars - overhead;
+        if (remaining < 160) continue;
+        text3 = text3.slice(0, remaining).trimEnd();
+      }
+      if (text3 === "") continue;
+      usedChars += text3.length;
+      selected.push({
+        key: entry.key,
+        page: entry.page,
+        index: entry.index,
+        text: text3,
+        kind: entry.kind,
+        score: 250,
+        section: entry.section
+      });
+    }
+    selected.sort((left, right) => left.index - right.index);
     if (selected.length === 0) {
       const first = index.entries[0];
       if (first !== void 0) {

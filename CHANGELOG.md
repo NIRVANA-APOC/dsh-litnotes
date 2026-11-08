@@ -75,6 +75,10 @@ formats. Existing libraries load as-is; no migration step.
 - Rail document menu anchored to its button; dialogs sized to their content without clipping.
 - Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
 - Import dialog lays out in one column at every width.
+- AI questions over the whole paper now see the document body, not just its title: after the
+  ranked lexical selection the context retriever fills the remaining budget with the first body
+  block of every section, so overview prompts (including a Chinese "总结全文" against an English
+  paper, which has no lexical hits) can actually summarise the paper.
 - The paper column and the AI margin scroll independently: the margin is a
   pinned, separately scrollable column on desktop (its own scrollbar, sticky
   composer and sticky filters), so reading the paper never drags the AI

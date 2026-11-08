@@ -134,11 +134,25 @@ test('context ranks the method paragraph for a method question', () => {
   expect(results[0]?.blockKey).toMatch(/^b\d+:[0-9a-f]{8}$/)
 })
 
-test('context always includes the title/abstract head even without query terms', () => {
+test('context always includes the title head plus whole-document coverage', () => {
   const retriever = makeRetriever()
   const context = retriever.context(input({ question: 'what is the' }))
-  expect(context.blocks.length).toBe(3)
+  expect(context.blocks.length).toBeGreaterThan(3)
   expect(context.blocks.some((block) => block.text.includes('Sparse Attention for Long Documents'))).toBe(true)
+  // Overview questions must see real body text, not just the title block.
+  expect(context.blocks.some((block) => block.text.includes('efficient attention for long documents'))).toBe(true)
+  expect(context.blocks.some((block) => block.text.includes('block-sparse attention with learned routing'))).toBe(true)
+  expect(context.blocks.some((block) => block.text.includes('throughput by 2.4x'))).toBe(true)
+})
+
+test('a cross-language summary question with no lexical hits still gets section bodies', () => {
+  const retriever = makeRetriever()
+  const context = retriever.context(input({ question: '总结全文', topK: 4 }))
+  expect(context.blocks.length).toBeGreaterThan(3)
+  expect(context.blocks.some((block) => block.text.includes('Sparse Attention for Long Documents'))).toBe(true)
+  const bodyBlocks = context.blocks.filter((block) => block.text.includes('attention') || block.text.includes('routing'))
+  expect(bodyBlocks.length).toBeGreaterThan(1)
+  expect(context.usedChars).toBeLessThanOrEqual(9000)
 })
 
 test('context always includes the reader focus block and selection block', () => {

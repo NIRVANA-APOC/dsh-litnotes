@@ -177,8 +177,10 @@ partial/unsupported claim states `.ln-ai__claim--partial/--unsupported`, followu
 `.ln-ai__followup`, status/stream rows, notices (entailment notice gated by the
 `entailmentNotice` preference), composer `.ln-ai__composer` with context chips
 `.ln-ai__context`, input row, send/stop, quick prompts `.ln-ai__prompt`.
-Composer: ⌘/Ctrl+Enter send, Shift+Enter newline; context chips (selection / visible paragraph)
-clear individually; AI unavailable shows the model setup hint.
+Composer: ⌘/Ctrl+Enter send, Shift+Enter newline. The default chip is 全文 (whole paper, no
+focus); an explicit paragraph focus (block toolbar → 询问 AI 此段) or a selection shows a removable
+此段 / 选中文本 chip. Scrolling never swaps the composer's context; AI unavailable shows the model
+setup hint.
 
 ### 4.6 Graph scene
 

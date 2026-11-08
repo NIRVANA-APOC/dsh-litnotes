@@ -126,7 +126,6 @@ function resetStores(): void {
     busy: false,
     input: '',
     composerContext: null,
-    autoFocusBlockKey: null,
     composerFocusTick: 0,
     streamError: null,
     lastKnowledgeDelta: null,
@@ -460,7 +459,7 @@ describe('composer context', () => {
     expect(useAiStore.getState().composerContext).toBeNull()
   })
 
-  it('falls back to the visible-paragraph block when no selection exists', async () => {
+  it('sends no focus by default so the Host answers over the whole document', async () => {
     let request: StreamScript['request'] | undefined
     setHostClient(
       createFakeHost({
@@ -471,14 +470,13 @@ describe('composer context', () => {
       }),
     )
     await useAiStore.getState().load('doc-1')
-    useAiStore.getState().setAutoFocus('b7:visible')
     await useAiStore.getState().ask('Q')
-    expect(request?.focus).toEqual({ blockKey: 'b7:visible' })
+    expect(request?.focus).toBeUndefined()
 
-    // An explicit selection context wins over the visible paragraph.
-    useAiStore.getState().focusComposer({ blockKey: 'b9:sel', quote: 'quoted', text: '' })
+    // An explicit paragraph context narrows the next question to that block.
+    useAiStore.getState().focusComposer({ blockKey: 'b7:para', quote: 'paragraph text', text: '', kind: 'paragraph' })
     await useAiStore.getState().ask('Q2')
-    expect(request?.focus).toEqual({ blockKey: 'b9:sel', selectionQuote: 'quoted' })
+    expect(request?.focus).toEqual({ blockKey: 'b7:para', selectionQuote: 'paragraph text' })
   })
 
   it('sends the composer context as the chat focus', async () => {

@@ -54,6 +54,10 @@ Most AI reading tools put the conversation in a floating window: ask a question,
 - Answers are generated only from the current paper's parsed text and streamed; stop, regenerate and follow-up questions are supported.
 - Citations are validated before they are shown; unverified citations are dimmed and never become annotations. A citation in an answer jumps straight back to its sentence.
 - Verified citations become AI annotations in their aspect color, carrying model and conversation provenance.
+- Questions default to the **whole paper** (no paragraph is attached for you); the per-paragraph
+  **Ask AI about this paragraph** button next to translate/annotate narrows the focus to one
+  paragraph, and a text selection narrows it to the selection — the composer chip always shows
+  which scope is active.
 - Conversation history is stored per paper locally, can be cleared and exported as Markdown.
 
 ### Knowledge graphs

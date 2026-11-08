@@ -307,14 +307,17 @@ id shape, which keeps agent/manual graph edits stable across calls.
 interface ChatRequest {
   documentId: string
   question: string
-  focus?: { blockKey?: string; selectionQuote?: string }  // reader focus/selection
+  focus?: { blockKey?: string; selectionQuote?: string }  // explicit paragraph/selection focus
   mode?: 'doc'                                            // reserved; only document scope
   regenerateOf?: string                                   // assistant message id to regenerate
 }
 ```
 
 The Host trims the question to 4000 characters, accepts only `b<index>:<hash>` focus block keys,
-bounds the selection quote to 2000 characters, and rejects any mode other than `doc`.
+bounds the selection quote to 2000 characters, and rejects any mode other than `doc`. A request
+without `focus` is a whole-document question: the context assembler still covers the head of the
+paper plus question-relevant blocks from the entire document, while `focus` only narrows it to one
+paragraph (the per-block "Ask AI about this paragraph" action) or one selection.
 
 ---
 
@@ -864,8 +867,11 @@ typography, motion) is specified in `.agents/plan/DESIGN-V2.md` §2 ("the margin
   through the client's NDJSON helper and adopts the `answer` frame (including replacing an entry
   for `regenerateOf`).
 - **Composer.** Fixed bottom of the stage, width = margin: textarea plus send/stop; `⌘/Ctrl+Enter`
-  sends, `Shift+Enter` inserts a newline, `Escape` stops; the selection context (`focus`) is a
-  removable chip. Unavailable model → setup hint instead of an input.
+  sends, `Shift+Enter` inserts a newline, `Escape` stops. The default scope chip reads 全文/Whole
+  paper and sends **no** `focus`, so questions are answered over the whole document; a paragraph
+  focus (the block toolbar's "Ask AI about this paragraph") or a text selection appears as a
+  removable 此段/选中文本 chip instead. Scrolling never changes the composer context by itself.
+  Unavailable model → setup hint instead of an input.
 - **Citation chip behavior.** Each `[n]` marker renders as a chip with one of three states:
   verified (signal styling, hover preview card with page/aspect/quote/claim, `跳到原文` enabled),
   `partial` entailment (warning mark + `ln-ai__cite--partial`; still jumpable), or

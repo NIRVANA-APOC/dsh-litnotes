@@ -41,7 +41,7 @@ export const zh = {
   'read.block.translate': '翻译本段',
   'read.block.translating': '翻译中…',
   'read.block.annotate': '批注本段',
-  'read.block.ask': '问 AI 本段',
+  'read.block.ask': '询问 AI 此段',
 
   /* Translation states */
   'read.translation.pending': '翻译中…',

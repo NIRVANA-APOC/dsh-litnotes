@@ -407,7 +407,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   const askBlock = useCallback((blockKey: string): void => {
     const block = findBlock(useReaderStore.getState().model, blockKey)
     if (block === null || typeof block.plainText !== 'string') return
-    askAI({ blockKey, quote: block.plainText.slice(0, 2000), text: block.plainText })
+    askAI({ blockKey, quote: block.plainText.slice(0, 2000), text: block.plainText, kind: 'paragraph' })
   }, [])
 
   const handleMarkClick = useCallback((annotationId: string, event?: { currentTarget: EventTarget | null }): void => {
@@ -570,7 +570,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   const askAboutSelection = useCallback((): void => {
     const current = selection
     if (current === null) return
-    askAI({ blockKey: current.blockKey, quote: current.quote, text: current.quote })
+    askAI({ blockKey: current.blockKey, quote: current.quote, text: current.quote, kind: 'selection' })
     clearBrowserSelection()
     setSelection(null)
   }, [selection])

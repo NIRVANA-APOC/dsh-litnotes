@@ -700,3 +700,17 @@
 
 /* Reduced motion is handled globally by the design system; the caret is the
    only continuous animation here and the global rule neutralizes it. */
+
+/* Default scope chip: the composer answers over the whole paper until the user
+ * explicitly picks a paragraph or a selection. */
+.ln-ai__chip[data-kind='document'] {
+  padding-right: 8px;
+  border-color: var(--ln-rule);
+  background: var(--ln-surface-2);
+  cursor: default;
+}
+
+.ln-ai__chip[data-kind='document'] .ln-ai__chip-label {
+  color: var(--ln-ink-soft);
+  cursor: default;
+}

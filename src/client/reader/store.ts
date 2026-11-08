@@ -78,6 +78,8 @@ export interface ReaderSelectionContext {
   blockKey: string
   quote: string
   text: string
+  /** Where the context came from: a text selection or the per-block AI button. */
+  kind?: 'selection' | 'paragraph'
 }
 
 /** A typed transient notice; the scene turns it into a toast with `t()`. */
@@ -141,11 +143,6 @@ export interface ReaderState {
   /* Navigation & notices */
   /** Block key the sheet should restore to once the model is ready. */
   restoreBlockKey: string | null
-  /**
-   * The block currently under the reading line (updated by the scene's
-   * IntersectionObserver). The AI composer reads this as the 本段 context.
-   */
-  visibleBlockKey: string | null
   jumpRequest: ReaderJumpRequest | null
   notice: ReaderNotice | null
 
@@ -558,7 +555,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   translationProviders: {},
   translateAll: null,
   restoreBlockKey: null,
-  visibleBlockKey: null,
   jumpRequest: null,
   notice: null,
 
@@ -595,7 +591,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       translationProviders: {},
       translateAll: null,
       restoreBlockKey,
-      visibleBlockKey: null,
       jumpRequest: keepJump,
       notice: null,
     })
@@ -687,7 +682,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       translationProviders: {},
       translateAll: null,
       restoreBlockKey: null,
-      visibleBlockKey: null,
       jumpRequest: null,
     })
     baseIds = new Set()
@@ -827,7 +821,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   },
 
   recordPosition: (blockKey) => {
-    if (get().visibleBlockKey !== blockKey) set({ visibleBlockKey: blockKey })
     rememberPosition(blockKey)
   },
 

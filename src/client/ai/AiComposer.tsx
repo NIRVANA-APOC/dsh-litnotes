@@ -1,19 +1,20 @@
 /**
  * The margin composer: the fixed bottom of the reader's margin column.
  *
- * Owns the textarea, the context chip (选区, handed over by the reader selection
- * toolbar through `registerAskAI`), the send/stop controls and the
- * model-unavailable setup hint. Sending is `⌘/Ctrl+Enter`; `Shift+Enter` keeps a
- * newline; `Escape` stops a running answer. All copy is localized through
- * `useT()`.
+ * Owns the textarea, the explicit context chip (a text selection or one
+ * paragraph, handed over by the reader through `registerAskAI`), the
+ * send/stop controls and the model-unavailable setup hint. Without an explicit
+ * context the Host answers over the whole document (the default chip is 全文).
+ * Sending is `⌘/Ctrl+Enter`; `Shift+Enter` keeps a newline; `Escape` stops a
+ * running answer. All copy is localized through `useT()`.
  */
 
 import type { ReactElement } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Button, IconButton, Kbd } from '../design/primitives.tsx'
 import { useT } from '../shell/locale-context.ts'
 import { excerpt } from './chat.ts'
-import { clearReaderSelection, useBlockExcerpt, useVisibleBlockKey } from './reader-bridge.ts'
+import { clearReaderSelection } from './reader-bridge.ts'
 import { useAiStore } from './store.ts'
 
 /** Props of {@link AiComposer}. */
@@ -45,22 +46,7 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
   const historyState = useAiStore((state) => state.historyState)
   const context = useAiStore((state) => state.composerContext)
   const focusTick = useAiStore((state) => state.composerFocusTick)
-  const setAutoFocus = useAiStore((state) => state.setAutoFocus)
-  const visibleBlockKey = useVisibleBlockKey()
-  const autoFocusText = useBlockExcerpt(visibleBlockKey)
-  const [autoCleared, setAutoCleared] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-
-  // The reader publishes the block under the reading line (`visibleBlockKey`);
-  // mirror it as the composer's 本段 context unless the reader clears it or a
-  // text selection takes precedence.
-  useEffect(() => {
-    setAutoFocus(autoCleared ? null : visibleBlockKey)
-  }, [visibleBlockKey, autoCleared, setAutoFocus])
-
-  useEffect(() => {
-    setAutoCleared(false)
-  }, [visibleBlockKey])
 
   useEffect(() => {
     if (focusTick === 0) return
@@ -96,9 +82,21 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
 
   return (
     <div className="ln-ai__composer" data-busy={busy ? 'true' : 'false'} data-available="true">
-      {context !== null ? (
-        <div className="ln-ai__context" role="group" aria-label={t('ai.selection')}>
-          <div className="ln-ai__chip" data-kind="selection">
+      {context === null ? (
+        <div className="ln-ai__context" role="group" aria-label={t('ai.document')}>
+          <div className="ln-ai__chip" data-kind="document">
+            <span className="ln-ai__chip-label" title={t('ai.documentHint')}>
+              <span className="ln-ai__chip-kind">{t('ai.document')}</span>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="ln-ai__context"
+          role="group"
+          aria-label={context.kind === 'paragraph' ? t('ai.paragraph') : t('ai.selection')}
+        >
+          <div className="ln-ai__chip" data-kind={context.kind === 'paragraph' ? 'paragraph' : 'selection'}>
             <button
               type="button"
               className="ln-ai__chip-label"
@@ -107,7 +105,9 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
                 if (context.blockKey !== '' && onJump !== undefined) onJump(context.blockKey)
               }}
             >
-              <span className="ln-ai__chip-kind">{t('ai.selection')}</span>
+              <span className="ln-ai__chip-kind">
+                {context.kind === 'paragraph' ? t('ai.paragraph') : t('ai.selection')}
+              </span>
               <span className="ln-ai__chip-quote">{excerpt(context.quote !== '' ? context.quote : context.blockKey, 32)}</span>
             </button>
             <IconButton
@@ -115,28 +115,6 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
               size={12}
               label={t('ai.clearContext')}
               onClick={() => clearReaderSelection()}
-            />
-          </div>
-        </div>
-      ) : autoCleared || visibleBlockKey === null || visibleBlockKey === '' ? null : (
-        <div className="ln-ai__context" role="group" aria-label={t('ai.visible')}>
-          <div className="ln-ai__chip" data-kind="visible">
-            <button
-              type="button"
-              className="ln-ai__chip-label"
-              title={visibleBlockKey}
-              onClick={() => {
-                if (onJump !== undefined) onJump(visibleBlockKey)
-              }}
-            >
-              <span className="ln-ai__chip-kind">{t('ai.visible')}</span>
-              <span className="ln-ai__chip-quote">{excerpt(autoFocusText !== '' ? autoFocusText : visibleBlockKey, 32)}</span>
-            </button>
-            <IconButton
-              icon="close"
-              size={12}
-              label={t('ai.clearParagraph')}
-              onClick={() => setAutoCleared(true)}
             />
           </div>
         </div>

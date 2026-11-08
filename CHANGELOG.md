@@ -75,6 +75,10 @@ formats. Existing libraries load as-is; no migration step.
 - Rail document menu anchored to its button; dialogs sized to their content without clipping.
 - Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
 - Import dialog lays out in one column at every width.
+- AI Q&A defaults to the whole paper: the composer no longer follows scrolling with an implicit
+  "current paragraph" context; a per-paragraph "Ask AI about this paragraph" button (next to
+  translate/annotate) applies an explicit paragraph focus, and a text selection applies a
+  selection focus.
 - No stale annotation/graph counts after deleting documents: an empty library shows the import
   invitation and the graph context bar hides all graph facts.
 - AI composer pinned in the margin; graph margin hint names the selection action.

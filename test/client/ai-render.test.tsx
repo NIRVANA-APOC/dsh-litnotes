@@ -265,7 +265,7 @@ beforeEach(() => {
   useUiStore.setState({ marginFilter: 'all', activeAspect: null, toasts: [] })
   useLibraryStore.setState({ status: STATUS, documents: [DOCUMENT], loaded: true })
   useSettingsStore.setState({ preferences: { ...DEFAULT_PREFERENCES }, loaded: true })
-  useReaderStore.setState({ annotations: [], selectionContext: null, visibleBlockKey: null } as never)
+  useReaderStore.setState({ annotations: [], selectionContext: null } as never)
 })
 
 afterEach(() => {
@@ -471,8 +471,7 @@ describe('composer', () => {
     expect(after?.value).toBe('')
   })
 
-  it('shows the 本段 context chip from the reading position and sends it as focus', async () => {
-    useReaderStore.setState({ visibleBlockKey: 'b7:visible' } as never)
+  it('defaults to a 全文 chip and sends no focus (whole-document scope)', async () => {
     let focus: { blockKey?: string; selectionQuote?: string } | undefined
     setHostClient(
       createFakeHost({
@@ -485,9 +484,37 @@ describe('composer', () => {
     )
     mount()
     await flush()
-    const chip = container.querySelector('.ln-ai__chip[data-kind="visible"]')
+    const chip = container.querySelector('.ln-ai__chip[data-kind="document"]')
     expect(chip).not.toBeNull()
-    expect(chip?.textContent).toContain('当前段落')
+    expect(chip?.textContent).toContain('全文')
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.ln-ai__input')
+    setTextareaValue(textarea as HTMLTextAreaElement, 'Summarize the paper')
+    act(() => {
+      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))
+    })
+    await flush()
+    expect(focus).toBeUndefined()
+  })
+
+  it('shows an explicit paragraph chip and sends it as focus', async () => {
+    let focus: { blockKey?: string; selectionQuote?: string } | undefined
+    setHostClient(
+      createFakeHost({
+        history: [],
+        stream: async ({ request, handlers }) => {
+          focus = request.focus
+          for (const frame of happyFrames()) handlers.onFrame(frame)
+        },
+      }),
+    )
+    useAiStore.getState().focusComposer({ blockKey: 'b7:para', quote: 'paragraph text', text: 'paragraph text', kind: 'paragraph' })
+    mount()
+    await flush()
+    const chip = container.querySelector('.ln-ai__chip[data-kind="paragraph"]')
+    expect(chip).not.toBeNull()
+    expect(chip?.textContent).toContain('此段')
+    expect(chip?.textContent).toContain('paragraph text')
 
     const textarea = container.querySelector<HTMLTextAreaElement>('.ln-ai__input')
     setTextareaValue(textarea as HTMLTextAreaElement, 'Q')
@@ -495,7 +522,7 @@ describe('composer', () => {
       textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))
     })
     await flush()
-    expect(focus).toEqual({ blockKey: 'b7:visible' })
+    expect(focus).toEqual({ blockKey: 'b7:para', selectionQuote: 'paragraph text' })
   })
 
   it('shows the setup invitation when the model is unavailable', async () => {

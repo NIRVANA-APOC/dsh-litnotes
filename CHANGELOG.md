@@ -75,6 +75,10 @@ formats. Existing libraries load as-is; no migration step.
 - Rail document menu anchored to its button; dialogs sized to their content without clipping.
 - Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
 - Import dialog lays out in one column at every width.
+- Paragraph hover toolbar: `content-visibility` paint containment clipped the
+  absolutely positioned tools at the block's right edge, so the last action
+  (询问 AI 此段) was invisible; blocks no longer use paint containment and all
+  three icon-only actions stay visible.
 - AI Q&A defaults to the whole paper: the composer no longer follows scrolling with an implicit
   "current paragraph" context; a per-paragraph "Ask AI about this paragraph" button (next to
   translate/annotate) applies an explicit paragraph focus, and a text selection applies a

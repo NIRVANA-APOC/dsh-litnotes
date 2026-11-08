@@ -110,8 +110,10 @@
 
 .ln-block {
   position: relative;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 110px;
+  /* No `content-visibility: auto` here: its paint containment clipped the
+   * absolutely positioned hover toolbar (翻译 / 批注 / 询问 AI) at the block's
+   * right edge, so the last button was invisible. Layout stays cheap because
+   * each block is a small element; the tool layer must escape the block box. */
 }
 
 .ln-block.is-flash {

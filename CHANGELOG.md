@@ -79,6 +79,12 @@ formats. Existing libraries load as-is; no migration step.
   ranked lexical selection the context retriever fills the remaining budget with the first body
   block of every section, so overview prompts (including a Chinese "总结全文" against an English
   paper, which has no lexical hits) can actually summarise the paper.
+- The AI panel body is the only scroll container inside the panel (the inner stream no longer
+  carries its own `ln-scroll`/overscroll box), so the mouse wheel always scrolls the conversation
+  history instead of being swallowed by a nested scroll area.
+- Provenance tethers are annotation-only: AI conversation turns (block-level anchors) no longer
+  draw lines, so the 对话 filter shows no lines between the paper and the right panel; note
+  tethers still render when a note and its sentence are both visible.
 - The reader's AI margin is a properly docked right rail: flush with the reader top, right and
   bottom edges (no gap above), with a fixed header (`页边` + count + filter chips), its own
   scrolling body, and the composer as a panel footer — so the panel never floats, never overlaps

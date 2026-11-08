@@ -112,7 +112,13 @@ export function Tethers({
     margin.querySelectorAll<HTMLElement>('[data-anchor-block]').forEach((element) => {
       if (element.closest('[aria-hidden="true"]') !== null) return
       const blockKey = element.dataset.anchorBlock
-      if (blockKey !== undefined && blockKey !== '') entries.push(element)
+      // Tethers encode annotation provenance: only reader notes carry an
+      // annotation id. AI conversation turns (block-level anchors only) never
+      // draw a line, so the 对话 view stays clean.
+      const annotationId = element.dataset.anchorId
+      if (blockKey === undefined || blockKey === '') return
+      if (annotationId === undefined || annotationId === '') return
+      entries.push(element)
     })
     // The docked AI panel is a separate surface: a tether must point at the
     // panel's left edge, never across the cards inside it.

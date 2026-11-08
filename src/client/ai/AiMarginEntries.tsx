@@ -530,7 +530,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       </div>
       <div
         ref={streamRef}
-        className="ln-ai__stream ln-scroll"
+        className="ln-ai__stream"
         role="log"
         aria-label={t('ai.title')}
         onScroll={handleScroll}

@@ -69,7 +69,6 @@
 .ln-ai__stream {
   flex: 1 1 auto;
   padding: 10px 14px 20px;
-  scrollbar-width: thin;
 }
 
 .ln-ai__turns {

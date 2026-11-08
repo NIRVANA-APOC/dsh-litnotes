@@ -46,7 +46,6 @@ import {
   unverifiedBreakdown,
 } from './chat.ts'
 import type { ChatEntry, ChatTurn, QuestionMark } from './chat.ts'
-import { AiComposer } from './AiComposer.tsx'
 import { AiMarginFilterChips } from './AiMarginFilterChips.tsx'
 import { AiMarkdown } from './markdown.tsx'
 import { CitationCard, CitationChip } from './Citation.tsx'
@@ -532,7 +531,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
           <span>{t('ai.toLatest')}</span>
         </button>
       ) : null}
-      <AiComposer documentId={documentId} available={available} modelLabel={modelLabel} onJump={jump} />
       {card !== null && card.citation !== null ? (
         <CitationCard
           t={tr}

@@ -24,7 +24,11 @@
 .ln-reader__scroll {
   flex: 1;
   min-height: 0;
-  padding: 26px 24px 96px;
+  /* No bottom padding here: sticky overlays (the AI composer) pin to the
+   * scrollport content box, so padding-bottom would leave the composer floating
+   * that many pixels above the panel bottom. The breathing room lives on the
+   * sheet instead. */
+  padding: 26px 24px 0;
 }
 
 .ln-sheet {
@@ -566,7 +570,9 @@
   flex-direction: column;
   min-width: 0;
   min-height: calc(100vh - 220px);
-  padding: 26px 0 40px 22px;
+  /* No bottom padding: the sticky composer must reach the scrollport bottom at
+   * the very end of the document too. */
+  padding: 26px 0 0 22px;
 }
 
 .ln-margin__head {
@@ -1268,7 +1274,7 @@
 
 @media (max-width: 820px) {
   .ln-reader__scroll {
-    padding: 14px 10px 80px;
+    padding: 14px 10px 0;
   }
 
   .ln-sheet {

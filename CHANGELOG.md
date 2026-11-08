@@ -75,6 +75,10 @@ formats. Existing libraries load as-is; no migration step.
 - Rail document menu anchored to its button; dialogs sized to their content without clipping.
 - Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
 - Import dialog lays out in one column at every width.
+- The AI composer is pinned to the bottom of the reader panel again: it now
+  lives at the end of the margin column (not inside the AI stream container) and
+  the scroll container no longer pads its bottom, so sticky never leaves a gap
+  above the panel bottom while reading or streaming.
 - Paragraph hover toolbar: `content-visibility` paint containment clipped the
   absolutely positioned tools at the block's right edge, so the last action
   (询问 AI 此段) was invisible; blocks no longer use paint containment and all

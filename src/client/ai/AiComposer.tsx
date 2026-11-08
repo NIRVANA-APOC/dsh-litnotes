@@ -12,6 +12,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useRef } from 'react'
 import { Button, IconButton, Kbd } from '../design/primitives.tsx'
+import { useLibraryStore } from '../state/library.ts'
 import { useT } from '../shell/locale-context.ts'
 import { excerpt } from './chat.ts'
 import { clearReaderSelection } from './reader-bridge.ts'
@@ -22,10 +23,6 @@ import { useAiStore } from './store.ts'
 export interface AiComposerProps {
   /** Open document id (the store already knows it; kept for explicitness). */
   documentId: string
-  /** Model availability from `status.ai.available`. */
-  available: boolean
-  /** Model label from `status.ai.route.model` (shown in the header). */
-  modelLabel: string
   /** Jump to a block (context chip label click). */
   onJump?: (blockKey: string) => void
 }
@@ -37,8 +34,11 @@ export interface AiComposerProps {
  * input, so the reader is told what to configure rather than facing a dead
  * textarea.
  */
-export function AiComposer({ documentId, available, modelLabel, onJump }: AiComposerProps): ReactElement {
+export function AiComposer({ documentId, onJump }: AiComposerProps): ReactElement {
   const t = useT()
+  const status = useLibraryStore((state) => state.status)
+  const available = status?.ai?.available === true
+  const modelLabel = status?.ai?.route?.model ?? ''
   const input = useAiStore((state) => state.input)
   const setInput = useAiStore((state) => state.setInput)
   const busy = useAiStore((state) => state.busy)

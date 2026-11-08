@@ -43,7 +43,7 @@ import { SelectionTranslationCard } from './translation.tsx'
 import type { SelectionTranslationState } from './translation.tsx'
 import { Tethers } from './tethers.tsx'
 import { AnnotationCard } from './annotation-card.tsx'
-import { AiMarginEntries } from './margin-ai.tsx'
+import { AiComposer, AiMarginEntries } from './margin-ai.tsx'
 import { askAI } from './api.ts'
 import { orderOf, refreshAnnotations, useReaderStore } from './store.ts'
 import { copyText } from './clipboard.ts'
@@ -912,6 +912,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
                   if (activeAspect !== null) ui.toggleAspect(activeAspect)
                 }}
               />
+              <AiComposer documentId={document.id} onJump={handleJump} />
             </aside>
           ) : null}
         </article>

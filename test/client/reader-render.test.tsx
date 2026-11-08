@@ -460,13 +460,16 @@ describe('ReadScene — selection toolbar', () => {
 })
 
 describe('ReadScene — navigation and AI margin', () => {
-  it('mounts the AI margin stream, filter chips and composer inside the margin', async () => {
+  it('mounts the AI margin stream, filter chips and composer inside the margin column', async () => {
     await renderScene()
-    const seat = container.querySelector('.ln-sheet__margin .ln-margin__ai .ln-ai')
+    const margin = container.querySelector('.ln-sheet__margin')
+    const seat = margin?.querySelector('.ln-margin__ai .ln-ai')
     expect(seat).not.toBeNull()
     expect(seat?.querySelector('.ln-ai__filters')).not.toBeNull()
     expect(seat?.querySelector('.ln-ai__stream')).not.toBeNull()
-    expect(seat?.querySelector('.ln-ai__composer')).not.toBeNull()
+    // The composer sits at the end of the margin column (sticky footer), not
+    // inside the AI stream container.
+    expect(margin?.querySelector(':scope > .ln-ai__composer')).not.toBeNull()
   })
 
   it('scrolls and flashes the target block on a citation jump request', async () => {

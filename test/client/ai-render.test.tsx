@@ -15,6 +15,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AiMarginEntries, type AiMarginEntriesProps } from '../../src/client/ai/AiMarginEntries.tsx'
+import { AiComposer } from '../../src/client/ai/AiComposer.tsx'
 import { setHostClient } from '../../src/client/api/client.ts'
 import type { HostClient } from '../../src/client/api/client.ts'
 import type { ApiMethod, ApiRequests, ApiResults, StreamMethod, StreamMethods } from '../../src/shared/protocol.ts'
@@ -212,6 +213,7 @@ function mount(overrides: Partial<AiMarginEntriesProps> = {}): void {
     root.render(
       <LocaleContext.Provider value={fakeT}>
         <AiMarginEntries {...props} />
+        <AiComposer documentId={props.documentId} onJump={onJump} />
       </LocaleContext.Provider>,
     )
   })

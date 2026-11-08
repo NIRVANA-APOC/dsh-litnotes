@@ -22,7 +22,8 @@
     "README.zh.md",
     "CHANGELOG.md",
     "docs/**/*.md",
-    "docs/screens/**"
+    "docs/screens/**",
+    "screenshots.json"
   ],
   "engines": {
     "node": ">=20.16"
@@ -85,5 +86,24 @@
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
     "zustand": "^5.0.16"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NIRVANA-APOC/dsh-litnotes.git"
+  },
+  "homepage": "https://github.com/NIRVANA-APOC/dsh-litnotes#readme",
+  "bugs": {
+    "url": "https://github.com/NIRVANA-APOC/dsh-litnotes/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "literature",
+    "literature-review",
+    "pdf",
+    "annotation",
+    "knowledge-graph",
+    "mineru",
+    "ai-reading"
+  ]
 }

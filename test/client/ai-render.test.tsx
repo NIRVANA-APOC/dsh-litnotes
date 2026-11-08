@@ -29,6 +29,7 @@ import { useSettingsStore } from '../../src/client/state/settings.ts'
 import { useReaderStore } from '../../src/client/reader/store.ts'
 import { useUiStore } from '../../src/client/state/ui.ts'
 import { useAiStore } from '../../src/client/ai/store.ts'
+import { useDeepReadStore } from '../../src/client/ai/deepread-store.ts'
 
 /* -------------------------------------------------------------------------- */
 /* Locale                                                                     */
@@ -266,7 +267,17 @@ beforeEach(() => {
     lastKnowledgeDocumentId: null,
     hostHooks: {},
   })
-  useUiStore.setState({ marginFilter: 'all', activeAspect: null, toasts: [] })
+  useUiStore.setState({ marginFilter: 'all', activeAspect: null, toasts: [], currentDocumentId: null })
+  useDeepReadStore.setState({
+    documentId: null,
+    record: null,
+    recordState: 'idle',
+    runState: 'idle',
+    progress: null,
+    error: null,
+    busy: false,
+    annotationsCreated: 0,
+  })
   useLibraryStore.setState({ status: STATUS, documents: [DOCUMENT], loaded: true })
   useSettingsStore.setState({ preferences: { ...DEFAULT_PREFERENCES }, loaded: true })
   useReaderStore.setState({ annotations: [], selectionContext: null } as never)
@@ -435,10 +446,13 @@ describe('margin filter chips', () => {
       [...container.querySelectorAll<HTMLButtonElement>('.ln-ai__filters .ln-chip')].find((node) =>
         (node.textContent ?? '').startsWith(label),
       )
+    // 精读 is the fifth chip after 全部/对话/AI 批注/我的批注.
+    expect(container.querySelectorAll('.ln-ai__filters .ln-chip')).toHaveLength(5)
     expect(chip('全部')?.textContent).toBe('全部4')
     expect(chip('对话')?.textContent).toBe('对话1')
     expect(chip('AI 批注')?.textContent).toBe('AI 批注1')
     expect(chip('我的批注')?.textContent).toBe('我的批注2')
+    expect(chip('精读')?.textContent).toBe('精读0')
 
     click(chip('AI 批注'))
     expect(useUiStore.getState().marginFilter).toBe('ai')
@@ -449,6 +463,38 @@ describe('margin filter chips', () => {
     await flush()
     expect(useUiStore.getState().marginFilter).toBe('chat')
     expect(container.querySelectorAll('.ln-ai__turn')).toHaveLength(1)
+  })
+
+  it('shows the close-reading report count on the fifth chip for the current document', async () => {
+    useUiStore.setState({ currentDocumentId: 'doc-1' })
+    useDeepReadStore.setState({
+      documentId: 'doc-1',
+      // The chip only reads `documentId` + `highlights.length`; the rest of the
+      // record is rendered by the panel test, not here.
+      record: { documentId: 'doc-1', highlights: [{}, {}, {}] } as never,
+      recordState: 'ready',
+    })
+    setHostClient(createFakeHost({ history: [] }))
+    mount()
+    const chips = [...container.querySelectorAll<HTMLButtonElement>('.ln-ai__filters .ln-chip')]
+    expect(chips).toHaveLength(5)
+    expect(chips[4]?.textContent).toBe('精读3')
+    // Let the background chat-history read settle before unmount.
+    await flush()
+  })
+
+  it('does not count a report that belongs to another document', async () => {
+    useUiStore.setState({ currentDocumentId: 'doc-1' })
+    useDeepReadStore.setState({
+      documentId: 'doc-2',
+      record: { documentId: 'doc-2', highlights: [{}, {}] } as never,
+      recordState: 'ready',
+    })
+    setHostClient(createFakeHost({ history: [] }))
+    mount()
+    const chips = [...container.querySelectorAll<HTMLButtonElement>('.ln-ai__filters .ln-chip')]
+    expect(chips[4]?.textContent).toBe('精读0')
+    await flush()
   })
 })
 

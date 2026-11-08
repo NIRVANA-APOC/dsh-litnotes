@@ -527,6 +527,154 @@ export interface ChatRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Deep read (AI 精读)
+// ---------------------------------------------------------------------------
+
+/** Phases streamed by the `deepread` workflow, in execution order. */
+export type DeepReadPhase =
+  | 'mapping'
+  | 'reading'
+  | 'gaps'
+  | 'judging'
+  | 'synthesizing'
+  | 'annotating'
+  | 'done'
+
+/** Section role vocabulary of the deep-reading plan. */
+export type DeepReadSectionRole =
+  | 'abstract'
+  | 'introduction'
+  | 'related-work'
+  | 'background'
+  | 'method'
+  | 'experiment'
+  | 'results'
+  | 'discussion'
+  | 'limitation'
+  | 'conclusion'
+  | 'appendix'
+  | 'references'
+  | 'other'
+
+/** What one deep-read annotation unit contributes to the reading. */
+export type DeepReadUnitKind =
+  | 'claim'
+  | 'definition'
+  | 'method'
+  | 'result'
+  | 'limitation'
+  | 'connection'
+  | 'context'
+
+/** Strength of the evidence behind a claimed contribution. */
+export type DeepReadEvidence = 'strong' | 'partial' | 'thin'
+
+/** One high-quality annotation produced by a deep-reading run. */
+export interface DeepReadHighlight {
+  /** Persisted annotation id; empty when the annotation write failed. */
+  annotationId: string
+  blockKey: string
+  quote: string
+  start: number
+  end: number
+  page: number | null
+  aspect: Aspect
+  note: string
+  importance: number
+  section: string | null
+  kind: DeepReadUnitKind
+}
+
+/** One labeled, evidence-anchored point of the close-reading report. */
+export interface DeepReadPoint {
+  label: string
+  detail: string
+  blockKeys: string[]
+  /** Only used by contributions. */
+  evidence?: DeepReadEvidence
+}
+
+/** One claim→evidence relation in the report's argument map. */
+export interface DeepReadArgumentEdge {
+  from: string
+  to: string
+  relation: string
+}
+
+/** Structured close-reading report persisted with the run. */
+export interface DeepReadReport {
+  tldr: string[]
+  problem: DeepReadPoint
+  gap: DeepReadPoint
+  contributions: DeepReadPoint[]
+  method: DeepReadPoint[]
+  evaluation: DeepReadPoint[]
+  findings: DeepReadPoint[]
+  limitations: DeepReadPoint[]
+  openQuestions: DeepReadPoint[]
+  argumentMap: DeepReadArgumentEdge[]
+  glossary: Array<{ term: string; definition: string; blockKeys: string[] }>
+  readingPath: string[]
+  verdict: {
+    strengths: string[]
+    weaknesses: string[]
+    confidence: 'high' | 'medium' | 'low'
+  }
+}
+
+/** Per-run statistics measured by the Host. */
+export interface DeepReadStats {
+  sections: number
+  sectionsRead: number
+  chunks: number
+  chunksRead: number
+  candidates: number
+  kept: number
+  skipped: number
+  /** Annotated content sections / total content sections (0-1). */
+  coverage: number
+  calls: number
+  durationMs: number
+  inputTokens: number
+  outputTokens: number
+  /** Source larger than `ai.deepReadMaxSourceChars` (tail read from the outline). */
+  truncated: boolean
+}
+
+/** `documents/<id>/deepread.json` — one persisted close-reading run. */
+export interface DeepReadRecord {
+  version: 1
+  documentId: string
+  generatedAt: string
+  /** Reader language id used for notes/report text (`zh`, `en`, …). */
+  language: string
+  model: { provider: string; model: string } | null
+  promptVersion: number
+  report: DeepReadReport
+  highlights: DeepReadHighlight[]
+  stats: DeepReadStats
+}
+
+/** `deepread` streaming request. */
+export interface DeepReadRequest {
+  documentId: string
+  /** Re-run even when a cached record exists. */
+  force?: boolean
+  /** Reader language id; normalized by the Host, default `en`. */
+  language?: string
+}
+
+/** NDJSON frames of the `deepread` method. */
+export type DeepReadFrame =
+  | { type: 'start'; model: { provider: string; model: string }; language: string }
+  | { type: 'progress'; phase: DeepReadPhase; done: number; total: number; section?: string }
+  | { type: 'report'; record: DeepReadRecord }
+  | { type: 'annotations'; created: number; highlights: DeepReadHighlight[] }
+  | { type: 'usage'; usage: { inputTokens?: number; outputTokens?: number } }
+  | { type: 'done' }
+  | { type: 'error'; code: string; message: string }
+
+// ---------------------------------------------------------------------------
 // Diagnostics
 // ---------------------------------------------------------------------------
 

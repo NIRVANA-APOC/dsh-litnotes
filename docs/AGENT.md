@@ -1,8 +1,8 @@
-# dsh-litnotes — agent tools (1.0.0)
+# dsh-litnotes — agent tools (1.1.0)
 
-The DSH agent can operate the same literature library the browser uses through **seven focused
-tools**: `library_search`, `library_read`, `library_ask`, `library_annotate`, `library_translate`,
-`library_graph`, `library_manage`. Every tool returns JSON-serializable results with
+The DSH agent can operate the same literature library the browser uses through **eight focused
+tools**: `library_search`, `library_read`, `library_ask`, `library_deepread`,
+`library_annotate`, `library_translate`, `library_graph`, `library_manage`. Every tool returns JSON-serializable results with
 citation-ready coordinates so the agent can point the user at the exact paper text.
 
 Code: `src/host/agent-tools.ts` (definitions), `src/host/service.ts` (`ServiceApi`, the operations
@@ -185,6 +185,33 @@ Manage the library.
 Parsing guidance: `auto` uses the standard API when a MinerU token is configured, otherwise the
 local engine when it supports the file, otherwise the token-free lightweight cloud API. A parse
 start returns immediately; use `status` for progress (including `ai`, `local` and token state).
+
+### 3.8 `library_deepread`
+
+Read the persisted AI 精读 (close reading) of one parsed paper, or run the workflow now.
+
+| parameter | type | notes |
+|---|---|---|
+| `action` | `get \| run` | `get` reads the stored record (no model calls, no tokens); `run` executes the whole workflow |
+| `documentId` | string | required; a parsed document id |
+| `language` | string? | reader-language id for the report and notes (`zh`, `en`, `ja`, …); omit for the reader/en default |
+
+| action | returns |
+|---|---|
+| `get` | `{documentId, record}` — the compact `DeepReadRecord`, or `record: null` when the paper has never been deep-read |
+| `run` | `{documentId, record, progressFrames}` — runs to completion and returns the final compact record |
+
+The compact record keeps the whole report (`tldr`, problem, gap, contributions with evidence
+strength, method, evaluation, findings, limitations, open questions, argument map, glossary,
+reading path, verdict) plus `stats`, `generatedAt`, `language`, `model` and `promptVersion`.
+Highlights are capped at 60 rows (`highlightCount` and `highlightsTruncated` keep the total
+visible); each row carries `annotationId` (or `''` when not written), `blockKey`, `page`,
+`quote`, `aspect`, `note`, `importance`, `section` and `kind`.
+
+Guidance: `run` performs many sequential model calls (minutes) and spends tokens — prefer `get`
+unless the user explicitly asks for a fresh close reading. A run needs a live model route;
+cancelling the tool call aborts the run and leaves the previous record and annotations intact.
+Every highlight and report point is page-anchored, so answers can cite the exact text.
 
 ## 4. Worked example: find, read, ask, cite
 

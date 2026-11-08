@@ -718,3 +718,490 @@
   color: var(--ln-ink-soft);
   cursor: default;
 }
+
+/* ========================================================================== */
+/* AI 精读 (deep read) — the close-reading report view                        */
+/* ========================================================================== */
+
+/* One block inside the reader's scrollable margin body (240–560px): no second
+ * scroll area. Reuses the existing `.ln-ai__` state/hint/action/error vocabulary
+ * and keeps only the report-specific hierarchy: serif reading type, quiet meta,
+ * evidence chips and aspect-ink annotation cards. */
+.ln-deepread {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  color: var(--ln-ink);
+  font-family: var(--ln-font-ui);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.ln-deepread button {
+  font-family: var(--ln-font-ui);
+}
+
+/* --------------------------------------------------------------- running */
+
+.ln-deepread__running {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ln-deepread__running-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.ln-deepread__running-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--ln-font-read);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ln-deepread__running-count {
+  margin: 0;
+  color: var(--ln-ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-deepread__phases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ln-deepread__phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--ln-ink-faint);
+  font-size: 12px;
+}
+
+.ln-deepread__phase[data-state='done'] {
+  color: var(--ln-ink-soft);
+}
+
+.ln-deepread__phase[data-state='active'] {
+  color: var(--ln-ink);
+  font-weight: 600;
+}
+
+.ln-deepread__phase-mark {
+  width: 12px;
+  flex: 0 0 auto;
+  text-align: center;
+  color: var(--ln-success);
+}
+
+.ln-deepread__phase[data-state='active'] .ln-deepread__phase-mark {
+  color: var(--ln-signal);
+}
+
+.ln-deepread__running-section {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--ln-signal-soft);
+  color: var(--ln-ink-soft);
+  font-family: var(--ln-font-read);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- errors */
+
+.ln-deepread__error {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.ln-deepread__error-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ln-error);
+  font-family: var(--ln-font-read);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ln-deepread__error-text {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ln-deepread__error-note {
+  margin: 0;
+  color: var(--ln-ink-soft);
+  font-size: 11px;
+}
+
+.ln-deepread__error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---------------------------------------------------------- report header */
+
+.ln-deepread__report {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ln-deepread__head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ln-rule);
+}
+
+.ln-deepread__head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ln-deepread__report-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--ln-font-read);
+  font-size: 15.5px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.ln-deepread__report-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.ln-deepread__meta,
+.ln-deepread__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ln-deepread__meta {
+  color: var(--ln-ink-soft);
+  font-size: 11px;
+}
+
+.ln-deepread__sep {
+  color: var(--ln-ink-faint);
+}
+
+.ln-deepread__stats {
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------- report sections */
+
+.ln-deepread__section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.ln-deepread__section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--ln-font-read);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.ln-deepread__section-title::after {
+  content: '';
+  flex: 1 1 18px;
+  height: 1px;
+  background: var(--ln-rule);
+}
+
+.ln-deepread__section--tldr {
+  gap: 7px;
+  padding: 11px 12px;
+  border-left: 2px solid var(--ln-signal);
+  background: var(--ln-surface-2);
+}
+
+.ln-deepread__section--tldr .ln-deepread__section-title::after {
+  display: none;
+}
+
+.ln-deepread__tldr {
+  margin: 0;
+  padding-left: 16px;
+  font-family: var(--ln-font-read);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ln-deepread__tldr li::marker {
+  color: var(--ln-signal);
+}
+
+/* ----------------------------------------------------------- report points */
+
+.ln-deepread__points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ln-deepread__point {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ln-deepread__point-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.ln-deepread__point-label {
+  flex: 1 1 auto;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ln-deepread__detail {
+  color: var(--ln-ink-soft);
+  line-height: 1.62;
+}
+
+.ln-deepread__refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ln-deepread__ref {
+  padding: 1px 6px;
+  border: 1px solid var(--ln-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.ln-deepread__ref:hover,
+.ln-deepread__ref:focus-visible {
+  border-color: var(--ln-signal);
+  color: var(--ln-signal);
+}
+
+/* Secondary report shapes reuse the reading typography above; only the
+ * relation marker and the glossary terms need their own voice. */
+.ln-deepread__edges {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.ln-deepread__edge {
+  margin: 2px 0;
+  font-size: 12px;
+}
+
+.ln-deepread__edge-rel {
+  color: var(--ln-signal);
+  font-size: 11px;
+}
+
+.ln-deepread__glossary {
+  margin: 0;
+}
+
+.ln-deepread__gloss-term {
+  font-family: var(--ln-font-read);
+  font-weight: 600;
+}
+
+.ln-deepread__gloss-def {
+  margin: 0 0 6px;
+  color: var(--ln-ink-soft);
+  font-size: 12px;
+}
+
+.ln-deepread__path {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ln-ink-soft);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------- verdict */
+
+/* auto-fit stacks the columns at the narrowest margin; no viewport query. */
+.ln-deepread__verdict {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.ln-deepread__verdict-col {
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--ln-rule-strong);
+}
+
+.ln-deepread__verdict-title {
+  margin: 0 0 3px;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.ln-deepread__verdict-col ul {
+  margin: 0;
+  padding-left: 15px;
+  font-size: 12px;
+}
+
+/* ----------------------------------------------------------- annotations */
+
+.ln-deepread__annotations {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ln-rule);
+}
+
+.ln-deepread__annotations-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--ln-radius-control);
+  background: transparent;
+  color: var(--ln-ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ln-deepread__annotations-toggle:hover,
+.ln-deepread__annotations-toggle:focus-visible {
+  background: var(--ln-surface-2);
+}
+
+.ln-deepread__annotations-title {
+  font-family: var(--ln-font-read);
+  font-weight: 600;
+}
+
+.ln-deepread__annotations-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ln-signal-soft);
+  color: var(--ln-signal);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.ln-deepread__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ln-deepread__card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ln-rule);
+  border-left: 2px solid var(--ln-aspect-ink, var(--ln-rule-strong));
+  background: var(--ln-surface-2);
+}
+
+.ln-deepread__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 7px;
+  color: var(--ln-ink-soft);
+  font-size: 10.5px;
+}
+
+.ln-deepread__card-aspect {
+  color: var(--ln-aspect-strong, var(--ln-ink-soft));
+  font-weight: 600;
+}
+
+.ln-deepread__card-page {
+  color: var(--ln-ink-faint);
+}
+
+.ln-deepread__card-quote {
+  margin: 0;
+  font-family: var(--ln-font-read);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ln-deepread__card-note {
+  margin: 0;
+  color: var(--ln-ink-soft);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.ln-deepread__card-jump {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ln-signal);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ln-deepread__card-jump:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

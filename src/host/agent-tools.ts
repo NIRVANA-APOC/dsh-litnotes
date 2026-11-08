@@ -1,7 +1,7 @@
 /**
  * DSH agent tools over the dsh-litnotes library (docs/AI-SPEC.md §7).
  *
- * Seven focused tools share one operations layer with the Web UI (the service
+ * Eight focused tools share one operations layer with the Web UI (the service
  * facade in `src/host/service.ts`). Every result that points into a document
  * carries citation-ready coordinates (`documentId`, `blockKey`, `page`,
  * `quote`) so the model can show the user exactly where a claim lives; every
@@ -13,7 +13,17 @@
  * @module host/agent-tools
  */
 
-import type { Citation, DocumentMeta, DocumentSummary, GraphNode, KnowledgeGraph, ParseStartOptions } from '../shared/model.ts'
+import type {
+  Citation,
+  DeepReadHighlight,
+  DeepReadPoint,
+  DeepReadRecord,
+  DocumentMeta,
+  DocumentSummary,
+  GraphNode,
+  KnowledgeGraph,
+  ParseStartOptions,
+} from '../shared/model.ts'
 import type { ResolvedConfig, ServiceApi } from './contracts.ts'
 import type { ContentBlock, JsonSchema, Logger, ToolDefinition, ToolsService } from './host-services.ts'
 import type { ToolAnnotationInput } from './service.ts'
@@ -23,6 +33,7 @@ export const LIBRARY_TOOL_NAMES: readonly string[] = Object.freeze([
   'library_search',
   'library_read',
   'library_ask',
+  'library_deepread',
   'library_annotate',
   'library_translate',
   'library_graph',
@@ -165,6 +176,83 @@ function compactGraph(graph: KnowledgeGraph | null | undefined, maxNodes = 60): 
       .slice(0, maxNodes * 2)
       .map((edge) => ({ from: edge.from, to: edge.to, type: edge.type, label: edge.label ?? null })),
     stats: { nodes: nodes.length, edges: edges.length, shownNodes: selected.length },
+  }
+}
+
+/** Compact one report point for tool results. */
+function compactDeepReadPoint(point: DeepReadPoint | undefined): Record<string, unknown> {
+  return {
+    label: typeof point?.label === 'string' ? point.label.slice(0, 90) : '',
+    detail: typeof point?.detail === 'string' ? point.detail.slice(0, 500) : '',
+    blockKeys: Array.isArray(point?.blockKeys) ? point.blockKeys.slice(0, 6) : [],
+    ...(point?.evidence === undefined ? {} : { evidence: point.evidence }),
+  }
+}
+
+/** Compact one deep-read highlight for tool results. */
+function compactDeepReadHighlight(highlight: DeepReadHighlight): Record<string, unknown> {
+  return {
+    annotationId: highlight.annotationId,
+    blockKey: highlight.blockKey,
+    page: highlight.page ?? null,
+    quote: typeof highlight.quote === 'string' ? highlight.quote.slice(0, 300) : '',
+    aspect: highlight.aspect,
+    note: typeof highlight.note === 'string' ? highlight.note.slice(0, 400) : '',
+    importance: highlight.importance,
+    section: highlight.section ?? null,
+    kind: highlight.kind,
+  }
+}
+
+/**
+ * Compact one persisted AI 精读 record for a bounded tool result.
+ *
+ * The report is kept whole (the engine already bounds every field); the
+ * highlight list is capped so a run with dozens of annotations cannot blow up
+ * the model context, and the full count stays visible.
+ *
+ * @param record - persisted record, or null when the paper was never deep-read.
+ * @param maxHighlights - highlight rows to include (default 60).
+ * @returns the compact record, or null.
+ */
+function compactDeepReadRecord(
+  record: DeepReadRecord | null,
+  maxHighlights = 60,
+): Record<string, unknown> | null {
+  if (record === null || typeof record !== 'object') return null
+  const report = record.report ?? ({} as DeepReadRecord['report'])
+  const highlights = Array.isArray(record.highlights) ? record.highlights : []
+  const list = <T>(value: T[] | undefined, cap: number): T[] =>
+    Array.isArray(value) ? value.slice(0, cap) : []
+  return {
+    documentId: record.documentId,
+    generatedAt: record.generatedAt,
+    language: record.language,
+    model: record.model ?? null,
+    promptVersion: record.promptVersion,
+    stats: record.stats ?? null,
+    report: {
+      tldr: list(report.tldr, 5),
+      problem: compactDeepReadPoint(report.problem),
+      gap: compactDeepReadPoint(report.gap),
+      contributions: list(report.contributions, 8).map(compactDeepReadPoint),
+      method: list(report.method, 10).map(compactDeepReadPoint),
+      evaluation: list(report.evaluation, 8).map(compactDeepReadPoint),
+      findings: list(report.findings, 12).map(compactDeepReadPoint),
+      limitations: list(report.limitations, 8).map(compactDeepReadPoint),
+      openQuestions: list(report.openQuestions, 8).map(compactDeepReadPoint),
+      argumentMap: list(report.argumentMap, 16),
+      glossary: list(report.glossary, 12),
+      readingPath: list(report.readingPath, 3),
+      verdict: {
+        strengths: list(report.verdict?.strengths, 8),
+        weaknesses: list(report.verdict?.weaknesses, 8),
+        confidence: report.verdict?.confidence ?? 'low',
+      },
+    },
+    highlightCount: highlights.length,
+    highlightsTruncated: highlights.length > maxHighlights,
+    highlights: highlights.slice(0, maxHighlights).map(compactDeepReadHighlight),
   }
 }
 
@@ -352,6 +440,67 @@ export function registerLibraryTools({ tools, service, config, logger }: AgentTo
           model: result.model,
           messageId: result.messageId,
         }
+      } catch (error) {
+        throw toolError(error)
+      }
+    },
+  })
+
+  // -------------------------------------------------------------------------
+  // library_deepread
+  // -------------------------------------------------------------------------
+  register({
+    name: 'library_deepread',
+    description:
+      'Read or run the AI 精读 (close reading) of one parsed paper. A run reads every substantive section of the whole paper (many sequential model calls, usually minutes), writes evidence-anchored annotations to the page, and persists a structured close-reading report: one-sentence conclusion, research problem, gap, contributions with evidence strength, method, evaluation, findings, limitations, open questions, argument map, glossary, reading path and verdict. action=get returns the persisted report (null when the paper has never been deep-read) without spending tokens; action=run executes the workflow now and returns the final report. Every highlight carries blockKey/page/quote coordinates you can cite.',
+    parameters: obj(
+      {
+        action: {
+          type: 'string',
+          enum: ['get', 'run'],
+          description: 'get = the persisted report only; run = execute the workflow now.',
+        },
+        documentId: { type: 'string', description: 'Document id of a parsed paper.' },
+        language: {
+          type: 'string',
+          description:
+            "Optional reader language id for the report and notes (e.g. zh, en, ja); omit to use the reader's default.",
+        },
+      },
+      ['action', 'documentId'],
+    ),
+    output: outputOf(),
+    async execute(args, exec) {
+      const documentId = requireString(args, 'documentId')
+      const action = requireString(args, 'action')
+      try {
+        if (action === 'get') {
+          const { record } = await service.deepReadRecord(documentId)
+          return { documentId, record: compactDeepReadRecord(record) }
+        }
+        if (action === 'run') {
+          const language = optionalString(args, 'language', 16)
+          const controller = new AbortController()
+          const signal = exec?.signal ?? controller.signal
+          let record: DeepReadRecord | null = null
+          let progressFrames = 0
+          for await (const frame of service.deepReadFrames(
+            { documentId, ...(language === undefined ? {} : { language }) },
+            signal,
+          )) {
+            if (frame.type === 'progress') progressFrames += 1
+            else if (frame.type === 'report') record = frame.record
+            else if (frame.type === 'error') {
+              const error = new Error(frame.message || 'AI 精读失败（deep read failed）') as Error & {
+                code?: string
+              }
+              if (typeof frame.code === 'string') error.code = frame.code
+              throw error
+            }
+          }
+          return { documentId, record: compactDeepReadRecord(record), progressFrames }
+        }
+        throw new Error(`unknown action: ${action}`)
       } catch (error) {
         throw toolError(error)
       }

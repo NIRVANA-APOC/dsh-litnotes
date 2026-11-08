@@ -4,7 +4,7 @@
  * Wires the on-disk library (store), the parse pipeline (MinerU cloud + local
  * engine), the operation service shared by the HTTP API and the agent tools,
  * the web routes, the grounded AI bundle (chat + knowledge graphs) and the
- * seven library tools exposed to the DSH agent. The Client half is
+ * eight library tools exposed to the DSH agent. The Client half is
  * `lib/client.js` and reaches this half only through the routes registered
  * here.
  *

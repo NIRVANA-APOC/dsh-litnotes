@@ -7,6 +7,7 @@
 <sub>[English](README.md) · **简体中文**</sub>
 
 [![version](https://img.shields.io/badge/version-1.0.0-2646be?style=flat-square)](CHANGELOG.md)
+[![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![runtime deps](https://img.shields.io/badge/runtime_deps-0-2f855a?style=flat-square)](package.json)
 [![data](https://img.shields.io/badge/data-stays_local-6B7280?style=flat-square)](#数据与隐私)
@@ -34,6 +35,7 @@
 | **阅读台**：侧重点四色高亮、页边笔记、点按高亮弹出批注卡<br>![阅读台](docs/screens/04-annotation.png) | **对照阅读**：原文与译文对照，逐段翻译<br>![对照阅读](docs/screens/03-bilingual.png) |
 | **选中即问**：高亮、批注、问 AI、翻译、复制<br>![选中工具栏](docs/screens/05-selection.png) | **AI 在页边回答**：引用可跳转、可追问、可导出<br>![页边 AI](docs/screens/06-ai.png) |
 | **本文知识图谱**：论文里的概念、方法与发现<br>![本文图谱](docs/screens/09-graph-node.png) | **全库图谱**：所有论文按主题聚类汇总<br>![全库图谱](docs/screens/10-library-graph.png) |
+| **AI 精读**：通读全文生成可跳转的精读报告<br>![精读报告](docs/screens/16-deepread-report.png) | **精读批注**：跨章节的解释性批注，而不是标题/作者元信息<br>![精读批注](docs/screens/17-deepread-annotated.png) |
 | **深色模式 · 阅读**<br>![深色阅读](docs/screens/13-dark-reader.png) | **深色模式 · 图谱**<br>![深色图谱](docs/screens/15-dark-graph.png) |
 
 ## 功能
@@ -60,6 +62,19 @@
   会把焦点收窄到该段，选中文本则收窄到选区——输入框上方的上下文 chip 始终标明当前范围。
 - 每篇论文的对话历史保存在本地，可清空、可导出 Markdown。
 
+### AI 精读
+
+- 一键**通读全文、逐节精读**，跨节保留阅读记忆——不是抽样开头加检索命中。
+- 生成**大量带证据、可跳转的解释性批注**（默认 24 条，带覆盖率检查），并明确排除标题、作者、
+  出处等元信息以及单纯复述引文的批注。
+- 生成**结构化的精读报告**：研究问题、研究空白、核心贡献（附证据强度）、方法、实验与证据、
+  主要发现、局限与风险、开放问题、论证地图、术语、阅读路径、总体评价；每个要点都能跳回原文
+  （`原文 p.N`）。
+- 对"读了什么"透明：覆盖章节数、批注数、覆盖率和模型调用次数、耗时、token 都会显示；运行可
+  取消、有缓存、可重跑，取消不会丢掉上一份报告与批注。
+- 通过 `ai.deepRead*` 配置：调用上限、原文长度、批注数量、单次输出预算、综合摘要长度、
+  覆盖率补读与批注校订开关。
+
 ### 知识图谱
 
 - **本文图谱**：一键让模型通读论文，抽取概念、方法、发现、定义、局限与章节及它们之间的关系；节点保留原文定位、可跳转，并支持问答持续补充新节点。
@@ -74,13 +89,14 @@
 
 ### Agent 原生
 
-dsh-litnotes 是 DSH 的插件，也把同一套文献库能力开放给 Agent：七个工具、统一的引用坐标，外加一段静态 system prompt 告诉 Agent 何时该用它们。
+dsh-litnotes 是 DSH 的插件，也把同一套文献库能力开放给 Agent：八个工具、统一的引用坐标，外加一段静态 system prompt 告诉 Agent 何时该用它们。
 
 | 工具 | 作用 |
 | --- | --- |
 | `library_search` | 全库或单篇检索段落，返回 `documentId/blockKey/page/snippet` |
 | `library_read` | 元信息与大纲、按段读 markdown、精确读取某个 block，或整页 |
 | `library_ask` | 基于原文的 grounded 回答，附引用坐标（自动生成 AI 批注） |
+| `library_deepread` | 读取已保存的精读报告，或立即跑一遍全文精读（较慢、消耗 token） |
 | `library_annotate` | 列出 / 新建 / 修改 / 删除高亮与边注 |
 | `library_translate` | 翻译任意文本，或最多 10 个带引用的 block |
 | `library_graph` | 读取/搜索/构建/更新本文图谱；读取/重建全库图谱 |
@@ -90,7 +106,15 @@ dsh-litnotes 是 DSH 的插件，也把同一套文献库能力开放给 Agent�
 
 ### 安装
 
-**从 GitHub 安装（推荐）**：
+**从 npm 安装（推荐）**：
+
+```bash
+dsh plugin --profile web add dsh-litnotes
+```
+
+可固定版本：`dsh plugin --profile web add dsh-litnotes@1.0.0`。
+
+**从 GitHub 安装**：
 
 ```bash
 dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
@@ -162,8 +186,8 @@ node scripts/check.ts --final     # 发布门禁（警告视为失败）
 | --- | --- |
 | [`docs/ARCH.md`](docs/ARCH.md) | 架构、数据格式、HTTP wire 契约、构建与测试门禁 |
 | [`docs/PARSING.md`](docs/PARSING.md) | 解析引擎、按页修复、批注重锚 |
-| [`docs/AGENT.md`](docs/AGENT.md) | 七个 Agent 工具与完整调用示例 |
-| [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded 对话、引用校验、蕴含检查、知识图谱 |
+| [`docs/AGENT.md`](docs/AGENT.md) | 八个 Agent 工具与完整调用示例 |
+| [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded 对话、引用校验、蕴含检查、知识图谱、AI 精读 |
 | [`docs/UI-SPEC.md`](docs/UI-SPEC.md) | 阅读台设计系统与交互契约 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本历史 |
 

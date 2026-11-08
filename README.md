@@ -7,6 +7,7 @@ A local-first AI literature desk that plugs into the [DeepSeek Harness](https://
 <sub>[**English**](README.md) · [简体中文](README.zh.md)</sub>
 
 [![version](https://img.shields.io/badge/version-1.0.0-2646be?style=flat-square)](CHANGELOG.md)
+[![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![runtime deps](https://img.shields.io/badge/runtime_deps-0-2f855a?style=flat-square)](package.json)
 [![data](https://img.shields.io/badge/data-stays_local-6B7280?style=flat-square)](#data-and-privacy)
@@ -33,6 +34,7 @@ Most AI reading tools put the conversation in a floating window: ask a question,
 | **Reading desk** — four aspect inks, margin notes, click a highlight for its annotation card<br>![Reading desk](docs/screens/04-annotation.png) | **Bilingual reading** — original and translation, paragraph by paragraph<br>![Bilingual reading](docs/screens/03-bilingual.png) |
 | **Select to act** — highlight, annotate, ask AI, translate, copy<br>![Selection toolbar](docs/screens/05-selection.png) | **AI in the margin** — citations jump to the source, follow-ups, export<br>![Margin AI](docs/screens/06-ai.png) |
 | **Per-paper knowledge graph** — the concepts, methods and findings inside one paper<br>![Per-paper graph](docs/screens/09-graph-node.png) | **Library graph** — every paper aggregated into topics<br>![Library graph](docs/screens/10-library-graph.png) |
+| **AI 精读** — whole-paper close reading with a page-anchored report<br>![Close reading report](docs/screens/16-deepread-report.png) | **Annotated by close reading** — interpretive notes across the paper, not title/author metadata<br>![Close reading annotations](docs/screens/17-deepread-annotated.png) |
 | **Dark mode · reading**<br>![Dark reading](docs/screens/13-dark-reader.png) | **Dark mode · graph**<br>![Dark graph](docs/screens/15-dark-graph.png) |
 
 ## Features
@@ -64,6 +66,21 @@ Most AI reading tools put the conversation in a floating window: ask a question,
   which scope is active.
 - Conversation history is stored per paper locally, can be cleared and exported as Markdown.
 
+### Close reading (AI 精读)
+
+- One action reads the **whole paper**, section by section, with a rolling reading memory — not a
+  sampled head plus retrieval hits.
+- It writes **many interpretive, evidence-anchored annotations** (24 by default, coverage-checked)
+  and explicitly rejects title/author/venue metadata and notes that merely restate their quote.
+- It produces a **structured close-reading report** — problem, gap, contributions with evidence
+  strength, method, evaluation, findings, limitations, open questions, argument map, glossary,
+  reading path and verdict — and every point jumps back to its page (`原文 p.N`).
+- Transparent about what it read: sections read, annotations, coverage, model calls, duration and
+  tokens are shown. The run is cancellable, cached and re-runnable; cancelling never loses the
+  previous report or annotations.
+- Configurable through the `ai.deepRead*` keys (call cap, source cap, annotation cap, per-call
+  output budget, synthesis digest, coverage pass, adjudication).
+
 ### Knowledge graphs
 
 - **Per-paper graph**: one action reads the paper and extracts concepts, methods, findings, definitions, limitations and sections plus their relations. Nodes keep their source location and jump into the text, and Q&A keeps adding new nodes over time.
@@ -78,13 +95,14 @@ Most AI reading tools put the conversation in a floating window: ask a question,
 
 ### Agent-native
 
-dsh-litnotes is a DSH plugin, and it gives the same library to agents: seven tools, one coordinate system, plus a static system-prompt section that tells the agent when to use them.
+dsh-litnotes is a DSH plugin, and it gives the same library to agents: eight tools, one coordinate system, plus a static system-prompt section that tells the agent when to use them.
 
 | tool | purpose |
 | --- | --- |
 | `library_search` | search passages across the library or one paper; returns `documentId/blockKey/page/snippet` |
 | `library_read` | metadata and outline, bounded markdown slices, exact block text, or a whole page |
 | `library_ask` | grounded answer with citation coordinates (and auto-created AI annotations) |
+| `library_deepread` | read the persisted close-reading report, or run the whole-paper close reading (slow, costs tokens) |
 | `library_annotate` | list / create / update / delete highlights and margin notes |
 | `library_translate` | translate arbitrary text, or up to 10 cited blocks |
 | `library_graph` | read/search/build/update a paper graph; read/rebuild the library graph |
@@ -94,13 +112,21 @@ dsh-litnotes is a DSH plugin, and it gives the same library to agents: seven too
 
 ### Install
 
-**From GitHub (recommended):**
+**From npm (recommended):**
+
+```bash
+dsh plugin --profile web add dsh-litnotes
+```
+
+Pin a version with `dsh plugin --profile web add dsh-litnotes@1.0.0`.
+
+**From GitHub:**
 
 ```bash
 dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
 ```
 
-Or install the prebuilt package (no local build):
+Or install the prebuilt release tarball (no local build):
 
 ```bash
 dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.0.0/dsh-litnotes-1.0.0.tgz
@@ -166,8 +192,8 @@ Requires Node ≥ 20.16. Source lives in `src/shared/**` (both halves), `src/hos
 | --- | --- |
 | [`docs/ARCH.md`](docs/ARCH.md) | architecture, data formats, HTTP wire contract, build and gate |
 | [`docs/PARSING.md`](docs/PARSING.md) | parse engines, page-scoped repair, annotation re-anchoring |
-| [`docs/AGENT.md`](docs/AGENT.md) | the seven agent tools with a worked flow |
-| [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded chat, citation validation, entailment, knowledge graphs |
+| [`docs/AGENT.md`](docs/AGENT.md) | the eight agent tools with a worked flow |
+| [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded chat, citation validation, entailment, knowledge graphs, AI 精读 (close reading) |
 | [`docs/UI-SPEC.md`](docs/UI-SPEC.md) | reading-desk design system and interaction contract |
 | [`CHANGELOG.md`](CHANGELOG.md) | release history |
 

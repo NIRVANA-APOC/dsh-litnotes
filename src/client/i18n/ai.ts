@@ -14,12 +14,16 @@ export const zh = {
   'ai.modelDefault': '默认模型',
   'ai.modelUnavailable': '模型未连接',
 
-  /* Margin stream filter chips (全部 / 对话 / AI 批注 / 我的批注). */
+  /* Margin stream filter chips (全部 / 对话 / AI 批注 / 我的批注 / 精读). */
   'ai.filter.label': '页边筛选',
   'ai.filter.all': '全部',
   'ai.filter.chat': '对话',
   'ai.filter.ai': 'AI 批注',
   'ai.filter.user': '我的批注',
+  'ai.filter.deepread': '精读',
+
+  /* Close-reading entry point (context bar). */
+  'ai.deepread.open': 'AI 精读',
 
   /* Empty / loading / setup states. */
   'ai.emptyTitle': '从这一页开始提问',
@@ -139,6 +143,9 @@ export const en: Record<keyof typeof zh, string> = {
   'ai.filter.chat': 'Chat',
   'ai.filter.ai': 'AI notes',
   'ai.filter.user': 'My notes',
+  'ai.filter.deepread': 'Deep read',
+
+  'ai.deepread.open': 'AI deep read',
 
   'ai.emptyTitle': 'Start from this page',
   'ai.emptyText': 'Answers are generated from this paper only, with source paragraphs cited.',

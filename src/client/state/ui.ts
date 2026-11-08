@@ -19,8 +19,14 @@ export type DialogKind = 'none' | 'import' | 'settings' | 'reparse' | 'rename' |
 /** Tone of one toast. */
 export type ToastTone = 'info' | 'success' | 'warn' | 'error'
 
-/** Margin stream filter: everything, conversation only, or notes by origin. */
-export type MarginFilter = 'all' | 'chat' | 'ai' | 'user'
+/**
+ * Margin stream filter: everything, conversation only, notes by origin, or the
+ * AI close-reading (`精读`) view.
+ *
+ * `chat` and `deepread` are session-only views: they are never persisted to the
+ * host preferences (only the origin filters `all`/`ai`/`user` round-trip).
+ */
+export type MarginFilter = 'all' | 'chat' | 'ai' | 'user' | 'deepread'
 
 /** One transient notice. */
 export interface ToastItem {
@@ -59,7 +65,10 @@ export interface UiState {
   takeImportFiles: () => File[] | null
   /** Toggle one aspect filter on/off (null clears). */
   toggleAspect: (aspect: Aspect) => void
-  /** Set the margin stream filter; origin filters persist to preferences. */
+  /**
+   * Set the margin stream filter; origin filters persist to preferences while
+   * the session-only views (`chat`, `deepread`) do not.
+   */
   setMarginFilter: (filter: MarginFilter) => void
   setSearchQuery: (query: string) => void
   focusSearch: () => void
@@ -122,7 +131,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   setMarginFilter: (filter) => {
     set({ marginFilter: filter })
-    if (filter === 'chat') return
+    // 对话 / 精读 are view modes inside the margin, not saved origin filters.
+    if (filter === 'chat' || filter === 'deepread') return
     void useSettingsStore.getState().patch({ notesFilter: filter })
   },
 

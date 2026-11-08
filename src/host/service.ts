@@ -11,9 +11,9 @@
  * translate-only prompt; when neither is usable it throws
  * `translate-unavailable` so the client can offer setup guidance.
  *
- * The AI engines (grounded chat + knowledge graphs), the parse-option policy
- * and the local extraction engine are injected: this module never imports a
- * concrete implementation, it only calls the contracts.
+ * The AI engines (grounded chat + knowledge graphs + AI 精读 close reading),
+ * the parse-option policy and the local extraction engine are injected: this
+ * module never imports a concrete implementation, it only calls the contracts.
  *
  * @module host/service
  */
@@ -36,6 +36,9 @@ import type {
   ChatRequest,
   Citation,
   ContentListEntry,
+  DeepReadFrame,
+  DeepReadRecord,
+  DeepReadRequest,
   DocumentMeta,
   DocumentSummary,
   GraphBuildFrame,
@@ -92,6 +95,8 @@ import { isPlainObject, requireUuid, WireError } from './wire.ts'
 
 /** Largest text accepted by one translate call. */
 const MAX_TRANSLATE_CHARS = 20000
+/** Reader-language ids accepted by the AI 精读 workflow (`zh`, `en`, `ja`, `zh-hant`, …). */
+const DEEP_READ_LANGUAGE_PATTERN = /^[a-z-]{2,16}$/
 /** Anonymous translator providers usable without a Session identity. */
 const ANONYMOUS_PROVIDERS: ReadonlySet<string> = new Set(['google', 'bing'])
 /** Human labels for translator provider ids. */
@@ -197,6 +202,21 @@ function documentNotFound(id: string): WireError {
 /** Build a `bad-request` error. */
 function badRequest(message: string): WireError {
   return new WireError('bad-request', message, 400)
+}
+
+/**
+ * Normalize the reader language id of a deep-read request.
+ *
+ * The wire accepts the reader's UI locale id (`zh`, `en`, `ja`, `zh-hant`, …);
+ * anything else is dropped so the engine applies its own default (`en`).
+ *
+ * @param value - raw `language` payload field.
+ * @returns the normalized id, or undefined when absent/invalid.
+ */
+function normalizeDeepReadLanguage(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const language = value.trim().toLowerCase()
+  return DEEP_READ_LANGUAGE_PATTERN.test(language) ? language : undefined
 }
 
 /** Render the configured data directory relative to the home directory. */
@@ -1358,6 +1378,42 @@ export function createService(deps: ServiceDeps): ServiceApi {
     yield* bundle.graph.buildDocGraph(document.id, { force: request.force === true, signal })
   }
 
+  /**
+   * Persisted AI 精读 record for one document (read-only: works without a
+   * model route; a never-deep-read document answers `null`).
+   *
+   * @param documentId - document id (validated).
+   * @returns `{ record }` — the persisted record or null.
+   */
+  async function deepReadRecord(documentId: string): Promise<{ record: DeepReadRecord | null }> {
+    const document = await requireDocument(documentId)
+    const bundle = await tolerantBundle()
+    return { record: await bundle.deepread.get(document.id) }
+  }
+
+  /**
+   * Stream one AI 精读 run (or replay of the cached record) as NDJSON frames.
+   * The request is normalized here (`force` boolean, reader language id) so the
+   * engine always receives the documented payload.
+   *
+   * @param request - `{ documentId, force?, language? }` from the wire.
+   * @param signal - aborted when the client disconnects.
+   */
+  async function* deepReadFrames(
+    request: DeepReadRequest,
+    signal: AbortSignal,
+  ): AsyncGenerator<DeepReadFrame> {
+    const payload: Record<string, unknown> = isPlainObject(request) ? { ...request } : {}
+    const document = await requireDocument(String(payload.documentId ?? ''))
+    const bundle = await aiBundle()
+    const language = normalizeDeepReadLanguage(payload.language)
+    yield* bundle.deepread.run(document.id, {
+      signal,
+      force: payload.force === true,
+      ...(language === undefined ? {} : { language }),
+    })
+  }
+
   /** Stream a library-graph rebuild. */
   async function* libraryGraphBuildFrames(
     signal: AbortSignal,
@@ -1621,6 +1677,8 @@ export function createService(deps: ServiceDeps): ServiceApi {
     chatHistory,
     chatClear,
     chatFrames,
+    deepReadRecord,
+    deepReadFrames,
     graphBuildFrames,
     libraryGraphBuildFrames,
     docGraph,

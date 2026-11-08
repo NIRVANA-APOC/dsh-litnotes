@@ -33,6 +33,7 @@ import {
 import type {
   Annotation,
   ChatRequest,
+  DeepReadRequest,
   GraphPatch,
   ParseStartOptions,
   Preferences,
@@ -176,6 +177,7 @@ function buildDispatch(service: ServiceApi): DispatchTable {
     // dedicated exact routes below.
     'chat.history': (payload) => service.chatHistory(requireString(payload, 'documentId')),
     'chat.clear': (payload) => service.chatClear(requireString(payload, 'documentId')),
+    'deepread.get': (payload) => service.deepReadRecord(requireString(payload, 'documentId')),
     'graph.doc': (payload) => service.docGraph(requireString(payload, 'documentId')),
     'graph.update': (payload) =>
       service.updateDocGraph(requireString(payload, 'documentId'), {
@@ -584,6 +586,19 @@ export function registerRoutes({ ctx, service, store, config, logger, vendorDir 
       handleStream(req, res, (payload, signal) =>
         service.chatFrames({ ...payload, documentId: String(payload.documentId ?? '') } as unknown as ChatRequest, signal),
       ),
+  })
+  register({
+    kind: 'exact',
+    path: `${API_PREFIX}/deepread`,
+    handler: (req, res) =>
+      handleStream(req, res, (payload, signal) => {
+        const request: DeepReadRequest = { documentId: String(payload.documentId ?? '') }
+        if (payload.force === true) request.force = true
+        if (typeof payload.language === 'string' && payload.language.trim() !== '') {
+          request.language = payload.language
+        }
+        return service.deepReadFrames(request, signal)
+      }),
   })
   register({
     kind: 'exact',

@@ -3,8 +3,9 @@
  *
  * The bundle is built lazily so the plugin still boots (and the reading desk
  * keeps working) while a deployment has no LLM service. One `ensure()` call
- * builds the gateway, retriever, graph service and grounded chat service and
- * memoizes them; `peek()` returns the bundle only when it is already built.
+ * builds the gateway, retriever, graph service, grounded chat service and the
+ * AI 精读 close-reading service and memoizes them; `peek()` returns the bundle
+ * only when it is already built.
  *
  * Contract: `AiServicesApi` in `src/host/contracts.ts`, `docs/AI-SPEC.md` §3.7.
  *
@@ -15,7 +16,9 @@ import { createLlmGateway, type LlmGateway } from './llm.ts'
 import { createRetriever, type Retriever } from './retrieval.ts'
 import { createChatService, type ChatService } from './chat.ts'
 import { createGraphService } from './graph.ts'
+import { createDeepReadService } from './deepread.ts'
 import type { AiServicesApi, ResolvedConfig, StoreApi } from '../contracts.ts'
+import type { DeepReadFrame } from '../../shared/model.ts'
 import type { Logger } from '../host-services.ts'
 
 /** Dependencies injected by the Host composition root. */
@@ -94,6 +97,23 @@ function buildBundle(deps: AiServicesDeps, bundle: { llm?: LlmGateway; retriever
       }
     },
   })
+  let deepread: AiServicesApi['deepread']
+  try {
+    deepread = createDeepReadService({
+      llm,
+      store: deps.store,
+      config: deps.config,
+      logger,
+      readMarkdown: (documentId) => deps.store.readMarkdown(documentId),
+    })
+  } catch (error) {
+    // AI 精读 is optional too: the reading desk keeps working without it.
+    logger.warn?.(
+      '[dsh-litnotes] close-reading engine unavailable: %s',
+      (error as Error)?.message ?? error,
+    )
+    deepread = emptyDeepReadService()
+  }
   bundle.llm = llm
   bundle.retriever = retriever
   return {
@@ -101,6 +121,7 @@ function buildBundle(deps: AiServicesDeps, bundle: { llm?: LlmGateway; retriever
     retriever,
     chat,
     graph: graph ?? emptyGraphService(),
+    deepread,
     available: llm.available() === true,
     version: deps.hostVersion ?? '',
   }
@@ -127,6 +148,19 @@ function emptyGraphService(): AiServicesApi['graph'] {
       throw new Error(unavailable.message)
     },
     rebuildLibraryGraph: () => abortFrame(),
+  }
+}
+
+/** A deep-read service that reports every capability as unavailable. */
+function emptyDeepReadService(): AiServicesApi['deepread'] {
+  const unavailable = { code: 'llm-unavailable', message: '精读服务不可用（Deep-read service unavailable）' }
+  return {
+    get: async () => {
+      throw new Error(unavailable.message)
+    },
+    run: async function* (): AsyncGenerator<DeepReadFrame> {
+      yield { type: 'error', ...unavailable }
+    },
   }
 }
 

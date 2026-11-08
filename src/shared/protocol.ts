@@ -15,6 +15,9 @@ import type {
   ChatFrame,
   ChatHistoryValue,
   ChatRequest,
+  DeepReadFrame,
+  DeepReadRecord,
+  DeepReadRequest,
   DocumentMeta,
   DocumentSummary,
   GraphBuildFrame,
@@ -57,6 +60,7 @@ export interface ApiRequests {
   'settings.update': { preferences: Partial<Preferences> }
   'chat.history': { documentId: string }
   'chat.clear': { documentId: string }
+  'deepread.get': { documentId: string }
   'graph.doc': { documentId: string }
   'graph.update': { documentId: string } & GraphPatch
   'graph.library': Record<string, never>
@@ -87,6 +91,7 @@ export interface ApiResults {
   'settings.update': { preferences: Preferences }
   'chat.history': ChatHistoryValue
   'chat.clear': { cleared: true }
+  'deepread.get': { record: DeepReadRecord | null }
   'graph.doc': { graph: KnowledgeGraph }
   'graph.update': { graph: KnowledgeGraph }
   'graph.library': { graph: KnowledgeGraph }
@@ -97,6 +102,7 @@ export type ApiMethod = keyof ApiRequests
 /** NDJSON streaming methods and their frames. */
 export interface StreamMethods {
   chat: { request: ChatRequest; frame: ChatFrame }
+  deepread: { request: DeepReadRequest; frame: DeepReadFrame }
   'graph.build': { request: { documentId: string; force?: boolean }; frame: GraphBuildFrame }
   'graph.library.rebuild': { request: Record<string, never>; frame: LibraryGraphFrame }
 }

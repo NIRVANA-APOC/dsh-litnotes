@@ -22,6 +22,9 @@ import type {
   ChatMessage,
   ChatRequest,
   Citation,
+  DeepReadFrame,
+  DeepReadRecord,
+  DeepReadRequest,
   DocumentMeta,
   DocumentSummary,
   GraphBuildFrame,
@@ -76,6 +79,14 @@ export interface AiConfig {
   maxGraphSourceChars: number
   entailmentCheck: boolean
   entailmentMaxTokens: number
+  /* AI 精读 (deep read) limits (`docs/AI-SPEC.md` §7). */
+  deepReadMaxChunks: number
+  deepReadMaxSourceChars: number
+  deepReadMaxAnnotations: number
+  deepReadMaxTokens: number
+  deepReadSynthesisChars: number
+  deepReadCoveragePass: boolean
+  deepReadJudge: boolean
 }
 
 /** Resolved Host configuration (defaults applied, paths absolute). */
@@ -96,8 +107,8 @@ export interface ResolvedConfig {
 // Store (on-disk library)
 // ---------------------------------------------------------------------------
 
-/** Auxiliary JSON documents stored beside a document (`chat.json`, `graph.json`). */
-export type DocumentAuxName = 'chat.json' | 'graph.json'
+/** Auxiliary JSON documents stored beside a document (`chat.json`, `graph.json`, `deepread.json`). */
+export type DocumentAuxName = 'chat.json' | 'graph.json' | 'deepread.json'
 /** Auxiliary JSON documents stored at the library root (`library-graph.json`). */
 export type LibraryAuxName = 'library-graph.json'
 
@@ -399,12 +410,24 @@ export interface GraphServiceApi {
   rebuildLibraryGraph: (input: { signal: AbortSignal }) => AsyncGenerator<LibraryGraphFrame>
 }
 
+/** Close-reading (AI 精读) service. */
+export interface DeepReadServiceApi {
+  /** Persisted record, or null when the document has never been deep-read. */
+  get: (documentId: string) => Promise<DeepReadRecord | null>
+  /** Run (or replay) the workflow; frames follow `docs/AI-SPEC.md` §5.3. */
+  run: (
+    documentId: string,
+    options: { signal: AbortSignal; force?: boolean; language?: string },
+  ) => AsyncGenerator<DeepReadFrame>
+}
+
 /** Lazily-created AI engine bundle. */
 export interface AiServicesApi {
   readonly llm: LlmGatewayApi
   readonly retriever: RetrieverApi
   readonly chat: ChatServiceApi
   readonly graph: GraphServiceApi
+  readonly deepread: DeepReadServiceApi
   readonly available: boolean
   readonly version: string
 }
@@ -504,6 +527,8 @@ export interface ServiceApi {
   chatHistory: (documentId: string) => Promise<{ messages: ChatMessage[] }>
   chatClear: (documentId: string) => Promise<{ cleared: true }>
   chatFrames: (request: ChatRequest, signal: AbortSignal) => AsyncGenerator<ChatFrame>
+  deepReadRecord: (documentId: string) => Promise<{ record: DeepReadRecord | null }>
+  deepReadFrames: (request: DeepReadRequest, signal: AbortSignal) => AsyncGenerator<DeepReadFrame>
   graphBuildFrames: (request: { documentId: string; force?: boolean }, signal: AbortSignal) => AsyncGenerator<GraphBuildFrame>
   libraryGraphBuildFrames: (signal: AbortSignal) => AsyncGenerator<LibraryGraphFrame>
   docGraph: (documentId: string) => Promise<{ graph: KnowledgeGraph }>

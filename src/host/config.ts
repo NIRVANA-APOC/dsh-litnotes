@@ -178,6 +178,15 @@ function resolveAiConfig(raw: unknown): AiConfig {
     // Default on: quote containment proves provenance, not entailment.
     entailmentCheck: source.entailmentCheck !== false,
     entailmentMaxTokens: integerOption(source.entailmentMaxTokens, 600, 64, 4096),
+    // AI 精读 (deep read): whole-paper close reading, report + annotations.
+    // Defaults are one full read of a typical 15-25 page paper.
+    deepReadMaxChunks: integerOption(source.deepReadMaxChunks, 24, 4, 60),
+    deepReadMaxSourceChars: integerOption(source.deepReadMaxSourceChars, 240000, 20000, 1000000),
+    deepReadMaxAnnotations: integerOption(source.deepReadMaxAnnotations, 24, 8, 60),
+    deepReadMaxTokens: integerOption(source.deepReadMaxTokens, 2400, 512, 8192),
+    deepReadSynthesisChars: integerOption(source.deepReadSynthesisChars, 14000, 4000, 40000),
+    deepReadCoveragePass: source.deepReadCoveragePass !== false,
+    deepReadJudge: source.deepReadJudge !== false,
   }
 }
 

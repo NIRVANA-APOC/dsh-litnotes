@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { en, zh } from '../../src/client/i18n/index.ts'
 
 const CLIENT_DIR = fileURLToPath(new URL('../../src/client/', import.meta.url))
-const AREA_FILES = ['base.ts', 'read.ts', 'ai.ts', 'graph.ts', 'lib.ts'] as const
+const AREA_FILES = ['base.ts', 'read.ts', 'ai.ts', 'deepread.ts', 'graph.ts', 'lib.ts'] as const
 
 /** All client source files (recursive). */
 function sourceFiles(dir: string): string[] {

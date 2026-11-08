@@ -103,6 +103,7 @@ test('the text names the tool families, the citation coordinates and the silence
     'library_search',
     'library_read',
     'library_ask',
+    'library_deepread',
     'library_annotate',
     'library_translate',
     'library_graph',

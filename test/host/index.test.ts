@@ -231,15 +231,15 @@ test('apply() boots, serves the API route and disposes cleanly', async () => {
 
   // --- apply: no throw, routes + effects registered -------------------------
   expect(() => apply(ctx, {})).not.toThrow()
-  // The API prefix, the assets prefix and three exact NDJSON streaming routes.
-  expect(routes.length).toBe(5)
+  // The API prefix, the assets prefix and four exact NDJSON streaming routes.
+  expect(routes.length).toBe(6)
   const api = routes.find((route) => route.path === API)
   const assets = routes.find((route) => route.path === '/dsh-litnotes/assets')
   expect(api).toBeTruthy()
   expect(assets).toBeTruthy()
   expect(api?.kind).toBe('prefix')
   expect(assets?.kind).toBe('prefix')
-  for (const suffix of ['chat', 'graph.build', 'graph.library.rebuild']) {
+  for (const suffix of ['chat', 'deepread', 'graph.build', 'graph.library.rebuild']) {
     const stream = routes.find((route) => route.path === `${API}/${suffix}`)
     expect(stream?.kind).toBe('exact')
   }

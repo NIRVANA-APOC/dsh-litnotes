@@ -1,5 +1,75 @@
 # Changelog
 
+## 1.1.0 — AI 精读 (close reading)
+
+The 1.0.0 AI flow answers one question over a bounded context window, so broad prompts such as
+"总结全文" tend to annotate the title, author line and venue: a ledger reading, not a close
+reading. `AI 精读` adds a whole-paper, multi-stage close-reading workflow that reads every
+substantive section, keeps a rolling reading memory across sections, writes many evidence-anchored
+interpretive annotations (front-matter metadata and quote-restatements rejected by an explicit
+quality gate) and produces a structured, fully page-anchored report.
+
+### Feature
+
+- New reading-margin view `精读`: idle CTA, live phase checklist (建立阅读地图 → 逐节精读 → 补读薄弱
+  章节 → 批注校订 → 撰写报告 → 写入原文) with progress, current section and `停止精读`; the report
+  view shows model/time, `通读 N 节 · 生成 M 条批注 · 覆盖率 P%`, all report sections, a collapsible
+  list of this run's annotation cards, `复制报告` and `重新精读`.
+- Entry points: the primary `AI 精读` button in the read context bar (starts a run when the paper
+  has no record) and a fifth, session-only margin filter chip `精读` with the paper's annotation
+  count.
+- Cancellable between model calls; a cancelled run writes nothing and keeps the previous record
+  and annotations. Records are cached: reopening or reloading serves the persisted report without
+  model calls. A forced re-run replaces the record and dedupes new annotations against the
+  existing ones.
+- The eighth agent tool `library_deepread` (`action: get | run`) exposes the persisted report or
+  runs the workflow; its highlights carry `documentId/blockKey/page/quote/annotationId`.
+
+### Quality gate
+
+- Every quote is verified against the parsed block text (shared `locateQuote`); offsets and pages
+  are Host-computed and block keys are validated before anything is shown or written.
+- Front-matter/boilerplate heuristics and an adjudication pass drop title/author/affiliation/venue
+  quotes, heading-only quotes, trivial notes and notes that restate their quote; the coverage pass
+  re-reads sections that received no annotation; selection is coverage-aware and capped
+  (`ai.deepReadMaxAnnotations`).
+- The report is validated field by field: bounded strings, unknown block keys dropped, evidence/
+  confidence normalised, and a deterministic fallback report when synthesis output is malformed.
+- Live isolated-instance acceptance (real model, 24-page paper) verifies annotation quality
+  metrics, offset verification, report block-key validity, reload persistence and cancel
+  behaviour, alongside the offline engine/wire/client test suites.
+
+### Wire and data
+
+- JSON `deepread.get` (`{ documentId } → { record | null }`).
+- NDJSON stream `deepread` (`{ documentId, force?, language? }`) with frames `start`, `progress`,
+  `report`, `annotations`, `usage`, `done`, `error`; cached calls replay the record with no model
+  calls; aborting the request aborts the run.
+- New per-document aux file `deepread.json` (`DeepReadRecord`, version 1) written atomically; the
+  frozen formats (`chat.json`, `graph.json`, `annotations.json`, `library-graph.json`) are
+  unchanged. Deep-read annotations use the standard annotation format with
+  `chatId: "deepread:<documentId>"`, `origin: "ai"` and the run id as `messageId`.
+- New `ai.deepRead*` configuration keys: `deepReadMaxChunks` (24), `deepReadMaxSourceChars`
+  (240000), `deepReadMaxAnnotations` (24), `deepReadMaxTokens` (2400), `deepReadSynthesisChars`
+  (14000), `deepReadCoveragePass` (on), `deepReadJudge` (on), each validated and clamped.
+
+### Engineering
+
+- New Host engine `src/host/ai/deepread.ts` (sequential, abortable, never throws) and the
+  `DEEPREAD_*` prompt family with `DEEPREAD_PROMPT_VERSION = 1`; the chat `PROMPT_VERSION` stays 2.
+- New client store `deepread-store.ts`, pure report helpers `deepread.ts`, the `DeepReadPanel`
+  view + styles + i18n dictionaries, and shell wiring (fifth chip, context-bar entry, margin
+  branch, locale seam).
+- Tests: engine unit suite over a fake LLM, wire/service/route/agent-tool tests, client store and
+  panel suites; full suite 865 tests across 75 files. Bundles stay within the enforced budgets
+  (Host 986.6 KiB, client 617.0 KiB, CSS 78.1 KiB).
+
+### Compatibility
+
+- Existing libraries need no migration. A document without `deepread.json` reports "never
+  deep-read"; old readers ignore the new file; existing annotations (user, chat, earlier
+  deep-read runs) win dedupe and are never deleted by a new run.
+
 ## 1.0.0
 
 First stable release. The complete pre-refactor feature set (0.3.0, preserved as tag `v0.3.0`)

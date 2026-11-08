@@ -1,5 +1,5 @@
 /**
- * Registration and dispatch tests for the seven library tools
+ * Registration and dispatch tests for the eight library tools
  * (docs/AI-SPEC.md §7; `src/host/agent-tools.ts`).
  *
  * Ported from the frozen 1.0.0 `ai-tools-registry.test.mjs`. A fake tool
@@ -12,6 +12,7 @@ import { expect } from 'vitest'
 import { LIBRARY_TOOL_NAMES, registerLibraryTools } from '../../src/host/agent-tools.ts'
 import type { ResolvedConfig, ServiceApi } from '../../src/host/contracts.ts'
 import type { ToolDefinition, ToolsService } from '../../src/host/host-services.ts'
+import type { DeepReadRecord } from '../../src/shared/model.ts'
 
 /** Minimal resolved config for tool registration. */
 const CONFIG: ResolvedConfig = {
@@ -36,6 +37,13 @@ const CONFIG: ResolvedConfig = {
     maxGraphSourceChars: 160000,
     entailmentCheck: true,
     entailmentMaxTokens: 600,
+    deepReadMaxChunks: 24,
+    deepReadMaxSourceChars: 240000,
+    deepReadMaxAnnotations: 24,
+    deepReadMaxTokens: 2400,
+    deepReadSynthesisChars: 14000,
+    deepReadCoveragePass: true,
+    deepReadJudge: true,
   },
   local: {
     enabled: true,
@@ -71,6 +79,63 @@ function makeTools() {
 interface RecordedCall {
   name: string
   args: unknown[]
+}
+
+/** A realistic persisted deep-read record for the fake service. */
+const DEEP_READ_RECORD: DeepReadRecord = {
+  version: 1,
+  documentId: 'doc-1',
+  generatedAt: '2026-01-01T00:00:00.000Z',
+  language: 'zh',
+  model: { provider: 'fake-provider', model: 'fake-model' },
+  promptVersion: 1,
+  report: {
+    tldr: ['一句话结论：这是一篇关于执行边界安全的论文。'],
+    problem: { label: '研究问题', detail: '如何约束代理的执行能力。', blockKeys: ['b0:deadbeef'] },
+    gap: { label: '研究空白', detail: '现有工作缺少执行层检查。', blockKeys: ['b1:feedface'] },
+    contributions: [
+      { label: '核心贡献', detail: '提出清单驱动的执行层约束。', blockKeys: ['b0:deadbeef'], evidence: 'strong' },
+    ],
+    method: [],
+    evaluation: [],
+    findings: [],
+    limitations: [],
+    openQuestions: [],
+    argumentMap: [],
+    glossary: [],
+    readingPath: ['先读方法一节'],
+    verdict: { strengths: ['机制清晰'], weaknesses: ['评估面窄'], confidence: 'medium' },
+  },
+  highlights: [
+    {
+      annotationId: 'ann-deep-1',
+      blockKey: 'b0:deadbeef',
+      quote: 'Paper',
+      start: 0,
+      end: 5,
+      page: 1,
+      aspect: 'method',
+      note: '关键方法定义：清单声明代理可触达的能力。',
+      importance: 4,
+      section: 'Method',
+      kind: 'method',
+    },
+  ],
+  stats: {
+    sections: 5,
+    sectionsRead: 4,
+    chunks: 6,
+    chunksRead: 5,
+    candidates: 9,
+    kept: 1,
+    skipped: 8,
+    coverage: 0.8,
+    calls: 7,
+    durationMs: 12000,
+    inputTokens: 1000,
+    outputTokens: 500,
+    truncated: false,
+  },
 }
 
 /** A fake service with recorded calls and mutable per-call overrides. */
@@ -124,6 +189,20 @@ function makeService(overrides: Partial<ServiceApi> = {}): ServiceApi & { calls:
     chatHistory: record('chatHistory', { messages: [] }),
     chatClear: record('chatClear', { cleared: true as const }),
     chatFrames: () => (async function* frames() {})(),
+    deepReadRecord: record('deepReadRecord', { record: DEEP_READ_RECORD }),
+    deepReadFrames: () =>
+      (async function* frames() {
+        yield {
+          type: 'start',
+          model: { provider: 'fake-provider', model: 'fake-model' },
+          language: 'zh',
+        } as const
+        yield { type: 'progress', phase: 'reading', done: 1, total: 2 } as const
+        yield { type: 'report', record: DEEP_READ_RECORD } as const
+        yield { type: 'annotations', created: 1, highlights: DEEP_READ_RECORD.highlights } as const
+        yield { type: 'usage', usage: { inputTokens: 1000, outputTokens: 500 } } as const
+        yield { type: 'done' } as const
+      })(),
     graphBuildFrames: () =>
       (async function* frames() {
         yield { type: 'progress', phase: 'reading', done: 1, total: 2 } as never
@@ -311,7 +390,7 @@ function recordOf(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-test('all seven library tools register and dispose cleanly', () => {
+test('all eight library tools register and dispose cleanly', () => {
   const tools = makeTools()
   const dispose = registerLibraryTools({ tools: tools.tools, service: makeService(), config: CONFIG })
   expect([...tools.definitions.keys()].sort()).toEqual([...LIBRARY_TOOL_NAMES].sort())
@@ -329,7 +408,7 @@ test('all seven library tools register and dispose cleanly', () => {
   }
   dispose()
   expect(tools.definitions.size).toBe(0)
-  expect(tools.disposed.length).toBe(7)
+  expect(tools.disposed.length).toBe(8)
 })
 
 test('registration is a no-op when the tools service is missing', () => {

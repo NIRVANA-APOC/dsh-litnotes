@@ -173,8 +173,9 @@ describe('host plugin composition', () => {
     const mounted = await mountPlugin()
     expect(mounted.effects).toBeGreaterThanOrEqual(3)
     expect(mounted.routes.some((route) => route.path === '/dsh-litnotes/api')).toBe(true)
-    expect(mounted.toolNames).toHaveLength(7)
+    expect(mounted.toolNames).toHaveLength(8)
     expect(mounted.toolNames).toContain('library_search')
+    expect(mounted.toolNames).toContain('library_deepread')
     expect(mounted.toolNames).toContain('library_manage')
     // The store initializes asynchronously; one request awaits the same init promise.
     await callApi(mounted, 'status')

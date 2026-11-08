@@ -36,7 +36,7 @@ export const LIBRARY_PROMPT_SECTION_ORDER = 55
  * the citation-ready result coordinates, plus the stay-silent rule.
  */
 export const LIBRARY_PROMPT_SECTION_TEXT: string = [
-  'A local literature library is available through dsh-litnotes: use the library_search, library_read, library_ask, library_annotate, library_translate, library_graph and library_manage tools when the task involves the user\'s papers.',
+  'A local literature library is available through dsh-litnotes: use the library_search, library_read, library_ask, library_deepread, library_annotate, library_translate, library_graph and library_manage tools when the task involves the user\'s papers.',
   'Their results carry documentId, blockKey, page and quote coordinates — cite papers with those coordinates so the user can jump to the exact text.',
   'Do not mention the literature library when the request is unrelated to it.',
 ].join('\n')

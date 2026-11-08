@@ -19,6 +19,7 @@ import { PANEL_ICON_SVG } from './icons.ts'
 import { en, zh } from './i18n/index.ts'
 import { CSS } from './styles/index.ts'
 import { App } from './shell/App.tsx'
+import { provideLocale } from './shell/locale-context.ts'
 
 /** Services this client half requires before it activates. */
 export const inject: string[] = ['slots', 'locale', 'layout']
@@ -64,6 +65,17 @@ function installStyles(): () => void {
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-litnotes: dictionaries')
   ctx.effect(installStyles, 'dsh-litnotes: stylesheet')
+  // Feature stores read the active locale outside React (the deep-read run
+  // sends it to the Host for notes/report language); a missing locale service
+  // must never break the panel, so the fallback reader is `en`.
+  ctx.effect(() => {
+    try {
+      provideLocale(() => ctx.locale.getLocale().active)
+    } catch {
+      provideLocale(() => 'en')
+    }
+    return () => provideLocale(() => 'en')
+  }, 'dsh-litnotes: active locale')
   const t = ctx.locale.bind(NS)
   ctx.effect(
     () =>

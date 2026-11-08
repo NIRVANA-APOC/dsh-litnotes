@@ -1,4 +1,4 @@
-# dsh-litnotes 1.0.0 — UI/UX spec: the margin voice
+# dsh-litnotes 1.1.0 — UI/UX spec: the margin voice
 
 Authoritative UI contract for the reading desk. It describes the shipped 1.0.0 client
 (`src/client/**`): design tokens, frame geometry, the position principle, component and class
@@ -168,7 +168,7 @@ Tethers: `.ln-tether[data-aspect][data-active]` in a pointer-events-none fixed l
 ### 4.5 Margin / AI voice
 
 `.ln-ai-panel` (docked right rail, flush with the reader's top/right/bottom edges) →
-`.ln-ai-panel__head` (`页边` + note count + filter chips: all / chat / AI notes / my notes) →
+`.ln-ai-panel__head` (`页边` + note count + filter chips: all / chat / AI notes / my notes / 精读) →
 `.ln-ai-panel__body` (its own scroll area: AI entries, then notes) → `.ln-ai-panel > .ln-ai__composer`
 (fixed footer: context chip, quick prompts, input, send/stop) → `.ln-margin__stream` → entries `.ln-margin__entry[data-kind=note|question|answer]
 [data-aspect][data-origin][data-anchor-block]`. Notes use `.ln-note` (aspect dot, quote
@@ -184,6 +184,43 @@ Composer: ⌘/Ctrl+Enter send, Shift+Enter newline. The default chip is 全文 (
 focus); an explicit paragraph focus (block toolbar → 询问 AI 此段) or a selection shows a removable
 此段 / 选中文本 chip. Scrolling never swaps the composer's context; AI unavailable shows the model
 setup hint.
+
+#### The 精读 view
+
+The fifth, session-only margin view (`精读`, `MarginFilter = 'deepread'`) is the highest-density
+surface in the product and deliberately quieter than chat: a reading report, not a conversation.
+It replaces the conversation stream + note slips inside `.ln-ai-panel__body` and hides the
+composer footer.
+
+- **Entry points.** A primary `AI 精读` button (sparkle icon, `.ln-btn--primary .ln-btn--sm`) sits
+  in the read context bar's left group, left of `翻译全文`; disabled when the paper is not parsed
+  or `status.ai.available` is false. The fifth margin chip `精读 <count>` (count = highlights of
+  the current paper's record) selects the same view; like `对话`, the filter is session-only and
+  never persisted.
+- **DOM/state.** `.ln-margin__deepread` wraps `.ln-deepread[data-state][data-busy]` with
+  `data-state` = `idle | running | report | error | loading | load-error`. The view keeps the same
+  docked rail, width and header as the AI stream, so the paper and the report read side by side.
+- **Idle** — `.ln-deepread__cta`: title `AI 精读`, one-sentence promise, a cost/time note
+  (`约 3–8 次模型调用 · 2–4 分钟 · 会消耗 token`), `开始精读`, and a hint that only a finished run
+  writes the page.
+- **Running** — `.ln-deepread__running`: phase checklist (`建立阅读地图 → 逐节精读 → 补读薄弱章节 →
+  批注校订 → 撰写报告 → 写入原文`) with done/active/pending states on
+  `.ln-deepread__phase[data-state]`, a progress bar plus `done/total · %`, the current section,
+  `停止精读`, and the promise that stopping writes nothing.
+- **Report** — `.ln-deepread__report`: header with model + generated-at, a faint meta line
+  (calls / minutes / tokens), and the stats row `通读 N 节 · 生成 M 条批注 · 覆盖率 P%`; then the
+  report sections in order (`一句话结论` · `研究问题` · `研究空白` · `核心贡献` with evidence badge
+  强/部分/弱 · `方法` · `实验与证据` · `主要发现` · `局限与风险` · `开放问题` · `论证地图` · `术语` ·
+  `阅读路径` · `总体评价` with 优点/不足/信心), empty sections omitted; a collapsible
+  `本次批注 M` list of annotation cards (aspect ink, quote excerpt, note, jump); actions
+  `复制报告` and `重新精读`. Every point ends with `原文 p.N` reference buttons
+  (`.ln-deepread__ref`); clicking one scrolls the paper and flashes the source block. Points
+  whose block key no longer resolves simply render without the chip.
+- **Error** — `.ln-deepread__error` with the failure message, `重试` and `关闭`; when a previous
+  record exists the report stays rendered beneath the notice.
+- **Layout.** Report text uses the reading measure inside the 240–560 px margin: refs wrap, long
+  glossary terms truncate with a title, and nothing overflows horizontally; light and dark share
+  the same token palette, reduced motion is honored.
 
 ### 4.6 Graph scene
 
@@ -221,6 +258,13 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
   are persisted host-side and restored before content arrives.
 - **Import**: drag anywhere over the rail/stage queues files into the import dialog; progress
   shows in the rail row; failures explain the next action.
+- **AI 精读**: the context-bar `AI 精读` opens the 精读 view and, when the open paper has no
+  record, starts the run in the same click; with a run in flight it only brings the running view
+  back (never restarts or cancels). `停止精读` aborts between model calls — nothing is written,
+  the previous report and annotations stay, and the view returns to/keeps the report with the
+  interruption noted. `重新精读` forces a re-run and the old report stays visible until the new
+  record lands. The `精读` chip is session-only: switching documents or reloading never persists
+  the filter, while the report itself is persisted per document.
 - **Keyboard**: all controls focusable with visible ring; `Esc` closes overlays; `⌘/Ctrl+K`
   search; arrows navigate rail rows and menu items; dialogs trap focus via native `<dialog>`.
 
@@ -258,6 +302,10 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 - Labels are verb phrases naming the outcome ("导出对话", "适应视图"); no filler; errors say what
   failed and what to do next; empty states invite an action in one sentence; AI notices never
   double-count (entailment-specific vs generic unverified).
+- 精读 labels: `AI 精读`, `精读`, `开始精读`, `停止精读`, `精读报告`, `本次批注`, `通读 {n} 节`,
+  `生成 {n} 条批注`, `覆盖率 {p}%`, `原文 p.{n}`, `复制报告`, `重新精读`,
+  `精读完成：生成 {n} 条批注`, and the failure vocabulary
+  (`模型不可用`, `模型调用失败，重试一次`, `精读被中断`, `这次精读没有完成`).
 
 ## 9. Performance budget
 
@@ -279,3 +327,8 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 - Real GUI acceptance runs an isolated DSH instance (separate `DSH_HOME`, copied library,
   Playwright Chromium over CDP): every scene, light+dark, 1440/1100/900/390 widths, zero
   console exceptions, screenshots + machine-readable summary.
+- AI 精读 acceptance (live model, isolated instance): the context-bar entry and fifth chip open
+  the view; idle/running/report/error render at 240/360/560 px without horizontal overflow; the
+  composer is hidden; `原文 p.N` jumps scroll + flash the block; a page reload restores the
+  report; `停止精读` leaves the previous record and annotations untouched. Evidence screenshots:
+  `docs/screens/16-deepread-report.png`, `docs/screens/17-deepread-annotated.png`.

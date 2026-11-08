@@ -1,5 +1,5 @@
 /**
- * Cross-half integration test: the 7 agent tool definitions executed against the
+ * Cross-half integration test: the 8 agent tool definitions executed against the
  * real composed service layer (`registerLibraryTools` → `ServiceApi` → store).
  *
  * Builds the real Host bundle, mounts it on a fake Cordis context that captures
@@ -8,7 +8,7 @@
  * tool's `execute()` handler exactly as the agent would:
  *
  *   library_search / library_read / library_annotate / library_translate /
- *   library_graph / library_manage / library_ask
+ *   library_graph / library_manage / library_ask / library_deepread
  *
  * Assertions cover bounded outputs (`config.toolMaxChars`), coordinate fields
  * (documentId / blockKey / page / snippet / quote), real disk side effects
@@ -432,10 +432,11 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe('agent tools end-to-end against the real service layer', () => {
-  it('registers the 7 focused library tools with schemas and output declarations', () => {
+  it('registers the 8 focused library tools with schemas and output declarations', () => {
     expect(mounted.tools.map((definition) => definition.name).sort()).toEqual([
       'library_annotate',
       'library_ask',
+      'library_deepread',
       'library_graph',
       'library_manage',
       'library_read',
@@ -452,6 +453,19 @@ describe('agent tools end-to-end against the real service layer', () => {
       expect(definition.output.schema).toMatchObject({ type: 'object' })
       expect(typeof definition.output.render).toBe('function')
     }
+
+    // The AI 精读 tool declares its get|run surface and bounded output.
+    const deepread = tool('library_deepread')
+    const parameters = deepread.parameters as JsonSchema
+    expect(parameters.additionalProperties).toBe(false)
+    expect(parameters.required).toEqual(['action', 'documentId'])
+    const properties = parameters.properties as Record<string, Record<string, unknown>>
+    expect(properties.action?.enum).toEqual(['get', 'run'])
+    expect(properties.documentId?.type).toBe('string')
+    expect(properties.language?.type).toBe('string')
+    expect(deepread.output.schema).toMatchObject({ type: 'object' })
+    expect(typeof deepread.output.render).toBe('function')
+    expect(deepread.description).toMatch(/精读|close reading/i)
   })
 
   it('library_search finds coordinate-bearing passages and honours scope/limit', async () => {
@@ -748,6 +762,27 @@ describe('agent tools end-to-end against the real service layer', () => {
     await rejectsWith(
       () => runTool('library_ask', { documentId: mainId, question: '   ' }),
       /问题不能为空|question/,
+    )
+  })
+
+  it('library_deepread returns the persisted report (null before the first run)', async () => {
+    const getArgs = { action: 'get', documentId: mainId }
+    const result = (await runTool('library_deepread', getArgs)) as Record<string, unknown>
+    expect(result.documentId).toBe(mainId)
+    // No deep-read has run for this fixture: the tool answers a null record
+    // (not an error) and spends no model calls.
+    expect(result.record).toBeNull()
+    assertBounded('library_deepread', getArgs, result)
+    expect(JSON.parse(renderTool('library_deepread', getArgs, result))).toMatchObject({
+      documentId: mainId,
+      record: null,
+    })
+
+    // A missing document surfaces the wire error through the tool.
+    await rejectsWith(
+      () => runTool('library_deepread', { action: 'get', documentId: '00000000-0000-4000-8000-000000000000' }),
+      /文档不存在|Document not found/,
+      'not-found',
     )
   })
 })

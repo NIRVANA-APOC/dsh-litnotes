@@ -9,6 +9,7 @@ import * as reader from './read.ts'
 import * as ai from './ai.ts'
 import * as graph from './graph.ts'
 import * as lib from './lib.ts'
+import * as deepread from './deepread.ts'
 
 export const zh = {
   ...base.zh,
@@ -16,6 +17,7 @@ export const zh = {
   ...ai.zh,
   ...graph.zh,
   ...lib.zh,
+  ...deepread.zh,
 }
 
 export const en: Record<keyof typeof zh, string> = {
@@ -24,6 +26,7 @@ export const en: Record<keyof typeof zh, string> = {
   ...ai.en,
   ...graph.en,
   ...lib.en,
+  ...deepread.en,
 }
 
 /** Key space of this plugin's locale namespace. */

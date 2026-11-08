@@ -1,4 +1,4 @@
-# dsh-litnotes — architecture (1.0.0)
+# dsh-litnotes — architecture (1.1.0)
 
 A DeepSeek Harness plugin that turns a local literature library into a reading desk: import and
 parse papers, read them bilingually, ask questions whose evidence is anchored on the page, keep
@@ -55,12 +55,12 @@ byte-identical on both sides.
 | `src/host/host-services.ts` | structural types for the DSH services the Host consumes | Host |
 | `src/host/wire.ts` | JSON envelope, error taxonomy, bounded body readers, uuid guard | Host |
 | `src/host/config.ts` `mime.ts` | row-config resolution, token credential lifecycle, extension/content-type map | Host |
-| `src/host/store/**` | on-disk library: atomic JSON, per-document queues, annotation merge, aux files | Host |
+| `src/host/store/**` | on-disk library: atomic JSON, per-document queues, annotation merge, aux files (`chat.json`, `graph.json`, `deepread.json`) | Host |
 | `src/host/service.ts` | operations layer shared by HTTP routes and agent tools | Host |
 | `src/host/routes.ts` | HTTP routes, upload streaming, NDJSON helpers, connection fence | Host |
-| `src/host/agent-tools.ts` | the seven model-facing library tools | Host |
+| `src/host/agent-tools.ts` | the eight model-facing library tools | Host |
 | `src/host/parse/**` | MinerU client + engine policy, local pdf.js/officeToPdf engine, manager, page repair, ZIP | Host |
-| `src/host/ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, prompt section | Host |
+| `src/host/ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, AI 精读 close reading, prompt section | Host |
 | `src/host/index.ts` | composition root (`apply(ctx, config)`) | Host |
 | `src/client/**` | design system, shell, reader, AI margin, graph scene, state, transport, i18n | Client |
 | `scripts/build.ts` | builds both artifacts (`--check` validates output) | — |
@@ -245,7 +245,21 @@ back to defaults):
 Preferences are read/written through the store (`readPreferences` / `writePreferences`) so exactly
 one implementation owns the file.
 
-### 4.7 `diagnostics/client.log`
+### 4.7 `deepread.json` — AI 精读 record
+
+One per document, written atomically by the close-reading engine beside `meta.json` and
+`annotations.json`. It holds the versioned `DeepReadRecord` (AI-SPEC §2.7): the structured report,
+the evidence-anchored highlights and the run statistics. `version` is `1`.
+
+- New in 1.1.0. Old readers ignore the file; a missing file means "never deep-read"
+  (`deepread.get` answers `null`). Unreadable records are treated the same way.
+- Deep-read annotations live in the standard `annotations.json` with `origin: 'ai'`,
+  `chatId: 'deepread:<documentId>'`, `messageId: <runId>` and the model label — the frozen
+  annotation format is unchanged.
+- A forced re-run replaces the record (annotations are deduped against, never deleted); a
+  cancelled run writes nothing and leaves the previous record intact.
+
+### 4.8 `diagnostics/client.log`
 
 Newest-first bounded log of client health/event pings (`health.ping`) as one JSON object per line,
 capped at 200 lines and reset when the file exceeds 2 MiB.
@@ -313,6 +327,7 @@ Request and result payloads are typed in `src/shared/protocol.ts` (`ApiRequests`
 | `settings.update` | `{preferences}` | `{preferences}` (normalized) |
 | `chat.history` | `{documentId}` | `{messages: ChatMessage[]}` |
 | `chat.clear` | `{documentId}` | `{cleared:true}` |
+| `deepread.get` | `{documentId}` | `{record: DeepReadRecord \| null}` |
 | `graph.doc` | `{documentId}` | `{graph}` |
 | `graph.update` | `{documentId, nodes?, edges?, merge?}` | `{graph}` (curation) |
 | `graph.library` | `{}` | `{graph}` |
@@ -322,6 +337,7 @@ Request and result payloads are typed in `src/shared/protocol.ts` (`ApiRequests`
 | route | request | frames |
 |---|---|---|
 | `/dsh-litnotes/api/chat` | `ChatRequest` (`documentId`, `question`, `focus?`, `regenerateOf?`) | `ChatFrame`: `start`, `delta`, `phase`, `answer`, `graph`, `usage`, `done`, `error` |
+| `/dsh-litnotes/api/deepread` | `{documentId, force?, language?}` | `DeepReadFrame`: `start`, `progress`, `report`, `annotations`, `usage`, `done`, `error` |
 | `/dsh-litnotes/api/graph.build` | `{documentId, force?}` | `GraphBuildFrame`: `progress`, `graph`, `error` |
 | `/dsh-litnotes/api/graph.library.rebuild` | `{}` | `LibraryGraphFrame`: `progress`, `graph`, `error` |
 
@@ -349,18 +365,18 @@ dispatch, on both API and asset routes.
 | `wire.ts` | envelope writers, bounded body readers, `WireError` taxonomy, `requireUuid`/`requireString`, options clamping |
 | `config.ts` | `resolveConfig` (row config → `ResolvedConfig`, absolute data dir, canonical API base, clamped limits, `ai`/`local` blocks), credential token lifecycle, preferences load/save through the store, package version |
 | `mime.ts` | supported source extensions, image extensions, extension → content type |
-| `store/**` | `StoreApi`: atomic JSON, per-doc queue, metadata index, parsed reads, annotations/translations, aux JSON (`chat.json`, `graph.json`, `library-graph.json`), preferences, diagnostics, stats, dispose |
+| `store/**` | `StoreApi`: atomic JSON, per-doc queue, metadata index, parsed reads, annotations/translations, aux JSON (`chat.json`, `graph.json`, `deepread.json`, `library-graph.json`), preferences, diagnostics, stats, dispose |
 | `service.ts` | `ServiceApi`: every operation the HTTP API and the agent tools perform (documents, parse start/cancel, reads, annotations, translation routing, status/settings/tokens/preferences, tool helpers, lexical search, AI bridge) |
 | `routes.ts` | registration and dispatch, upload/file serving, NDJSON plumbing, fence |
-| `agent-tools.ts` | the seven model-facing tools (see `AGENT.md`) |
+| `agent-tools.ts` | the eight model-facing tools (see `AGENT.md`) |
 | `parse/**` | MinerU client + engine policy, local engine, parse manager, page merge, ZIP safety (see `PARSING.md`) |
-| `ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, prompt section (see `AI-SPEC.md`) |
+| `ai/**` | LLM gateway, MiniSearch retrieval, grounded chat, knowledge graphs, AI 精读 close reading, prompt section (see `AI-SPEC.md`) |
 | `index.ts` | composition root and lifecycle |
 
 Module seams are declared in `src/host/contracts.ts` and never imported across concrete modules:
 `StoreApi`, `ParseManagerApi`, `LocalEngineApi`, `MineruClientApi`, `NormalizeParseOptions`,
 `DescribeMineruError`, `ReanchorHook`, `LlmGatewayApi`, `RetrieverApi`, `ChatServiceApi`,
-`GraphServiceApi`, `AiServicesApi`, `ServiceApi`. Tests and embedders depend on these interfaces,
+`GraphServiceApi`, `DeepReadServiceApi`, `AiServicesApi`, `ServiceApi`. Tests and embedders depend on these interfaces,
 not on factory internals.
 
 ## 7. Boot lifecycle
@@ -452,9 +468,11 @@ the agent default route, normalized delta/usage/finish stream, `tokenMeter`-base
 `MiniSearch` lexical retriever over the shared block model (BM25+, ASCII + CJK tokenization,
 deterministic context assembly), a grounded `ChatServiceApi` (citation-first answers with
 provenance and entailment verification, auto-annotations, conversation persistence, graph
-knowledge deltas) and a `GraphServiceApi` (per-paper extraction + deterministic library
-aggregation + curation). Every AI feature degrades independently: reader/library stay usable
-without a model. Frame and payload contracts: `AI-SPEC.md`.
+knowledge deltas), a `GraphServiceApi` (per-paper extraction + deterministic library aggregation
++ curation) and a `DeepReadServiceApi` (whole-paper sequential close reading → quality-gated,
+evidence-anchored annotations + a structured report; cancellable, cached, record persisted as
+`deepread.json`). Every AI feature degrades independently: reader/library stay usable without a
+model. Frame and payload contracts: `AI-SPEC.md`.
 
 ## 12. Configuration
 
@@ -470,7 +488,7 @@ ignores unknown ones.
 | `pollIntervalMs` | 3000 | 10 – 600 000 |
 | `parseTimeoutMs` | 30 min | 1 s – 24 h |
 | `toolMaxChars` | 40 000 | 1 000 – 400 000 (caps tool read slices and rendered results) |
-| `ai.*` | see `AI-SPEC.md` §7 | provider/model override, context chars, history turns, answer/graph tokens, annotation cap, reasoning effort, graph chunk caps, entailment switch |
+| `ai.*` | see `AI-SPEC.md` §7 | provider/model override, context chars, history turns, answer/graph tokens, annotation cap, reasoning effort, graph chunk caps, entailment switch, `deepRead*` caps and passes |
 | `local.*` | enabled, 500 pages, 200 MiB PDF, 32 MiB text, 120 s timeout, 100 MiB Office | every field clamped; see `PARSING.md` |
 
 **Credentials.** The MinerU token lives in the Host credential store under

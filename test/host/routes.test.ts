@@ -172,6 +172,14 @@ function makeAiBundle(overrides: Partial<{ -readonly [K in keyof AiServicesApi]:
       libraryGraph: throwGraph,
       rebuildLibraryGraph: async function* () {},
     },
+    deepread: {
+      get: async () => null,
+      run: async function* () {
+        yield { type: 'start', model: { provider: 'fake-provider', model: 'fake-model' }, language: 'zh' } as never
+        yield { type: 'progress', phase: 'mapping', done: 0, total: 1 } as never
+        yield { type: 'done' } as never
+      },
+    },
     available: true,
     version: '0.0.0',
     ...overrides,

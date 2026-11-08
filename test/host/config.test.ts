@@ -162,6 +162,39 @@ test('ai config exposes the entailment switch and no dead autoBuildGraph key', (
   expect(resolveConfig({ ai: { maxAnnotationsPerAnswer: 0 } }).ai.maxAnnotationsPerAnswer).toBe(1)
 })
 
+test('ai deep-read block keeps defaults and clamps overrides', () => {
+  const base = resolveConfig({}).ai
+  expect(base.deepReadMaxChunks).toBe(24)
+  expect(base.deepReadMaxSourceChars).toBe(240000)
+  expect(base.deepReadMaxAnnotations).toBe(24)
+  expect(base.deepReadMaxTokens).toBe(2400)
+  expect(base.deepReadSynthesisChars).toBe(14000)
+  expect(base.deepReadCoveragePass).toBe(true)
+  expect(base.deepReadJudge).toBe(true)
+
+  // Clamped into the documented ranges (docs/AI-SPEC.md §7).
+  const clamped = resolveConfig({
+    ai: {
+      deepReadMaxChunks: 1,
+      deepReadMaxSourceChars: 1,
+      deepReadMaxAnnotations: 1000,
+      deepReadMaxTokens: 1,
+      deepReadSynthesisChars: 1,
+      deepReadCoveragePass: false,
+      deepReadJudge: 'false',
+    },
+  }).ai
+  expect(clamped.deepReadMaxChunks).toBe(4)
+  expect(clamped.deepReadMaxSourceChars).toBe(20000)
+  expect(clamped.deepReadMaxAnnotations).toBe(60)
+  expect(clamped.deepReadMaxTokens).toBe(512)
+  expect(clamped.deepReadSynthesisChars).toBe(4000)
+  // Only an explicit false disables the passes (matches the entailment switch).
+  expect(clamped.deepReadCoveragePass).toBe(false)
+  expect(clamped.deepReadJudge).toBe(true)
+  expect(resolveConfig({ ai: { deepReadJudge: false } }).ai.deepReadJudge).toBe(false)
+})
+
 test('local config block keeps defaults and clamps overrides', () => {
   const base = resolveConfig({}).local
   expect(base.enabled).toBe(true)

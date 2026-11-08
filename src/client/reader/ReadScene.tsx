@@ -9,6 +9,9 @@
  *         .ln-sheet__gutter       section ticks live in the heading blocks
  *         .ln-sheet__paper        title block + blocks (`data-block-key`)
  *         .ln-sheet__margin       margin head + AI stream + reader notes
+ *                                 (the 精读 view swaps the stream + notes for
+ *                                 the close-reading report and hides the
+ *                                 composer footer)
  *     .ln-tether-layer            fixed 1px provenance hairlines
  *     .ln-selbar / .ln-selcard / .ln-noteeditor
  *
@@ -43,9 +46,10 @@ import { SelectionTranslationCard } from './translation.tsx'
 import type { SelectionTranslationState } from './translation.tsx'
 import { Tethers } from './tethers.tsx'
 import { AnnotationCard } from './annotation-card.tsx'
-import { AiComposer, AiMarginEntries, MarginFilterRow } from './margin-ai.tsx'
+import { AiComposer, AiMarginEntries, DeepReadPanel, MarginFilterRow } from './margin-ai.tsx'
 import { askAI } from './api.ts'
 import { orderOf, refreshAnnotations, useReaderStore } from './store.ts'
+import { useDeepReadStore } from '../ai/deepread-store.ts'
 import { copyText } from './clipboard.ts'
 import READER_CSS from './styles.css'
 
@@ -161,6 +165,18 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
       }
     }
   }, [document.id, document.updatedAt])
+
+  /* ---- deep-read record: load on open (cached report → 精读 chip count) - */
+  useEffect(() => {
+    const target = document.id
+    const deepRead = useDeepReadStore.getState()
+    // Guard on the store's own document: a switch between two papers must not
+    // issue a second load for the paper whose record is already adopted.
+    if (deepRead.documentId === target) return
+    void deepRead.load(target).catch(() => {
+      /* optional feature: a failed load keeps the margin's idle CTA usable */
+    })
+  }, [document.id])
 
   /* ---- page-mark preference changes rebuild the view model ------------ */
   const showPageMarks = preferences.showPageMarks
@@ -681,6 +697,17 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
     void refreshAnnotations()
   }, [])
 
+  /* ---- deep-read panel host hooks ------------------------------------ */
+  // The panel/store finish a run by asking the shell to reload the page
+  // annotations (the Host wrote them); the reader is the only owner of that
+  // reload, so it registers the hook here and detaches it on unmount.
+  useEffect(() => {
+    useDeepReadStore.getState().setHostHooks({ onAnnotationsChanged: handleAnnotationsChanged })
+    return () => {
+      useDeepReadStore.getState().setHostHooks({})
+    }
+  }, [handleAnnotationsChanged])
+
   /* ---- hover cross-highlighting -------------------------------------- */
   const hoverAnnotation = useCallback((annotationId: string | null, blockKey: string | null): void => {
     setHovered({ annotationId, blockKey })
@@ -891,37 +918,54 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
                 </div>
               </div>
             ) : null}
-            <div className="ln-margin__ai">
-              <AiMarginEntries
-                documentId={document.id}
-                orderOf={orderOf}
-                onJump={handleJump}
-                onAnnotationsChanged={handleAnnotationsChanged}
-              />
-            </div>
-            <MarginNotes
-              t={t}
-              annotations={annotations}
-              staleAnnotations={staleAnnotations}
-              droppedAnnotations={droppedAnnotations}
-              marginFilter={marginFilter}
-              activeAspect={activeAspect}
-              activeAnnotationId={activeAnnotationId}
-              hoveredAnnotationId={hovered.annotationId}
-              orderOf={orderOf}
-              onHover={hoverAnnotation}
-              onActivate={focusAnnotation}
-              onEdit={editAnnotation}
-              onDelete={deleteAnnotation}
-              onDeleteStale={deleteStaleAnnotation}
-              onClearFilters={() => {
-                const ui = useUiStore.getState()
-                ui.setMarginFilter('all')
-                if (activeAspect !== null) ui.toggleAspect(activeAspect)
-              }}
-            />
+            {/* 精读 view: the close-reading report replaces the conversation
+                stream + note slips; the composer footer is hidden below. */}
+            {marginFilter === 'deepread' ? (
+              <div className="ln-margin__deepread">
+                <DeepReadPanel
+                  documentId={document.id}
+                  annotations={annotations}
+                  onJump={handleJump}
+                  onAnnotationsChanged={handleAnnotationsChanged}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="ln-margin__ai">
+                  <AiMarginEntries
+                    documentId={document.id}
+                    orderOf={orderOf}
+                    onJump={handleJump}
+                    onAnnotationsChanged={handleAnnotationsChanged}
+                  />
+                </div>
+                <MarginNotes
+                  t={t}
+                  annotations={annotations}
+                  staleAnnotations={staleAnnotations}
+                  droppedAnnotations={droppedAnnotations}
+                  marginFilter={marginFilter}
+                  activeAspect={activeAspect}
+                  activeAnnotationId={activeAnnotationId}
+                  hoveredAnnotationId={hovered.annotationId}
+                  orderOf={orderOf}
+                  onHover={hoverAnnotation}
+                  onActivate={focusAnnotation}
+                  onEdit={editAnnotation}
+                  onDelete={deleteAnnotation}
+                  onDeleteStale={deleteStaleAnnotation}
+                  onClearFilters={() => {
+                    const ui = useUiStore.getState()
+                    ui.setMarginFilter('all')
+                    if (activeAspect !== null) ui.toggleAspect(activeAspect)
+                  }}
+                />
+              </>
+            )}
           </div>
-          <AiComposer documentId={document.id} onJump={handleJump} />
+          {marginFilter === 'deepread' ? null : (
+            <AiComposer documentId={document.id} onJump={handleJump} />
+          )}
         </aside>
       ) : null}
 

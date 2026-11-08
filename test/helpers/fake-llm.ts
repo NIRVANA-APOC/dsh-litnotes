@@ -142,6 +142,58 @@ export function entailmentText(
   return `${jsonFence({ results: normalized }, ENTAILMENT_FENCE)}\n`
 }
 
+/** AI 精读 fence tags (`docs/AI-SPEC.md` §5.3). */
+export const DEEPREAD_MAP_FENCE = 'litnotes-deepread-map'
+export const DEEPREAD_FENCE = 'litnotes-deepread'
+export const DEEPREAD_JUDGE_FENCE = 'litnotes-deepread-judge'
+export const DEEPREAD_REPORT_FENCE = 'litnotes-deepread-report'
+
+/** Reading-map model output: a ```litnotes-deepread-map fence. */
+export function deepReadMapText(payload: Record<string, unknown> = {}): string {
+  return `${jsonFence(payload, DEEPREAD_MAP_FENCE)}\n`
+}
+
+/** Section/gap close-reading model output: a ```litnotes-deepread fence. */
+export function deepReadSectionText(
+  payload: {
+    role?: string
+    summary?: string
+    annotations?: readonly unknown[]
+    points?: readonly unknown[]
+  } = {},
+): string {
+  return `${jsonFence(
+    {
+      role: payload.role ?? 'other',
+      summary: payload.summary ?? '',
+      annotations: payload.annotations ?? [],
+      points: payload.points ?? [],
+    },
+    DEEPREAD_FENCE,
+  )}\n`
+}
+
+/** Annotation adjudication model output: a ```litnotes-deepread-judge fence. */
+export function deepReadJudgeText(
+  results: ReadonlyArray<{ id?: number; score?: number; reason?: string }> = [],
+): string {
+  return `${jsonFence(
+    {
+      results: results.map((entry) => ({
+        id: entry.id,
+        score: entry.score,
+        reason: entry.reason ?? '',
+      })),
+    },
+    DEEPREAD_JUDGE_FENCE,
+  )}\n`
+}
+
+/** Report synthesis model output: a ```litnotes-deepread-report fence. */
+export function deepReadReportText(payload: Record<string, unknown> = {}): string {
+  return `${jsonFence(payload, DEEPREAD_REPORT_FENCE)}\n`
+}
+
 /** A ready-made `agentDefaultModel` fake: exposes `currentSelection()`. */
 export interface FakeDefaultModel {
   current: { provider: string; model: string }

@@ -16,7 +16,9 @@ import { parseMarkdown } from '../../src/shared/markdown/parse.ts'
 import { setHostClient } from '../../src/client/api/client.ts'
 import { useSettingsStore } from '../../src/client/state/settings.ts'
 import { useUiStore } from '../../src/client/state/ui.ts'
+import { useLibraryStore } from '../../src/client/state/library.ts'
 import { useReaderStore } from '../../src/client/reader/store.ts'
+import { useDeepReadStore } from '../../src/client/ai/deepread-store.ts'
 import { registerAskAI } from '../../src/client/reader/api.ts'
 import { ReadScene } from '../../src/client/reader/ReadScene.tsx'
 import { ReadContextBar } from '../../src/client/reader/ReadContextBar.tsx'
@@ -26,6 +28,7 @@ import {
   PAPER_MARKDOWN,
   createFakeHost,
   makePreferences,
+  makeStatusValue,
   makeSummary,
 } from './reader-helpers.ts'
 import type { FakeHostOptions } from './reader-helpers.ts'
@@ -142,7 +145,18 @@ async function renderScene(
 
 beforeEach(() => {
   useReaderStore.getState().close()
-  useUiStore.setState({ marginOpen: true, scene: 'read', activeAspect: null, marginFilter: 'all' })
+  useUiStore.setState({ marginOpen: true, scene: 'read', activeAspect: null, marginFilter: 'all', currentDocumentId: null })
+  useLibraryStore.setState({ documents: [], status: null, loading: false, loaded: true, error: null, revision: 0 })
+  useDeepReadStore.setState({
+    documentId: null,
+    record: null,
+    recordState: 'idle',
+    runState: 'idle',
+    progress: null,
+    error: null,
+    busy: false,
+    annotationsCreated: 0,
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -629,6 +643,25 @@ describe('ReadScene — margin filters and editing', () => {
     expect(container.querySelectorAll('.ln-note').length).toBe(1)
   })
 
+  it('switches the margin to the 精读 panel from the fifth chip and hides the composer', async () => {
+    act(() => {
+      useDeepReadStore.setState({ documentId: 'doc-1', record: null, recordState: 'ready', runState: 'running' })
+    })
+    await renderScene()
+    const chips = [...container.querySelectorAll<HTMLButtonElement>('.ln-ai-panel__head .ln-chip')]
+    expect(chips).toHaveLength(5)
+    expect((chips[4]?.textContent ?? '').startsWith('ai.filter.deepread')).toBe(true)
+
+    act(() => click(chips[4]))
+    await flush(1)
+
+    expect(useUiStore.getState().marginFilter).toBe('deepread')
+    expect(container.querySelector('.ln-ai-panel__body .ln-deepread')).not.toBeNull()
+    expect(container.querySelector('.ln-ai-panel__body .ln-margin__ai')).toBeNull()
+    expect(container.querySelector('.ln-ai-panel > .ln-ai__composer')).toBeNull()
+    expect(container.querySelectorAll('.ln-note')).toHaveLength(0)
+  })
+
   it('edits an existing note from its margin slip', async () => {
     const key = firstParagraphKey()
     const annotation: Annotation = {
@@ -683,5 +716,154 @@ describe('ReadScene — margin filters and editing', () => {
       element.getAttribute('data-annotation-id'),
     )
     expect(targets).toContain('ann-click')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* AI 精读 entry                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Install a parsed document + AI status so the context-bar controls enable. */
+function installReadableLibrary(): void {
+  const preferences = makePreferences()
+  act(() => {
+    useLibraryStore.setState({
+      documents: [makeSummary()],
+      status: makeStatusValue(preferences),
+      loading: false,
+      loaded: true,
+      error: null,
+      revision: 0,
+    })
+    useUiStore.setState({ currentDocumentId: 'doc-1' })
+  })
+}
+
+/** The `AI 精读` primary button in the left control group. */
+function deepReadButton(): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('.ln-contextbar__left .ln-btn')].find((button) =>
+    textOf(button).includes('ai.deepread.open'),
+  )
+}
+
+/** Mount only the context bar (no paper) and settle one tick. */
+async function renderBarOnly(): Promise<void> {
+  await act(async () => {
+    root.render(
+      <LocaleContext.Provider value={t}>
+        <ReadContextBar />
+      </LocaleContext.Provider>,
+    )
+  })
+  await flush(1)
+}
+
+/** Fake host whose `deepread` stream records its request (no frames). */
+function installDeepReadRecorder(): string[] {
+  const fake = createFakeHost()
+  const requests: string[] = []
+  fake.stream = (async (...args: unknown[]): Promise<void> => {
+    const method = args[0] as string
+    const request = args[1] as { documentId: string }
+    if (method !== 'deepread') throw new Error(`fake host: unexpected stream ${method}`)
+    requests.push(request.documentId)
+  }) as unknown as typeof fake.stream
+  setHostClient(fake)
+  return requests
+}
+
+/** Mount the context bar next to the reader scene (same stores). */
+async function renderBarAndScene(): Promise<void> {
+  setHostClient(createFakeHost())
+  useSettingsStore.setState({ preferences: makePreferences(), loaded: true, error: null })
+  await act(async () => {
+    root.render(
+      <LocaleContext.Provider value={t}>
+        <ReadContextBar />
+        <ReadScene document={makeSummary()} />
+      </LocaleContext.Provider>,
+    )
+  })
+  await settleReady()
+  await flush(2)
+}
+
+describe('ReadContextBar — AI 精读 entry', () => {
+  it('opens the 精读 view: the report replaces the stream and the composer is hidden', async () => {
+    installReadableLibrary()
+    // A run is already in flight: a click only opens the view (never restarts).
+    act(() => {
+      useDeepReadStore.setState({ documentId: 'doc-1', record: null, recordState: 'ready', runState: 'running' })
+    })
+    await renderBarAndScene()
+    const button = deepReadButton()
+    expect(button).not.toBeUndefined()
+    expect(button?.disabled).toBe(false)
+
+    act(() => click(button))
+    await flush(2)
+
+    expect(useUiStore.getState().marginFilter).toBe('deepread')
+    expect(useUiStore.getState().marginOpen).toBe(true)
+    const panel = container.querySelector('.ln-ai-panel')
+    expect(panel).not.toBeNull()
+    // The 精读 panel took the body; the conversation stream, note slips and the
+    // composer footer are gone (session-only view, like 对话).
+    expect(panel?.querySelector('.ln-ai-panel__body .ln-margin__deepread')).not.toBeNull()
+    expect(panel?.querySelector('.ln-ai-panel__body .ln-deepread[data-state="running"]')).not.toBeNull()
+    expect(panel?.querySelector('.ln-margin__ai')).toBeNull()
+    expect(panel?.querySelector('.ln-note')).toBeNull()
+    expect(panel?.querySelector(':scope > .ln-ai__composer')).toBeNull()
+  })
+
+  it('starts the first run when the paper has no report yet', async () => {
+    installReadableLibrary()
+    const requests = installDeepReadRecorder()
+    await renderBarOnly()
+    act(() => click(deepReadButton()))
+    await flush(2)
+    expect(useUiStore.getState().marginFilter).toBe('deepread')
+    expect(requests).toEqual(['doc-1'])
+  })
+
+  it('only opens the view when a report already exists (no restart)', async () => {
+    installReadableLibrary()
+    act(() => {
+      useDeepReadStore.setState({
+        documentId: 'doc-1',
+        record: { documentId: 'doc-1', highlights: [] } as never,
+        recordState: 'ready',
+        runState: 'done',
+      })
+    })
+    const requests = installDeepReadRecorder()
+    await renderBarOnly()
+    act(() => click(deepReadButton()))
+    await flush(2)
+    expect(useUiStore.getState().marginFilter).toBe('deepread')
+    expect(requests).toEqual([])
+  })
+
+  it('disables the entry when the paper is not parsed or the model is unavailable', async () => {
+    installReadableLibrary()
+    await renderBarOnly()
+    expect(deepReadButton()?.disabled).toBe(false)
+
+    act(() => {
+      useLibraryStore.setState({ documents: [makeSummary({ status: 'uploaded' })] })
+    })
+    await flush(1)
+    expect(deepReadButton()?.disabled).toBe(true)
+
+    const preferences = makePreferences()
+    const status = makeStatusValue(preferences)
+    act(() => {
+      useLibraryStore.setState({
+        documents: [makeSummary()],
+        status: { ...status, ai: { ...status.ai, available: false } },
+      })
+    })
+    await flush(1)
+    expect(deepReadButton()?.disabled).toBe(true)
   })
 })

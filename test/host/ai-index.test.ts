@@ -34,6 +34,13 @@ function makeConfig(): ResolvedConfig {
       maxGraphSourceChars: 160000,
       entailmentCheck: true,
       entailmentMaxTokens: 600,
+      deepReadMaxChunks: 24,
+      deepReadMaxSourceChars: 240000,
+      deepReadMaxAnnotations: 24,
+      deepReadMaxTokens: 2400,
+      deepReadSynthesisChars: 14000,
+      deepReadCoveragePass: true,
+      deepReadJudge: true,
     },
     local: {
       enabled: false,
@@ -93,6 +100,7 @@ test('peek() is empty until ensure() builds the bundle and memoizes it', async (
   expect(built.retriever).toBeDefined()
   expect(built.chat).toBeDefined()
   expect(built.graph).toBeDefined()
+  expect(built.deepread).toBeDefined()
   expect(typeof built.available).toBe('boolean')
   expect(built.version).toBe('1.0.0-test')
 })
@@ -109,6 +117,8 @@ test('the AiServicesApi surface matches the contract (available/version/engines)
   expect(typeof built.graph.docGraph).toBe('function')
   expect(typeof built.graph.buildDocGraph).toBe('function')
   expect(typeof built.graph.libraryGraph).toBe('function')
+  expect(typeof built.deepread.get).toBe('function')
+  expect(typeof built.deepread.run).toBe('function')
   // The concrete retriever also exposes the contract's blocks() helper.
   expect(built.retriever.blocks({ documentId: 'doc-1', markdown: '', contentList: null })).toEqual([])
 })

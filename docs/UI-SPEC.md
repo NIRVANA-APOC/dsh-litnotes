@@ -153,7 +153,7 @@ a signal left bar, not a filled card. Search supports arrow-key navigation and �
 
 ### 4.4 Read scene
 
-`.ln-reader[data-mode=original|bilingual|translated]` → `.ln-reader__scroll` (single scroll
+`.ln-reader[data-mode=original|bilingual|translated]` → `.ln-reader__scroll` (paper scroll
 container; restore offset here) → `.ln-sheet` (grid: `.ln-sheet__gutter`, `.ln-sheet__paper`,
 `.ln-sheet__margin`) → `.ln-paper__titleblock/__title/__meta/__rule` +
 `.ln-block[data-block-key][data-kind]` + `.ln-pagemark[data-page]`.
@@ -166,8 +166,9 @@ Tethers: `.ln-tether[data-aspect][data-active]` in a pointer-events-none fixed l
 
 ### 4.5 Margin / AI voice
 
-`.ln-sheet__margin` → `.ln-margin__head` (sticky filters: all / chat / AI notes / my notes with
-counts) → `.ln-margin__stream` → entries `.ln-margin__entry[data-kind=note|question|answer]
+`.ln-sheet__margin` (independent scroll area on desktop, pinned to the reader viewport height;
+sticky `.ln-ai__composer` at its bottom) → `.ln-margin__head` (sticky filters: all / chat / AI
+notes / my notes with counts) → `.ln-margin__stream` → entries `.ln-margin__entry[data-kind=note|question|answer]
 [data-aspect][data-origin][data-anchor-block]`. Notes use `.ln-note` (aspect dot, quote
 excerpt, note text, edit/delete). AI entries use `.ln-ai`: `.ln-ai__turn`, `__question-label`,
 `__question-text`, `__answer`, `__markdown` (`.ln-ai__heading/__paragraph/__list/__code/
@@ -230,8 +231,8 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
   `role=menu`/`menuitem`.
 - Light and dark both verified; no hard-coded page colors outside tokens.
 - Reduced motion honored; graph simulation pauses when the scene is hidden.
-- No layout thrash: single scroll container; `content-visibility` on offscreen paper blocks;
-  no per-scroll React state; toasts/popovers portal-free but non-blocking.
+- No layout thrash: the paper and the margin are separate scroll containers (scrolling one never
+  moves the other); no per-scroll React state; toasts/popovers portal-free but non-blocking.
 
 ## 7. Responsive
 

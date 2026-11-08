@@ -202,6 +202,9 @@ export function Tethers({
     const scroller = scrollRef.current
     if (scroller === null) return undefined
     scroller.addEventListener('scroll', schedule, { passive: true })
+    // The margin column scrolls independently on desktop.
+    const marginScroller = marginRef.current
+    marginScroller?.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
     const paper = paperRef.current
     const margin = marginRef.current
@@ -220,6 +223,7 @@ export function Tethers({
     }
     return () => {
       scroller.removeEventListener('scroll', schedule)
+      marginScroller?.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
       observer?.disconnect()
       mutations?.disconnect()

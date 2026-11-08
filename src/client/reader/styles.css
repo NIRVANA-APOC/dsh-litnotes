@@ -575,6 +575,22 @@
   padding: 26px 0 0 22px;
 }
 
+/* Desktop: the margin column scrolls independently from the paper. It stays
+ * pinned in the viewport height and gets its own scrollbar, so reading the
+ * paper never drags the AI conversation (and vice versa). */
+@media (min-width: 821px) {
+  .ln-sheet__margin {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: var(--ln-margin-h, calc(100vh - 146px));
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+}
+
 .ln-margin__head {
   display: flex;
   position: sticky;

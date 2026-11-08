@@ -285,8 +285,18 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
 
   /* ----- scroll: stick to bottom, navigator, back-to-latest -------------- */
 
-  const refreshNavigator = useCallback(() => {
+  /** The element that actually scrolls the margin. On desktop the margin column
+   * is an independent scroll area; in tests/minimal hosts the stream itself is
+   * the scroll container. */
+  const scrollHost = useCallback((): HTMLElement | null => {
     const element = streamRef.current
+    if (element === null) return null
+    const column = element.closest<HTMLElement>('.ln-sheet__margin')
+    return column ?? element
+  }, [])
+
+  const refreshNavigator = useCallback(() => {
+    const element = scrollHost()
     if (element === null || marks.length < 2) return
     const containerRect = element.getBoundingClientRect()
     const offsets: Array<{ messageId: string; top: number }> = []
@@ -299,10 +309,10 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
     const index = navCurrentMark(marks, offsets, NAV_ANCHOR_Y)
     const next = index >= 0 ? (marks[index]?.id ?? null) : null
     setCurrentMarkId((previous) => (previous === next ? previous : next))
-  }, [marks])
+  }, [marks, scrollHost])
 
   const handleScroll = useCallback(() => {
-    const element = streamRef.current
+    const element = scrollHost()
     if (element === null) return
     stickRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 56
     const away = navAwayFromLatest(element.scrollTop, element.scrollHeight, element.clientHeight)
@@ -312,25 +322,34 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       scrollFrameRef.current = null
       refreshNavigator()
     })
-  }, [refreshNavigator])
+  }, [refreshNavigator, scrollHost])
+
+  // React's onScroll only fires for the stream; the margin column may be the
+  // real scroll area, so listen there too.
+  useEffect(() => {
+    const host = scrollHost()
+    if (host === null) return undefined
+    host.addEventListener('scroll', handleScroll, { passive: true })
+    return () => host.removeEventListener('scroll', handleScroll)
+  }, [handleScroll, scrollHost])
 
   useEffect(() => {
-    const element = streamRef.current
+    const element = scrollHost()
     if (element === null) return
     if (stickRef.current) element.scrollTop = element.scrollHeight
     refreshNavigator()
-  }, [messages, refreshNavigator])
+  }, [messages, refreshNavigator, scrollHost])
 
   const scrollToLatest = useCallback(() => {
-    const element = streamRef.current
+    const element = scrollHost()
     if (element === null) return
     stickRef.current = true
     setAwayFromLatest(false)
     element.scrollTo({ top: element.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
-  }, [])
+  }, [scrollHost])
 
   const jumpToQuestion = useCallback((mark: QuestionMark) => {
-    const element = streamRef.current
+    const element = scrollHost()
     if (element === null) return
     const target = element.querySelector<HTMLElement>(`[data-message-id="${mark.messageId}"]`)
     if (target === null) return
@@ -346,7 +365,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
       flashTimerRef.current = null
       setFlashId(null)
     }, NAV_FLASH_DELAY)
-  }, [])
+  }, [scrollHost])
 
   /* ----- actions -------------------------------------------------------- */
 

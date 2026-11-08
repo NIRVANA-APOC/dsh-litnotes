@@ -75,6 +75,10 @@ formats. Existing libraries load as-is; no migration step.
 - Rail document menu anchored to its button; dialogs sized to their content without clipping.
 - Highlight click reopens an anchored annotation card (note, quoted source, edit/delete).
 - Import dialog lays out in one column at every width.
+- The paper column and the AI margin scroll independently: the margin is a
+  pinned, separately scrollable column on desktop (its own scrollbar, sticky
+  composer and sticky filters), so reading the paper never drags the AI
+  conversation and vice versa; the tether layer recomputes on either scroll.
 - The AI composer is pinned to the bottom of the reader panel again: it now
   lives at the end of the margin column (not inside the AI stream container) and
   the scroll container no longer pads its bottom, so sticky never leaves a gap

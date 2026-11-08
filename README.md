@@ -21,7 +21,7 @@ A local-first AI literature desk that plugs into the [DeepSeek Harness](https://
 
 Most AI reading tools put the conversation in a floating window: ask a question, switch back to the text, hunt for the quote — attention split in two. dsh-litnotes answers differently: **AI belongs in the margin, just as annotations always have.**
 
-- **Your eyes never leave the page.** The paper and the margin share one scroll axis. Annotations and AI answers are pinned to their place in the text, and a 1px tether ties each margin entry back to its sentence. Hover either end and the other lights up.
+- **Your eyes never leave the page.** The paper and the margin are two independent reading surfaces — scrolling one never drags the other. Annotations and AI answers are pinned to their place in the text, and a 1px tether ties each margin entry back to its sentence. Hover either end and the other lights up.
 - **Evidence before conclusions.** Every answer carries `[n]` citations: hover to preview the quoted sentence, click to jump back to it. Quotes are validated verbatim, then checked again for whether they actually support the claim; unverified citations never become annotations.
 - **Order is position.** Margin entries are ordered by where they sit in the text. Read the margin top to bottom, and you read the paper front to back.
 

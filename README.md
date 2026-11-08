@@ -120,6 +120,8 @@ dsh plugin --profile web add dsh-litnotes
 
 Pin a version with `dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.1`.
 
+Until the alpha is published to npm, install it from the GitHub release tarball below.
+
 **From GitHub:**
 
 ```bash

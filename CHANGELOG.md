@@ -79,6 +79,11 @@ formats. Existing libraries load as-is; no migration step.
   absolutely positioned tools at the block's right edge, so the last action
   (询问 AI 此段) was invisible; blocks no longer use paint containment and all
   three icon-only actions stay visible.
+- The reading-width preset control (窄/标准/宽/全宽) is gone: the text column always uses the
+  full paper width, so the toolbar is shorter and the paper never leaves unused side margins.
+- The AI composer now always offers the preset whole-paper questions (总结全文 / 这篇论文解决了
+  什么 / 方法是什么 / 有什么局限 / 解释这个概念) above the input — in a fresh conversation and in
+  every later one, not only in the empty state.
 - AI Q&A defaults to the whole paper: the composer no longer follows scrolling with an implicit
   "current paragraph" context; a per-paragraph "Ask AI about this paragraph" button (next to
   translate/annotate) applies an explicit paragraph focus, and a text selection applies a

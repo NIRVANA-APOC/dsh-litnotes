@@ -42,7 +42,7 @@ orientation and memory**:
   status bar; the same control keeps the same position in every scene. Reading position, mode,
   widths and the last conversation are restored on return.
 - **Reading comfort first.** Serif English original with a quieter translation column, original /
-  bilingual / translated modes, page marks, outline, adjustable measure and scale, formulas
+  bilingual / translated modes, page marks, outline and scale, formulas
   rendered locally (vendored KaTeX).
 - **Control over the stream.** Stop, regenerate, follow-ups, quick prompts where the eye is, and
   one-click Markdown export of a conversation.

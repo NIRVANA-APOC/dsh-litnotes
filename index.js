@@ -298,7 +298,6 @@ var ASPECT_COLORS = {
 var ANNOTATION_COLORS = ["yellow", "sage", "sky", "rose"];
 var READING_MODES = ["original", "bilingual", "translated"];
 var READING_SCALES = [0.9, 1, 1.12];
-var READING_MEASURES = [500, 560, 700, 840];
 var DOC_WIDTHS = [720, 880, 1040, 1200];
 var PARSE_ENGINES = ["auto", "standard", "agent", "local"];
 var LOCAL_PROVIDERS = ["auto", "builtin", "system:officeToPdf"];
@@ -365,7 +364,6 @@ var DEFAULT_PREFERENCES = Object.freeze({
   notesFilter: "all",
   lastDocumentId: null,
   lastBlockKey: null,
-  readingMeasure: 560,
   docWidth: 880,
   railWidth: 288,
   marginWidth: 320,
@@ -427,7 +425,6 @@ function normalizePreferences(raw) {
     notesFilter: source.notesFilter === "ai" || source.notesFilter === "user" ? source.notesFilter : "all",
     lastDocumentId: typeof source.lastDocumentId === "string" && source.lastDocumentId.trim() !== "" ? source.lastDocumentId.trim().slice(0, 200) : null,
     lastBlockKey: typeof source.lastBlockKey === "string" && source.lastBlockKey.trim() !== "" ? source.lastBlockKey.trim().slice(0, 200) : null,
-    readingMeasure: presetOf(source.readingMeasure, READING_MEASURES, d.readingMeasure),
     docWidth: presetOf(source.docWidth, DOC_WIDTHS, d.docWidth),
     railWidth: clampedInt(source.railWidth, d.railWidth, 200, 400),
     marginWidth: clampedInt(source.marginWidth, d.marginWidth, 240, 560),

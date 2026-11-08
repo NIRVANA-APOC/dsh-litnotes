@@ -545,10 +545,10 @@ describe('ReadContextBar — reading controls', () => {
     return { fake }
   }
 
-  it('keeps the fixed control order: mode, measure, page marks, outline, scale', async () => {
+  it('keeps the fixed control order: mode, page marks, outline, scale (no width control)', async () => {
     await renderBar()
     const groups = container.querySelectorAll('.ln-contextbar__left > *')
-    expect(groups.length).toBeGreaterThanOrEqual(7)
+    expect(groups.length).toBeGreaterThanOrEqual(6)
     const labels = Array.from(container.querySelectorAll('.ln-contextbar__left [aria-label]')).map(
       (element) => element.getAttribute('aria-label'),
     )
@@ -557,21 +557,16 @@ describe('ReadContextBar — reading controls', () => {
     expect(labels).toContain('read.controls.scaleDown')
     expect(labels).toContain('read.controls.scaleUp')
     expect(labels).toContain('read.controls.mode')
-    expect(labels).toContain('read.controls.measure')
+    expect(labels).not.toContain('read.controls.measure')
+    expect(container.querySelectorAll('.ln-contextbar .ln-seg__item')).toHaveLength(3)
   })
 
-  it('patches measure, scale and page-mark preferences through the settings store', async () => {
+  it('patches scale and page-mark preferences through the settings store', async () => {
     const { fake } = await renderBar()
-    const measureButton = Array.from(container.querySelectorAll('.ln-contextbar .ln-seg__item')).find(
-      (button) => textOf(button) === 'read.measure.narrow',
-    )
-    act(() => click(measureButton))
-    await flush(1)
-    expect(useSettingsStore.getState().preferences.readingMeasure).toBe(500)
-    expect(fake.lastCall('settings.update')).toBeDefined()
     act(() => click(container.querySelector('[aria-label="read.controls.scaleUp"]')))
     await flush(1)
     expect(useSettingsStore.getState().preferences.readingScale).toBe(1.12)
+    expect(fake.lastCall('settings.update')).toBeDefined()
     act(() => click(container.querySelector('[aria-label="read.controls.pageMarks"]')))
     await flush(1)
     expect(useSettingsStore.getState().preferences.showPageMarks).toBe(false)

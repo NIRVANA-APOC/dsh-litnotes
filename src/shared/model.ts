@@ -246,7 +246,6 @@ export interface Preferences {
   notesFilter: 'all' | 'ai' | 'user'
   lastDocumentId: string | null
   lastBlockKey: string | null
-  readingMeasure: number
   docWidth: number
   railWidth: number
   marginWidth: number

@@ -15,6 +15,7 @@ import { Button, IconButton, Kbd } from '../design/primitives.tsx'
 import { useT } from '../shell/locale-context.ts'
 import { excerpt } from './chat.ts'
 import { clearReaderSelection } from './reader-bridge.ts'
+import { QUICK_PROMPT_KEYS } from './quick-prompts.ts'
 import { useAiStore } from './store.ts'
 
 /** Props of {@link AiComposer}. */
@@ -82,6 +83,20 @@ export function AiComposer({ documentId, available, modelLabel, onJump }: AiComp
 
   return (
     <div className="ln-ai__composer" data-busy={busy ? 'true' : 'false'} data-available="true">
+      {busy ? null : (
+        <div className="ln-ai__quickrow" role="group" aria-label={t('ai.quickLabel')}>
+          {QUICK_PROMPT_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className="ln-ai__quickchip"
+              onClick={() => void useAiStore.getState().ask(t(key))}
+            >
+              {t(key)}
+            </button>
+          ))}
+        </div>
+      )}
       {context === null ? (
         <div className="ln-ai__context" role="group" aria-label={t('ai.document')}>
           <div className="ln-ai__chip" data-kind="document">

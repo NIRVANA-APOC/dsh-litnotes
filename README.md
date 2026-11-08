@@ -39,7 +39,9 @@ Most AI reading tools put the conversation in a floating window: ask a question,
 
 ### Reading
 
-- Original, bilingual and translation-only modes; adjustable measure, scale, page marks and outline; formulas rendered locally with KaTeX, figures and tables kept in page order.
+- Original, bilingual and translation-only modes; the text column uses the full paper width by
+  default, with adjustable scale, page marks and outline; formulas rendered locally with KaTeX,
+  figures and tables kept in page order.
 - Reading position, mode and panel widths are persisted locally — reopening a paper returns to where you left off.
 - The margin can show only your notes or only AI annotations, and can be filtered by aspect.
 
@@ -54,6 +56,8 @@ Most AI reading tools put the conversation in a floating window: ask a question,
 - Answers are generated only from the current paper's parsed text and streamed; stop, regenerate and follow-up questions are supported.
 - Citations are validated before they are shown; unverified citations are dimmed and never become annotations. A citation in an answer jumps straight back to its sentence.
 - Verified citations become AI annotations in their aspect color, carrying model and conversation provenance.
+- Preset questions sit right above the composer in every scope, and the composer can be
+  answered by typing, by a preset, or by a follow-up.
 - Questions default to the **whole paper** (no paragraph is attached for you); the per-paragraph
   **Ask AI about this paragraph** button next to translate/annotate narrows the focus to one
   paragraph, and a text selection narrows it to the selection — the composer chip always shows

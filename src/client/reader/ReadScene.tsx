@@ -768,7 +768,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   /* ---- render -------------------------------------------------------- */
   const readerStyle = {
     ['--ln-read-scale' as string]: String(preferences.readingScale),
-    ['--ln-measure' as string]: `${preferences.readingMeasure}px`,
+    ['--ln-measure' as string]: '100%',
     ['--ln-margin-width' as string]: `${preferences.marginWidth}px`,
   } as CSSProperties
 

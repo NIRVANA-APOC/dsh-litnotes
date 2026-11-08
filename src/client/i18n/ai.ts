@@ -35,6 +35,7 @@ export const zh = {
   'ai.dismiss': '关闭',
 
   /* Quick prompts (empty state). */
+  'ai.quickLabel': '快捷提问',
   'ai.quickSummary': '总结全文',
   'ai.quickSolved': '这篇论文解决了什么',
   'ai.quickMethod': '方法是什么',
@@ -151,6 +152,7 @@ export const en: Record<keyof typeof zh, string> = {
   'ai.retry': 'Retry',
   'ai.dismiss': 'Dismiss',
 
+  'ai.quickLabel': 'Suggested questions',
   'ai.quickSummary': 'Summarize the paper',
   'ai.quickSolved': 'What problem does this paper solve?',
   'ai.quickMethod': 'What is the method?',

@@ -10,7 +10,6 @@
 import {
   DOC_WIDTHS,
   PARSE_ENGINES,
-  READING_MEASURES,
   READING_MODES,
   READING_SCALES,
   TARGET_LANGUAGE_OPTIONS,
@@ -39,7 +38,6 @@ export const DEFAULT_PREFERENCES: Readonly<Preferences> = Object.freeze({
   notesFilter: 'all',
   lastDocumentId: null,
   lastBlockKey: null,
-  readingMeasure: 560,
   docWidth: 880,
   railWidth: 288,
   marginWidth: 320,
@@ -153,7 +151,6 @@ export function normalizePreferences(raw: unknown): Preferences {
       typeof source.lastBlockKey === 'string' && source.lastBlockKey.trim() !== ''
         ? source.lastBlockKey.trim().slice(0, 200)
         : null,
-    readingMeasure: presetOf(source.readingMeasure, READING_MEASURES, d.readingMeasure),
     docWidth: presetOf(source.docWidth, DOC_WIDTHS, d.docWidth),
     railWidth: clampedInt(source.railWidth, d.railWidth, 200, 400),
     marginWidth: clampedInt(source.marginWidth, d.marginWidth, 240, 560),

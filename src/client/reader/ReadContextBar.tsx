@@ -2,7 +2,7 @@
  * Read-scene context bar — owned by the `client-reader` workstream.
  *
  * Sits in the fixed context-bar region (DESIGN-V2 §4): reading controls on the
- * left (mode, measure, page marks, outline, scale, translate-all), document
+ * left (mode, page marks, outline, scale, translate-all), document
  * actions on the right (aspect legend-as-filter + document menu). The position
  * of every control here must not move between states (position principle).
  *
@@ -10,7 +10,7 @@
  */
 
 import type { ReactElement } from 'react'
-import { READING_MEASURES, READING_MODES, READING_SCALES, ASPECTS } from '../../shared/constants.ts'
+import { READING_MODES, READING_SCALES, ASPECTS } from '../../shared/constants.ts'
 import type { ReadingMode } from '../../shared/constants.ts'
 import { useSettingsStore } from '../state/settings.ts'
 import { useUiStore } from '../state/ui.ts'
@@ -19,14 +19,6 @@ import { AspectLegend, Button, IconButton, Segmented, type SegmentOption } from 
 import { useT } from '../shell/locale-context.ts'
 import { useReaderStore } from './store.ts'
 import { OutlineButton } from './outline.tsx'
-
-/** Label key of one measure preset. */
-const MEASURE_LABELS: Record<number, 'read.measure.narrow' | 'read.measure.standard' | 'read.measure.wide' | 'read.measure.full'> = {
-  500: 'read.measure.narrow',
-  560: 'read.measure.standard',
-  700: 'read.measure.wide',
-  840: 'read.measure.full',
-}
 
 /** The read-scene context bar. */
 export function ReadContextBar(): ReactElement {
@@ -46,10 +38,6 @@ export function ReadContextBar(): ReactElement {
     value: mode,
     label: t(`read.mode.${mode}` as 'read.mode.original'),
   }))
-  const measures: Array<SegmentOption<string>> = READING_MEASURES.map((value) => ({
-    value: String(value),
-    label: t(MEASURE_LABELS[value] ?? 'read.measure.standard'),
-  }))
   const scaleIndex = READING_SCALES.indexOf(preferences.readingScale as (typeof READING_SCALES)[number])
   const canScaleDown = scaleIndex > 0
   const canScaleUp = scaleIndex >= 0 && scaleIndex < READING_SCALES.length - 1
@@ -64,17 +52,6 @@ export function ReadContextBar(): ReactElement {
           options={modes}
           onChange={(mode) => void patch({ readingMode: mode })}
           ariaLabel={t('read.controls.mode')}
-        />
-        <Segmented
-          size="sm"
-          value={String(preferences.readingMeasure)}
-          options={measures}
-          onChange={(value) =>
-            void patch({
-              readingMeasure: Number(value) as 500 | 560 | 700 | 840,
-            })
-          }
-          ariaLabel={t('read.controls.measure')}
         />
         <IconButton
           icon="eye"

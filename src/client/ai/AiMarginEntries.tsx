@@ -363,14 +363,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
     [t],
   )
 
-  const quickPrompts: Array<{ key: 'ai.quickSummary' | 'ai.quickSolved' | 'ai.quickMethod' | 'ai.quickLimits' | 'ai.quickConcept'; prompt: string }> = [
-    { key: 'ai.quickSummary', prompt: 'ai.quickSummary' },
-    { key: 'ai.quickSolved', prompt: 'ai.quickSolved' },
-    { key: 'ai.quickMethod', prompt: 'ai.quickMethod' },
-    { key: 'ai.quickLimits', prompt: 'ai.quickLimits' },
-    { key: 'ai.quickConcept', prompt: 'ai.quickConcept' },
-  ]
-
   const headerActions: MenuItem[] = [
     {
       id: 'export',
@@ -466,20 +458,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
           <span>{available ? t('ai.emptyTitle') : t('ai.unavailableTitle')}</span>
         </div>
         <p className="ln-ai__empty-text">{available ? t('ai.emptyText') : t('ai.unavailableText')}</p>
-        {available ? (
-          <div className="ln-ai__prompts">
-            {quickPrompts.map((prompt) => (
-              <button
-                key={prompt.key}
-                type="button"
-                className="ln-ai__prompt"
-                onClick={() => void useAiStore.getState().ask(t(prompt.key))}
-              >
-                {t(prompt.key)}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
     )
   } else if (visibleTurns.length === 0) {

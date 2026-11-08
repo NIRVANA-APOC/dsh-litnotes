@@ -469,24 +469,33 @@
   line-height: 1.55;
 }
 
-.ln-ai__prompts {
+.ln-ai__quickrow {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.ln-ai__prompt {
-  padding: 4px 10px;
+.ln-ai__quickrow::-webkit-scrollbar {
+  display: none;
+}
+
+.ln-ai__quickchip {
+  flex: 0 0 auto;
+  padding: 3px 9px;
   border: 1px solid var(--ln-rule);
   border-radius: 999px;
   background: transparent;
   color: var(--ln-ink-soft);
   font-family: var(--ln-font-ui);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.ln-ai__prompt:hover {
+.ln-ai__quickchip:hover {
   border-color: color-mix(in srgb, var(--ln-signal) 45%, transparent);
   background: var(--ln-signal-soft);
   color: var(--ln-signal);

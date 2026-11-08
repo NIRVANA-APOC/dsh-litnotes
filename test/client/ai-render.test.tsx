@@ -380,11 +380,11 @@ describe('margin entries', () => {
     expect(anchors).toEqual(['b1:first', 'b2:second'])
   })
 
-  it('renders quick prompts in the empty state and asks with the prompt', async () => {
+  it('offers preset questions above the composer even with existing history', async () => {
     let question = ''
     setHostClient(
       createFakeHost({
-        history: [],
+        history: history(),
         stream: async ({ request, handlers }) => {
           question = request.question
           for (const frame of happyFrames()) handlers.onFrame(frame)
@@ -393,12 +393,20 @@ describe('margin entries', () => {
     )
     mount()
     await flush()
-    const prompts = [...container.querySelectorAll('.ln-ai__prompt')]
+    const prompts = [...container.querySelectorAll('.ln-ai__quickchip')]
     expect(prompts.length).toBeGreaterThan(0)
+    expect(prompts.map((node) => node.textContent)).toContain('总结全文')
     click(prompts[0])
     await flush()
     expect(question).toBe('总结全文')
-    expect(container.querySelectorAll('.ln-ai__turn')).toHaveLength(1)
+    expect(container.querySelectorAll('.ln-ai__turn').length).toBeGreaterThan(0)
+  })
+
+  it('offers preset questions in a fresh (empty) conversation too', async () => {
+    setHostClient(createFakeHost({ history: [] }))
+    mount()
+    await flush()
+    expect(container.querySelectorAll('.ln-ai__quickchip').length).toBeGreaterThan(0)
   })
 })
 

@@ -92,7 +92,7 @@ page. A control that exists in more than one state keeps the same screen positio
 │ ln-topbar: [wordmark] [breadcrumb ▾]        [Read | Graph]  [⌕][Import][◧][⚙] │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ ln-contextbar (same frame region in every scene)                             │
-│  read:  Original|Bilingual|Translation  measure  [page marks] [outline]  ⋯   │
+│  read:  Original|Bilingual|Translation  [page marks] [outline]  ⋯             │
 │  graph: This paper|Library  [type filters] [aspect legend]   [build/rebuild]  │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ ln-desk                                                                       │
@@ -112,7 +112,7 @@ Position matrix (must hold in every scene/state):
 | breadcrumb (document title ▾) | topbar left, after wordmark | always ("文献库" when no document) |
 | scene switch `[阅读 \| 图谱]` | topbar center | always (graph works without a document = library graph) |
 | search / import / margin toggle (read only; reserved space in graph) / settings | topbar utilities, fixed order | always |
-| reading controls (mode/measure/page marks/outline) | contextbar left | read |
+| reading controls (mode/page marks/outline) | contextbar left | read |
 | document actions (⋯ reparse/repair/rename/delete/translate) | contextbar right | read |
 | graph scope/filters/legend/build | contextbar left→right | graph |
 | composer | bottom of the margin column, width = margin | read |
@@ -214,7 +214,7 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 - **Citations**: hover shows quote/page/aspect/verified state; partially-supported citations show
   a quiet claim warning but remain jumpable; unsupported citations are dimmed and not
   jumpable; clicking scrolls and flashes the source block.
-- **Reading position**: last document, block key, reading mode, scale, measure and margin width
+- **Reading position**: last document, block key, reading mode, scale and margin width
   are persisted host-side and restored before content arrives.
 - **Import**: drag anywhere over the rail/stage queues files into the import dialog; progress
   shows in the rail row; failures explain the next action.
@@ -236,7 +236,8 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 ## 7. Responsive
 
 - ≥ 1360px: rail + sheet + margin visible (rail 264, margin 336).
-- 1080–1360px: rail can collapse to 44–56px (remembered); measure clamps down to 52ch.
+- 1080–1360px: rail can collapse to 44–56px (remembered); the paper column keeps its
+  full-width text measure inside the narrower sheet.
 - 820–1080px: margin becomes an overlay sheet over the paper (same right edge, full height,
   left hairline + shadow), toggled from the fixed topbar control; scrim closes it.
 - < 820px: rail becomes a left drawer opened from the wordmark; paper padding shrinks; margin

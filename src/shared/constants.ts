@@ -53,8 +53,6 @@ export type ReadingMode = (typeof READING_MODES)[number]
 export const READING_SCALES = [0.9, 1, 1.12] as const
 
 /** Reading measure presets in CSS px (narrow / standard / wide / full). */
-export const READING_MEASURES = [500, 560, 700, 840] as const
-
 /** Document-width presets for the shared reading/graph column. */
 export const DOC_WIDTHS = [720, 880, 1040, 1200] as const
 

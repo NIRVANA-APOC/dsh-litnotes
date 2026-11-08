@@ -20,7 +20,7 @@ import type { Block, ListBlock, TableBlock } from '../../shared/markdown/model.t
 import type { NormalizedAnnotation } from '../../shared/annotate/highlight.ts'
 import type { TranslationEnvelope } from '../../shared/model.ts'
 import { getHostClient } from '../api/client.ts'
-import { Button, IconButton, cx } from '../design/primitives.tsx'
+import { IconButton, cx } from '../design/primitives.tsx'
 import { FormulaView, renderInlineRuns } from './inline.tsx'
 import type { MarkClickHandler } from './inline.tsx'
 import { TranslationBlock } from './translation.tsx'
@@ -98,16 +98,12 @@ function BlockTools({
         size={14}
         onClick={() => onAnnotate(blockKey)}
       />
-      <Button
-        variant="ghost"
-        size="sm"
+      <IconButton
         icon="sparkle"
-        className="ln-block__tool-ai"
-        title={t('read.block.ask')}
+        label={t('read.block.ask')}
+        size={14}
         onClick={() => onAsk(blockKey)}
-      >
-        {t('read.block.ask')}
-      </Button>
+      />
     </div>
   )
 }

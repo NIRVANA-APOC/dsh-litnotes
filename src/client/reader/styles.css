@@ -1398,17 +1398,3 @@
 .ln-margin__ai:has(.ln-ai__stream:empty) .ln-ai__stream {
   display: none;
 }
-
-/* The per-paragraph AI action is labelled (not icon-only): it must be
- * unmistakable that asking about this paragraph is a first-class action. */
-.ln-block__tools .ln-btn {
-  height: 24px;
-  padding: 0 7px;
-  gap: 5px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.ln-block__tools .ln-btn .ln-btn__label {
-  font-size: 11px;
-}

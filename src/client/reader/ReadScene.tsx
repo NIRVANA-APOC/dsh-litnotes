@@ -110,7 +110,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
   /* ---- DOM refs ------------------------------------------------------ */
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const paperRef = useRef<HTMLDivElement | null>(null)
-  const marginRef = useRef<HTMLElement | null>(null)
+  const marginRef = useRef<HTMLDivElement | null>(null)
   const documentRef = useRef(document)
   documentRef.current = document
   const openedFor = useRef<string | null>(null)
@@ -804,120 +804,126 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
       data-margin={marginOpen ? 'open' : 'closed'}
       style={readerStyle}
     >
-      <div className="ln-reader__scroll ln-scroll" ref={scrollRef} onScroll={handleScroll}>
-        <article className="ln-sheet">
-          <div className="ln-sheet__gutter" aria-hidden="true" />
-          <div className="ln-sheet__paper" ref={paperRef}>
-            <header className="ln-paper__titleblock">
-              <h1 className="ln-paper__title">{title}</h1>
-              <p className="ln-paper__meta ln-tabular">{metaParts.join(' · ')}</p>
-              <div className="ln-paper__rule" aria-hidden="true" />
-            </header>
-            {phase === 'ready' ? (
-              <div
-                className="ln-paper__body"
-                onMouseUp={handleMouseUp}
-                onKeyUp={handleKeyUp}
-                onMouseOver={handleBodyOver}
-                onMouseLeave={handleBodyLeave}
-              >
-                {blocks.length === 0 ? (
-                  <p className="ln-reader__empty">{t('read.emptyDoc')}</p>
-                ) : (
-                  blocks
-                )}
-              </div>
-            ) : phase === 'error' ? (
-              <div className="ln-reader__state" role="status">
-                <p>{t('read.loadFailed')}</p>
-                <p className="ln-reader__stateDetail">{storeError ?? ''}</p>
-                <Button variant="ghost" icon="refresh" onClick={() => void useReaderStore.getState().open(document)}>
-                  {t('read.retry')}
-                </Button>
-              </div>
-            ) : (
-              <div className="ln-reader__state" role="status" aria-busy="true">
-                <Spinner size={18} label={t('read.loading')} />
-                <p>{t('read.loading')}</p>
-              </div>
-            )}
-          </div>
-          {marginOpen ? (
-            <aside
-              className="ln-sheet__margin"
-              ref={marginRef}
-              aria-label={t('margin.title')}
-              onMouseOver={handleMarginOver}
-              onMouseLeave={handleMarginLeave}
-            >
-              <div className="ln-margin__head">
-                <span className="ln-margin__title">{t('margin.title')}</span>
-                <span className="ln-margin__count ln-tabular">
-                  {t('margin.notesCount', { count: annotations.length + staleAnnotations.length })}
-                </span>
-                <MarginFilterRow />
-              </div>
-              {translateAll !== null && translateAll.running ? (
-                <div className="ln-translateall" role="status">
-                  <ProgressBar
-                    value={translateAll.done}
-                    total={translateAll.total}
-                    label={t('read.translation.progress', {
+      <div className="ln-reader__main">
+        <div className="ln-reader__scroll ln-scroll" ref={scrollRef} onScroll={handleScroll}>
+          <article className="ln-sheet ln-sheet--read">
+            <div className="ln-sheet__gutter" aria-hidden="true" />
+            <div className="ln-sheet__paper" ref={paperRef}>
+              <header className="ln-paper__titleblock">
+                <h1 className="ln-paper__title">{title}</h1>
+                <p className="ln-paper__meta ln-tabular">{metaParts.join(' · ')}</p>
+                <div className="ln-paper__rule" aria-hidden="true" />
+              </header>
+              {phase === 'ready' ? (
+                <div
+                  className="ln-paper__body"
+                  onMouseUp={handleMouseUp}
+                  onKeyUp={handleKeyUp}
+                  onMouseOver={handleBodyOver}
+                  onMouseLeave={handleBodyLeave}
+                >
+                  {blocks.length === 0 ? (
+                    <p className="ln-reader__empty">{t('read.emptyDoc')}</p>
+                  ) : (
+                    blocks
+                  )}
+                </div>
+              ) : phase === 'error' ? (
+                <div className="ln-reader__state" role="status">
+                  <p>{t('read.loadFailed')}</p>
+                  <p className="ln-reader__stateDetail">{storeError ?? ''}</p>
+                  <Button variant="ghost" icon="refresh" onClick={() => void useReaderStore.getState().open(document)}>
+                    {t('read.retry')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="ln-reader__state" role="status" aria-busy="true">
+                  <Spinner size={18} label={t('read.loading')} />
+                  <p>{t('read.loading')}</p>
+                </div>
+              )}
+            </div>
+          </article>
+        </div>
+      </div>
+
+      {marginOpen ? (
+        <aside
+          className="ln-ai-panel"
+          aria-label={t('margin.title')}
+          onMouseOver={handleMarginOver}
+          onMouseLeave={handleMarginLeave}
+        >
+          <header className="ln-ai-panel__head">
+            <div className="ln-ai-panel__titleRow">
+              <span className="ln-margin__title">{t('margin.title')}</span>
+              <span className="ln-margin__count ln-tabular">
+                {t('margin.notesCount', { count: annotations.length + staleAnnotations.length })}
+              </span>
+            </div>
+            <MarginFilterRow />
+          </header>
+          <div className="ln-ai-panel__body ln-scroll" ref={marginRef} data-margin-scroll="">
+            {translateAll !== null && translateAll.running ? (
+              <div className="ln-translateall" role="status">
+                <ProgressBar
+                  value={translateAll.done}
+                  total={translateAll.total}
+                  label={t('read.translation.progress', {
+                    done: translateAll.done,
+                    total: translateAll.total,
+                  })}
+                />
+                <div className="ln-translateall__row">
+                  <span>
+                    {t('read.translation.progress', {
                       done: translateAll.done,
                       total: translateAll.total,
                     })}
-                  />
-                  <div className="ln-translateall__row">
-                    <span>
-                      {t('read.translation.progress', {
-                        done: translateAll.done,
-                        total: translateAll.total,
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      className="ln-link-btn"
-                      onClick={() => useReaderStore.getState().cancelTranslateAll()}
-                    >
-                      {t('read.translation.cancel')}
-                    </button>
-                  </div>
+                  </span>
+                  <button
+                    type="button"
+                    className="ln-link-btn"
+                    onClick={() => useReaderStore.getState().cancelTranslateAll()}
+                  >
+                    {t('read.translation.cancel')}
+                  </button>
                 </div>
-              ) : null}
-              <div className="ln-margin__ai">
-                <AiMarginEntries
-                  documentId={document.id}
-                  orderOf={orderOf}
-                  onJump={handleJump}
-                  onAnnotationsChanged={handleAnnotationsChanged}
-                />
               </div>
-              <MarginNotes
-                t={t}
-                annotations={annotations}
-                staleAnnotations={staleAnnotations}
-                droppedAnnotations={droppedAnnotations}
-                marginFilter={marginFilter}
-                activeAspect={activeAspect}
-                activeAnnotationId={activeAnnotationId}
-                hoveredAnnotationId={hovered.annotationId}
+            ) : null}
+            <div className="ln-margin__ai">
+              <AiMarginEntries
+                documentId={document.id}
                 orderOf={orderOf}
-                onHover={hoverAnnotation}
-                onActivate={focusAnnotation}
-                onEdit={editAnnotation}
-                onDelete={deleteAnnotation}
-                onDeleteStale={deleteStaleAnnotation}
-                onClearFilters={() => {
-                  const ui = useUiStore.getState()
-                  ui.setMarginFilter('all')
-                  if (activeAspect !== null) ui.toggleAspect(activeAspect)
-                }}
+                onJump={handleJump}
+                onAnnotationsChanged={handleAnnotationsChanged}
               />
-              <AiComposer documentId={document.id} onJump={handleJump} />
-            </aside>
-          ) : null}
-        </article>
-      </div>
+            </div>
+            <MarginNotes
+              t={t}
+              annotations={annotations}
+              staleAnnotations={staleAnnotations}
+              droppedAnnotations={droppedAnnotations}
+              marginFilter={marginFilter}
+              activeAspect={activeAspect}
+              activeAnnotationId={activeAnnotationId}
+              hoveredAnnotationId={hovered.annotationId}
+              orderOf={orderOf}
+              onHover={hoverAnnotation}
+              onActivate={focusAnnotation}
+              onEdit={editAnnotation}
+              onDelete={deleteAnnotation}
+              onDeleteStale={deleteStaleAnnotation}
+              onClearFilters={() => {
+                const ui = useUiStore.getState()
+                ui.setMarginFilter('all')
+                if (activeAspect !== null) ui.toggleAspect(activeAspect)
+              }}
+            />
+          </div>
+          <AiComposer documentId={document.id} onJump={handleJump} />
+        </aside>
+      ) : null}
 
       <Tethers
         scrollRef={scrollRef}

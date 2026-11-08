@@ -153,9 +153,10 @@ a signal left bar, not a filled card. Search supports arrow-key navigation and �
 
 ### 4.4 Read scene
 
-`.ln-reader[data-mode=original|bilingual|translated]` → `.ln-reader__scroll` (paper scroll
-container; restore offset here) → `.ln-sheet` (grid: `.ln-sheet__gutter`, `.ln-sheet__paper`,
-`.ln-sheet__margin`) → `.ln-paper__titleblock/__title/__meta/__rule` +
+`.ln-reader[data-mode=original|bilingual|translated]` → `.ln-reader__main` (paper half) +
+`.ln-ai-panel` (docked margin half) → `.ln-reader__scroll` (paper scroll container; restore offset
+here) → `.ln-sheet.ln-sheet--read` (grid: `.ln-sheet__gutter`, `.ln-sheet__paper`) →
+`.ln-paper__titleblock/__title/__meta/__rule` +
 `.ln-block[data-block-key][data-kind]` + `.ln-pagemark[data-page]`.
 Annotated ranges render as `.ln-hl[data-ink][data-id]`; `.ln-hl--active` outlines the active
 annotation; blocks carry `data-plain-length` (annotation offset space).
@@ -166,9 +167,10 @@ Tethers: `.ln-tether[data-aspect][data-active]` in a pointer-events-none fixed l
 
 ### 4.5 Margin / AI voice
 
-`.ln-sheet__margin` (independent scroll area on desktop, pinned to the reader viewport height;
-sticky `.ln-ai__composer` at its bottom) → `.ln-margin__head` (sticky filters: all / chat / AI
-notes / my notes with counts) → `.ln-margin__stream` → entries `.ln-margin__entry[data-kind=note|question|answer]
+`.ln-ai-panel` (docked right rail, flush with the reader's top/right/bottom edges) →
+`.ln-ai-panel__head` (`页边` + note count + filter chips: all / chat / AI notes / my notes) →
+`.ln-ai-panel__body` (its own scroll area: AI entries, then notes) → `.ln-ai-panel > .ln-ai__composer`
+(fixed footer: context chip, quick prompts, input, send/stop) → `.ln-margin__stream` → entries `.ln-margin__entry[data-kind=note|question|answer]
 [data-aspect][data-origin][data-anchor-block]`. Notes use `.ln-note` (aspect dot, quote
 excerpt, note text, edit/delete). AI entries use `.ln-ai`: `.ln-ai__turn`, `__question-label`,
 `__question-text`, `__answer`, `__markdown` (`.ln-ai__heading/__paragraph/__list/__code/
@@ -236,14 +238,15 @@ local capabilities), translation, AI features, appearance, about. Toast copy nam
 
 ## 7. Responsive
 
-- ≥ 1360px: rail + sheet + margin visible (rail 264, margin 336).
+- ≥ 1081px: rail + paper + **docked AI panel** side by side; the panel is flush with the reader
+  top/right/bottom (fixed header, scrolling body, composer footer) and never moves with the paper.
 - 1080–1360px: rail can collapse to 44–56px (remembered); the paper column keeps its
   full-width text measure inside the narrower sheet.
-- 820–1080px: margin becomes an overlay sheet over the paper (same right edge, full height,
-  left hairline + shadow), toggled from the fixed topbar control; scrim closes it.
-- < 820px: rail becomes a left drawer opened from the wordmark; paper padding shrinks; margin
-  overlay full-screen with its own header; composer pinned at the overlay bottom; graph hides
-  labels under a zoom threshold and offers the label toggle in the HUD.
+- 820–1080px: the AI panel becomes an overlay drawer over the paper (flush top/right/bottom,
+  left hairline + shadow), toggled from the fixed topbar control.
+- < 820px: rail becomes a left drawer opened from the wordmark; paper padding shrinks; the AI
+  drawer takes up to 86vw with its own header, scrolling body and composer footer at the overlay
+  bottom; graph hides labels under a zoom threshold and offers the label toggle in the HUD.
 - Interactive min sizes: 30px controls, 24px chips; the reader never drops below
   `calc(15.5px * scale)` text.
 

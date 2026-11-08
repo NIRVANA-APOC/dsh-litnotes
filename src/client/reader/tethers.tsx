@@ -114,6 +114,11 @@ export function Tethers({
       const blockKey = element.dataset.anchorBlock
       if (blockKey !== undefined && blockKey !== '') entries.push(element)
     })
+    // The docked AI panel is a separate surface: a tether must point at the
+    // panel's left edge, never across the cards inside it.
+    const panel = margin.closest<HTMLElement>('.ln-ai-panel')
+    const panelRect = panel === null ? null : panel.getBoundingClientRect()
+    const marginRect = margin.getBoundingClientRect()
     const next: TetherLine[] = []
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index]
@@ -125,8 +130,13 @@ export function Tethers({
       if (!intersectsViewport(entryRect)) continue
       const target = targetOf(paper, blockKey, anchorId)
       if (target === null || !intersectsViewport(target)) continue
-      const x1 = entryRect.left - 6
-      const y1 = entryRect.top + Math.min(16, Math.max(10, entryRect.height / 2))
+      let x1 = entryRect.left - 6
+      let y1 = entryRect.top + Math.min(16, Math.max(10, entryRect.height / 2))
+      if (panelRect !== null) {
+        x1 = Math.round(panelRect.left - 2)
+        const anchor = entryRect.top + Math.min(16, Math.max(10, entryRect.height / 2))
+        y1 = Math.round(Math.min(Math.max(anchor, marginRect.top + 8), marginRect.bottom - 8))
+      }
       const x2 = Math.min(target.right + 6, x1 - 8)
       if (x2 >= x1) continue
       const y2 = target.top + Math.min(14, Math.max(6, target.height / 2))

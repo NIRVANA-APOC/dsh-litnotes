@@ -460,17 +460,17 @@ describe('ReadScene — selection toolbar', () => {
 })
 
 describe('ReadScene — navigation and AI margin', () => {
-  it('mounts the AI margin stream, filter chips and composer inside the margin column', async () => {
+  it('mounts the docked AI panel: header chips, scroll body, composer footer', async () => {
     await renderScene()
-    const margin = container.querySelector('.ln-sheet__margin')
-    const seat = margin?.querySelector('.ln-margin__ai .ln-ai')
-    expect(seat).not.toBeNull()
-    // Filter chips live in the sticky margin header; the stream stays in the seat.
-    expect(margin?.querySelector('.ln-margin__head .ln-ai__filters')).not.toBeNull()
-    expect(seat?.querySelector('.ln-ai__stream')).not.toBeNull()
-    // The composer sits at the end of the margin column (sticky footer), not
-    // inside the AI stream container.
-    expect(margin?.querySelector(':scope > .ln-ai__composer')).not.toBeNull()
+    const panel = container.querySelector('.ln-ai-panel')
+    expect(panel).not.toBeNull()
+    // Header carries the filter chips; the scroll body carries the AI stream; the
+    // composer is a footer of the panel (not inside the scroll body).
+    expect(panel?.querySelector('.ln-ai-panel__head .ln-ai__filters')).not.toBeNull()
+    const body = panel?.querySelector('.ln-ai-panel__body')
+    expect(body?.querySelector('.ln-margin__ai .ln-ai__stream')).not.toBeNull()
+    expect(panel?.querySelector(':scope > .ln-ai__composer')).not.toBeNull()
+    expect(body?.querySelector('.ln-ai__composer')).toBeNull()
   })
 
   it('scrolls and flashes the target block on a citation jump request', async () => {

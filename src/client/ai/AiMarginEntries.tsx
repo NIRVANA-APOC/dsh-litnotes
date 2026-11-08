@@ -285,7 +285,7 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const scrollHost = useCallback((): HTMLElement | null => {
     const element = streamRef.current
     if (element === null) return null
-    const column = element.closest<HTMLElement>('.ln-sheet__margin')
+    const column = element.closest<HTMLElement>('[data-margin-scroll]')
     return column ?? element
   }, [])
 

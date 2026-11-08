@@ -471,14 +471,9 @@
 
 .ln-ai__quickrow {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.ln-ai__quickrow::-webkit-scrollbar {
-  display: none;
 }
 
 .ln-ai__quickchip {
@@ -524,25 +519,22 @@
 /* ---------------------------------------------------------------- composer */
 
 .ln-ai__composer {
-  /* The margin scrolls with the paper, so the composer must stay anchored to the
-     viewport bottom instead of living at the end of a long document margin. */
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
+  /* Footer of the docked AI panel (static: the panel body scrolls above it). */
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--ln-rule);
   background: var(--ln-surface);
-  box-shadow: 0 -8px 16px -16px color-mix(in srgb, var(--ln-ink) 30%, transparent);
 }
 
 .ln-ai__context {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .ln-ai__chip {
@@ -560,7 +552,8 @@
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  max-width: 220px;
+  max-width: 100%;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--ln-signal);
@@ -609,14 +602,17 @@
 
 .ln-ai__composer-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
 }
 
 .ln-ai__hint {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
+  min-width: 0;
   gap: 3px;
   color: var(--ln-ink-faint);
   font-size: 11px;

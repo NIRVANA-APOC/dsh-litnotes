@@ -48,9 +48,10 @@ Client:  AiMarginEntries ──► Ai store ──► POST /dsh-litnotes/api/{ch
 5. **One knowledge base, two views.** Annotations, notes, chat answers and graph nodes share
    block-key provenance. Clicking a citation, a graph node or a margin entry jumps to the same
    sentence in the paper.
-6. **The agent is a first-class reader.** DeepSeek Harness chat reaches the library through seven
-   focused tools that return citation-ready coordinates, plus one compact system-prompt section
-   that tells the agent the library exists without polluting unrelated conversations.
+6. **The agent is a first-class reader.** DeepSeek Harness chat reaches the library through eight
+   focused tools (including `library_deepread`, which reads or runs the whole-paper close reading)
+   that return citation-ready coordinates, plus one compact system-prompt section that tells the
+   agent the library exists without polluting unrelated conversations.
 
 ---
 
@@ -322,7 +323,7 @@ paragraph (the per-block "Ask AI about this paragraph" action) or one selection.
 ### 2.7 Deep-read types
 
 `AI 精读` (close reading) persists one record per document and streams one workflow. Types live in
-`src/shared/model.ts` and the record is documented in ARCH §4.8; the workflow is §3.8 and the wire
+`src/shared/model.ts` and the record is documented in ARCH §4.7; the workflow is §3.8 and the wire
 §5.3.
 
 ```ts
@@ -718,12 +719,12 @@ the annotation helpers and the shared anchor rules.
 | Stage | Calls | What happens |
 |---|---|---|
 | 0 prepare | 0 | `parseMarkdown` + `appendPageMarks` → blocks; sections from headings; role heuristics; greedy ~4000-char chunks (bounded by `ai.deepReadMaxSourceChars`); select at most `ai.deepReadMaxChunks` chunks (priority roles first, then an even fill). `references`/boilerplate sections are never selected for annotations. |
-| 1 paper map | 1 | `litnotes-deepread-map`: kind, problem, gap, claimed contributions, method family, evaluation, key terms, section roles. A reading plan, never a quote source; malformed output falls back to a deterministic map. |
+| 1 paper map | 1-2 | `litnotes-deepread-map`: kind, problem, gap, claimed contributions, method family, evaluation, key terms, section roles. A reading plan, never a quote source. A failed or unparsable call is retried once with reasoning disabled; only then is the deterministic map derived. |
 | 2 section close reading | ≤ chunks | `litnotes-deepread`: role lens + paper map + rolling memory (prior section summaries and strongest points, bounded ~2500 chars). Output: section summary, ≤6 annotations, ≤8 points. |
 | 3 coverage pass | 0-4 | Re-read the best chunk of every content section with no validated annotation (`MAX_GAP_PASSES = 4`), with the targeted `litnotes-deepread-gap` prompt. This prevents the "only abstract/intro annotated" failure. |
-| 4 adjudication | 0-2 | `litnotes-deepread-judge` scores candidates 0/1/2 (≤60 per call, ≤240 candidates, ≤4 calls); fail-open. Host heuristics also drop front-matter/boilerplate quotes, heading-only quotes, notes under 30 chars and notes too close to their quote. |
+| 4 adjudication | 0-4 | `litnotes-deepread-judge` scores candidates 0/1/2 (≤60 per call, ≤240 candidates, ≤4 calls); fail-open. Host heuristics also drop front-matter/boilerplate quotes, heading-only quotes, notes under 30 chars and notes too close to their quote. |
 | 5 selection | 0 | Dedupe against existing annotations, coverage-aware ranking (one per covered section first, then importance, aspect diversity and quote specificity), cap `ai.deepReadMaxAnnotations` (default 24). |
-| 6 synthesis | 1 | `litnotes-deepread-report`: the full report shape. Host bounds every string, drops unknown block keys, normalises evidence/confidence; malformed output falls back to a deterministic report built from the map, section digests and selected annotations. |
+| 6 synthesis | 1-2 | `litnotes-deepread-report`: the full report shape with a generous output budget (6144-8192 tokens). Host bounds every string, drops unknown block keys, normalises evidence/confidence. A failed/unparsable call is retried once with reasoning disabled; if both attempts are unusable, a deterministic report is built from the map, section digests and selected annotations (and missing report sections are then filled from that fallback). |
 | 7 persist & emit | 0 | Annotations atomically (`origin: 'ai'`, `chatId: 'deepread:<documentId>'`, `messageId: <runId>`, model, createdAt), then `deepread.json`, then `progress done → report → annotations → usage → done`. |
 
 Hard rules:
@@ -740,6 +741,9 @@ Hard rules:
 - A cached (`force: false`) call replays the stored record with **no model calls**: `progress
   mapping 0/1 → progress done → report → annotations(0) → usage(0,0) → done`. A forced run
   replaces the record; new annotations are deduped against the existing ones, never deleted.
+- Structured-output calls (map, section/gap, report) are retried once with reasoning disabled
+  before falling back: with a reasoning model the completion budget can be spent before any
+  JSON is written, which would otherwise silently degrade into the deterministic report.
 - `DEEPREAD_PROMPT_VERSION = 1`; the chat `PROMPT_VERSION` stays 2.
 
 ---
@@ -1146,7 +1150,7 @@ The plugin row config accepts an `ai:` block; `config.ts` validates and clamps i
 | `deepReadMaxChunks` | `24` | 4–60 | close-reading calls after chunk selection |
 | `deepReadMaxSourceChars` | `240000` | 20000–1000000 | source characters read; larger papers are truncated with an outline tail |
 | `deepReadMaxAnnotations` | `24` | 8–60 | annotations written to the page |
-| `deepReadMaxTokens` | `2400` | 512–8192 | output budget per section / gap call |
+| `deepReadMaxTokens` | `2400` | 512–8192 | output budget per section / gap call (the report synthesis call gets 6144–8192, i.e. at least 2× and never below 6144) |
 | `deepReadSynthesisChars` | `14000` | 4000–40000 | evidence digest rendered to the report call |
 | `deepReadCoveragePass` | `true` | boolean | enable the coverage / gap pass |
 | `deepReadJudge` | `true` | boolean | enable annotation adjudication |

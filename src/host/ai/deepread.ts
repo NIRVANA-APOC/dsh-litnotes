@@ -125,7 +125,7 @@ const MAX_MAP_PREVIEW_CHARS = 300
 /** First-chars budget of the map prompt. */
 const MAP_HEAD_CHARS = 5000
 /** Map output budget (small JSON payload). */
-const MAP_MAX_TOKENS = 1600
+const MAP_MAX_TOKENS = 3000
 /** Hard cap on raw model output consumed for one call. */
 const MAX_RAW_OUTPUT_CHARS = 200000
 /** Sections with less content than this are not "content sections" (no coverage). */
@@ -1149,10 +1149,12 @@ function pointKeysForRoles(document: PreparedDocument, material: ReadonlyMap<num
  * Build the deterministic fallback report (synthesis failed or was empty).
  *
  * From the paper map, the section summaries and the selected annotations: tldr
- * = top notes, problem/gap from the map, contributions from the map, method /
- * findings / limitations grouped by aspect, open questions from reading points,
- * glossary from key terms (definitions when available), reading path from the
- * most annotated sections, `confidence: 'medium'`.
+ * = top notes, problem/gap from the map (falling back to the section summaries
+ * and gap reading points), contributions from the map / contribution points /
+ * the strongest annotations, method / findings / limitations grouped by aspect,
+ * open questions from reading points, an argument map from contributions to
+ * findings, glossary from key terms (definition annotations when the map has no
+ * terms), reading path from the most annotated sections, `confidence: 'medium'`.
  */
 function buildFallbackReport(input: {
   language: string
@@ -1165,25 +1167,103 @@ function buildFallbackReport(input: {
   const labels = reportLabels(input.language)
   const notes = input.selected.map((candidate) => boundedText(candidate.note, 200)).filter((note) => note !== '')
   const tldr = (notes.length > 0 ? notes : input.map.contributions).slice(0, 3).map((note) => note.slice(0, 200))
+
+  const materialPairs: Array<[number, SectionMaterial]> = [...input.material.entries()].sort(
+    (left, right) => left[0] - right[0],
+  )
+  /** First summary of a section whose role is in `roles`. */
+  const summaryFor = (roles: readonly DeepReadSectionRole[]): string => {
+    for (const role of roles) {
+      for (const [, entry] of materialPairs) {
+        if (entry.role === role && entry.summary !== '') return entry.summary
+      }
+    }
+    return ''
+  }
+  /** Reading points of the given kinds, in document order (bounded). */
+  const pointsOfKinds = (kinds: readonly string[], max: number): ParsedDeepReadPoint[] => {
+    const out: ParsedDeepReadPoint[] = []
+    for (const [, entry] of materialPairs) {
+      for (const point of entry.points) {
+        if (!kinds.includes(point.kind)) continue
+        out.push(point)
+        if (out.length >= max) return out
+      }
+    }
+    return out
+  }
+
+  const problemDetail =
+    boundedText(input.map.problem, 500) ||
+    boundedText(summaryFor(['abstract', 'introduction']), 500) ||
+    boundedText(notes[0] ?? '', 500)
   const problem: DeepReadPoint = {
     label: labels.problem ?? 'Research problem',
-    detail: boundedText(input.map.problem, 500),
+    detail: problemDetail,
     blockKeys: pointKeysForRoles(input.document, input.material, ['abstract', 'introduction']),
   }
+  const gapPoint = pointsOfKinds(['gap'], 1)[0]
   const gap: DeepReadPoint = {
     label: labels.gap ?? 'Research gap',
-    detail: boundedText(input.map.gap, 500),
-    blockKeys: [],
+    detail: boundedText(input.map.gap, 500) || boundedText(gapPoint?.text ?? '', 500),
+    blockKeys: gapPoint === undefined ? [] : gapPoint.blockKeys.slice(0, 4),
   }
-  const contributions: DeepReadPoint[] = input.map.contributions.map((text) => ({
+
+  const contributions: DeepReadPoint[] = input.map.contributions.slice(0, 4).map((text) => ({
     label: boundedText(text, 90),
     detail: boundedText(text, 500),
     blockKeys: [],
     evidence: 'partial' as const,
   }))
+  if (contributions.length === 0) {
+    for (const point of pointsOfKinds(['contribution'], 3)) {
+      contributions.push({
+        label: boundedText(point.text, 90),
+        detail: boundedText(point.text, 500),
+        blockKeys: point.blockKeys.slice(0, 4),
+        evidence: 'partial',
+      })
+    }
+  }
+  if (contributions.length === 0) {
+    // Last resort: the strongest verified annotations carry the paper's claims.
+    const strongest = [...input.selected].sort(
+      (left, right) => right.importance - left.importance || left.order - right.order,
+    )
+    for (const candidate of strongest.slice(0, 2)) {
+      contributions.push({
+        label: boundedText(candidate.section ?? labels.contributions ?? 'Contribution', 90),
+        detail: boundedText(candidate.note, 500),
+        blockKeys: [candidate.blockKey],
+        evidence: 'partial',
+      })
+    }
+  }
+
+  const method: DeepReadPoint[] = pointsFromCandidates(input.selected, ['method'], labels.method ?? 'Method', 4)
+  if (method.length === 0) {
+    for (const point of pointsOfKinds(['method'], 4)) {
+      method.push({ label: labels.method ?? 'Method', detail: boundedText(point.text, 500), blockKeys: point.blockKeys.slice(0, 4) })
+    }
+  }
+  let evaluation: DeepReadPoint[] = pointsFromCandidates(
+    input.selected.filter((candidate) => candidate.role === 'experiment'),
+    null,
+    labels.evaluation ?? 'Evaluation',
+    4,
+  )
+  if (evaluation.length === 0) {
+    evaluation = pointsFromCandidates(input.selected, ['result'], labels.evaluation ?? 'Evaluation', 4)
+  }
+  const findings = pointsFromCandidates(input.selected, ['result'], labels.findings ?? 'Findings', 4)
+  if (findings.length === 0) {
+    for (const point of pointsOfKinds(['result'], 4)) {
+      findings.push({ label: labels.findings ?? 'Findings', detail: boundedText(point.text, 500), blockKeys: point.blockKeys.slice(0, 4) })
+    }
+  }
   const limitations = pointsFromCandidates(input.selected, ['limitation'], labels.limitations ?? 'Limitations', 4)
-  for (const entry of input.material.values()) {
-    for (const point of entry.points) {
+  for (const entry of materialPairs) {
+    for (const point of entry[1].points) {
       if (point.kind !== 'limitation' || limitations.length >= 4) continue
       limitations.push({
         label: labels.limitations ?? 'Limitations',
@@ -1200,6 +1280,7 @@ function buildFallbackReport(input: {
       blockKeys: point.blockKeys.slice(0, 4),
     })
   }
+
   const glossary: DeepReadReport['glossary'] = []
   const definitionCandidates = input.selected.filter((candidate) => candidate.aspect === 'definition')
   const usedCandidates = new Set<number>()
@@ -1218,6 +1299,24 @@ function buildFallbackReport(input: {
       blockKeys: match !== undefined ? [match.blockKey] : [],
     })
   }
+  if (glossary.length === 0) {
+    for (const candidate of definitionCandidates.slice(0, MAX_GLOSSARY_TERMS)) {
+      glossary.push({
+        term: boundedText(candidate.quote, 60),
+        definition: boundedText(candidate.note, 300),
+        blockKeys: [candidate.blockKey],
+      })
+    }
+  }
+
+  const argumentMap: DeepReadReport['argumentMap'] = []
+  for (let index = 0; index < Math.min(3, contributions.length); index += 1) {
+    const contribution = contributions[index]
+    const evidence = findings[Math.min(index, findings.length - 1)]
+    if (contribution === undefined || evidence === undefined) break
+    argumentMap.push({ from: contribution.label, to: evidence.label, relation: 'supported-by' })
+  }
+
   const sectionCounts = new Map<number, number>()
   for (const candidate of input.selected) {
     sectionCounts.set(candidate.sectionId, (sectionCounts.get(candidate.sectionId) ?? 0) + 1)
@@ -1243,17 +1342,12 @@ function buildFallbackReport(input: {
     problem,
     gap,
     contributions,
-    method: pointsFromCandidates(input.selected, ['method'], labels.method ?? 'Method', 4),
-    evaluation: pointsFromCandidates(
-      input.selected.filter((candidate) => candidate.role === 'experiment'),
-      null,
-      labels.evaluation ?? 'Evaluation',
-      3,
-    ),
-    findings: pointsFromCandidates(input.selected, ['result'], labels.findings ?? 'Findings', 4),
+    method,
+    evaluation,
+    findings,
     limitations,
     openQuestions,
-    argumentMap: [],
+    argumentMap,
     glossary,
     readingPath,
     verdict: {
@@ -1284,11 +1378,30 @@ function isUsableReport(report: DeepReadReport): boolean {
   )
 }
 
-/** Fill the few empty structural fields of a usable model report from the fallback. */
+/**
+ * Fill every empty field of a usable model report from the deterministic
+ * fallback.
+ *
+ * A model can return a valid-but-partial report (for example when the JSON
+ * omitted the contribution list or the glossary); the reader must never see a
+ * report with missing required sections when the engine already has grounded
+ * fallback material for them.
+ */
 function fillReportGaps(report: DeepReadReport, fallback: DeepReadReport): DeepReadReport {
   if (report.tldr.length === 0) report.tldr = fallback.tldr.slice(0, 3)
   if (report.problem.detail === '') report.problem = fallback.problem
   if (report.gap.detail === '') report.gap = fallback.gap
+  if (report.contributions.length === 0) report.contributions = fallback.contributions
+  if (report.method.length === 0) report.method = fallback.method
+  if (report.evaluation.length === 0) report.evaluation = fallback.evaluation
+  if (report.findings.length === 0) report.findings = fallback.findings
+  if (report.limitations.length === 0) report.limitations = fallback.limitations
+  if (report.openQuestions.length === 0) report.openQuestions = fallback.openQuestions
+  if (report.argumentMap.length === 0) report.argumentMap = fallback.argumentMap
+  if (report.glossary.length === 0) report.glossary = fallback.glossary
+  if (report.readingPath.length === 0) report.readingPath = fallback.readingPath
+  if (report.verdict.strengths.length === 0) report.verdict.strengths = fallback.verdict.strengths
+  if (report.verdict.weaknesses.length === 0) report.verdict.weaknesses = fallback.verdict.weaknesses
   return report
 }
 
@@ -1460,6 +1573,8 @@ export function createDeepReadService(deps: DeepReadServiceDeps): DeepReadServic
       maxTokens: number
       signal: AbortSignal | undefined
       temperature?: number | undefined
+      /** Per-attempt override (the retry disables reasoning to free the output budget). */
+      reasoningEffort?: string | undefined
     },
   ): Promise<string> {
     if (isAborted(input.signal)) throw abortFailure()
@@ -1472,7 +1587,7 @@ export function createDeepReadService(deps: DeepReadServiceDeps): DeepReadServic
       signal: input.signal,
       maxTokens: input.maxTokens,
       temperature: input.temperature ?? 0.2,
-      reasoningEffort: readingConfig.reasoningEffort,
+      reasoningEffort: input.reasoningEffort ?? readingConfig.reasoningEffort,
       purpose: input.purpose,
       maxChars: Math.min(MAX_RAW_OUTPUT_CHARS, Math.max(20000, input.maxTokens * 16)),
     }
@@ -1672,7 +1787,27 @@ export function createDeepReadService(deps: DeepReadServiceDeps): DeepReadServic
       return false
     }
     if (isAborted(input.signal)) throw abortFailure()
-    const parsed = parseDeepReadSectionOutput(raw)
+    let parsed = parseDeepReadSectionOutput(raw)
+    if (parsed === null) {
+      // One retry with reasoning disabled and a slightly larger output budget:
+      // a reasoning model can spend the whole completion budget before writing
+      // the JSON, which would otherwise silently lose the section.
+      try {
+        raw = await completeModel(state, {
+          purpose: `${input.pass === 'gap' ? 'deepread-gap' : 'deepread-section'}-retry`,
+          system: input.pass === 'gap' ? DEEPREAD_GAP_SYSTEM : DEEPREAD_SECTION_SYSTEM,
+          user: prompt,
+          maxTokens: Math.min(8192, readingConfig.maxTokens + 2048),
+          temperature: 0.1,
+          reasoningEffort: 'off',
+          signal: input.signal,
+        })
+        parsed = parseDeepReadSectionOutput(raw)
+      } catch (error) {
+        if (isAbortFailure(error, input.signal)) throw abortFailure()
+        log.warn?.('[dsh-litnotes] deep-read close reading retry failed: %s', (error as Error)?.message ?? error)
+      }
+    }
     if (parsed === null) {
       log.warn?.('[dsh-litnotes] deep-read close reading returned no parsable payload')
       return false
@@ -1791,14 +1926,30 @@ export function createDeepReadService(deps: DeepReadServiceDeps): DeepReadServic
         tailOutline: input.document.tailOutline,
         truncated: input.document.truncated,
       })
+      const mapTokens = Math.min(MAP_MAX_TOKENS, Math.max(readingConfig.maxTokens, 2400))
       const raw = await completeModel(state, {
         purpose: 'deepread-map',
         system: DEEPREAD_MAP_SYSTEM,
         user: prompt,
-        maxTokens: Math.min(MAP_MAX_TOKENS, readingConfig.maxTokens),
+        maxTokens: mapTokens,
         signal: input.signal,
       })
       map = parseDeepReadMapOutput(raw)
+      if (map === null) {
+        // Retry once without reasoning: the map is required for a good report,
+        // and a reasoning-heavy model may return no parsable JSON on attempt one.
+        log.warn?.('[dsh-litnotes] deep-read map output unusable; retrying without reasoning')
+        const retryRaw = await completeModel(state, {
+          purpose: 'deepread-map-retry',
+          system: DEEPREAD_MAP_SYSTEM,
+          user: prompt,
+          maxTokens: mapTokens,
+          temperature: 0.1,
+          reasoningEffort: 'off',
+          signal: input.signal,
+        })
+        map = parseDeepReadMapOutput(retryRaw)
+      }
     } catch (error) {
       if (isAbortFailure(error, input.signal)) throw abortFailure()
       log.warn?.('[dsh-litnotes] deep-read map call failed, using the deterministic map: %s', (error as Error)?.message ?? error)
@@ -2139,16 +2290,32 @@ export function createDeepReadService(deps: DeepReadServiceDeps): DeepReadServic
         maxChars: readingConfig.synthesisChars,
         truncated: input.document.truncated,
       })
+      const reportTokens = Math.min(8192, Math.max(6144, readingConfig.maxTokens * 2))
+      const knownBlockKeys = new Set(input.document.blocks.map((block) => block.key))
       const raw = await completeModel(state, {
         purpose: 'deepread-report',
         system: DEEPREAD_REPORT_SYSTEM,
         user: prompt,
-        maxTokens: clampInt(readingConfig.maxTokens * 2, 1024, 8192, 4800),
+        maxTokens: reportTokens,
         temperature: 0.3,
         signal: input.signal,
       })
-      const knownBlockKeys = new Set(input.document.blocks.map((block) => block.key))
       parsed = parseDeepReadReportOutput(raw, { knownBlockKeys })
+      if (parsed === null) {
+        // Retry once without reasoning and with the full report budget: the
+        // synthesis JSON is the largest structured payload of the run.
+        log.warn?.('[dsh-litnotes] deep-read report output unusable; retrying without reasoning')
+        const retryRaw = await completeModel(state, {
+          purpose: 'deepread-report-retry',
+          system: DEEPREAD_REPORT_SYSTEM,
+          user: prompt,
+          maxTokens: 8192,
+          temperature: 0.2,
+          reasoningEffort: 'off',
+          signal: input.signal,
+        })
+        parsed = parseDeepReadReportOutput(retryRaw, { knownBlockKeys })
+      }
     } catch (error) {
       if (isAbortFailure(error, input.signal)) throw abortFailure()
       log.warn?.('[dsh-litnotes] deep-read report call failed, using the deterministic report: %s', (error as Error)?.message ?? error)

@@ -600,6 +600,9 @@ function PointSection({
   onJump: (blockKey: string) => void
 }): ReactElement {
   const showEvidence = group.id === 'contributions'
+  // The problem/gap sections are single-point groups whose point label is the
+  // section title itself (是否由模型或回退生成); repeating it is noise.
+  const hideLabel = group.id === 'problem' || group.id === 'gap'
   return (
     <section className="ln-deepread__section" data-section={group.id}>
       <h4 className="ln-deepread__section-title">{deepReadT(t, group.titleKey)}</h4>
@@ -611,6 +614,7 @@ function PointSection({
             point={point}
             pages={pages}
             showEvidence={showEvidence}
+            hideLabel={hideLabel}
             onJump={onJump}
           />
         ))}
@@ -625,21 +629,25 @@ function PointView({
   point,
   pages,
   showEvidence,
+  hideLabel,
   onJump,
 }: {
   t: AiTranslate
   point: DeepReadPoint
   pages: ReadonlyMap<string, number>
   showEvidence: boolean
+  /** The group title already names this single point (problem/gap). */
+  hideLabel: boolean
   onJump: (blockKey: string) => void
 }): ReactElement {
   const refs = evidenceRefs(point.blockKeys, pages)
   const labelKey = showEvidence ? evidenceLabelKey(point.evidence) : null
+  const showLabel = !hideLabel && point.label !== ''
   return (
     <article className="ln-deepread__point" data-evidence={point.evidence}>
-      {point.label !== '' || labelKey !== null ? (
+      {showLabel || labelKey !== null ? (
         <div className="ln-deepread__point-head">
-          {point.label !== '' ? <p className="ln-deepread__point-label">{point.label}</p> : null}
+          {showLabel ? <p className="ln-deepread__point-label">{point.label}</p> : null}
           {labelKey !== null && point.evidence !== undefined ? (
             <Badge tone={evidenceTone(point.evidence)}>{deepReadT(t, labelKey)}</Badge>
           ) : null}

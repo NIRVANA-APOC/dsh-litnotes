@@ -868,7 +868,8 @@ describe('deep-read workflow', () => {
     const service2 = makeService(env2, gateway2)
     const frames2 = await collect(service2.run(documentId))
     expect(errorsOf(frames2)).toEqual([])
-    expect(gateway2.counts.map).toBe(1)
+    // One retry without reasoning is allowed before the deterministic fallback.
+    expect(gateway2.counts.map).toBe(2)
     const sectionPrompts = gateway2.calls
       .filter((call) => call.system === DEEPREAD_SECTION_SYSTEM)
       .map((call) => call.prompt)
@@ -1024,7 +1025,9 @@ describe('deep-read workflow', () => {
       defaultScripts({
         section: (prompt, index) => {
           callIndex += 1
-          if (callIndex === 1) return 'I am afraid I cannot return JSON for this chunk.'
+          // The first chunk fails both the first attempt and the reasoning-off
+          // retry; every later chunk succeeds.
+          if (callIndex <= 2) return 'I am afraid I cannot return JSON for this chunk.'
           return defaultSection(prompt, index)
         },
       }),
@@ -1035,6 +1038,8 @@ describe('deep-read workflow', () => {
     const record = reportOf(frames)
     expect(record.stats.chunksRead).toBeLessThan(record.stats.chunks)
     expect(record.stats.chunksRead).toBeGreaterThan(0)
+    // The skipped chunk is retried once (chunk calls = chunks + 1 retry).
+    expect(gateway.calls.filter((call) => call.system === DEEPREAD_SECTION_SYSTEM).length).toBe(record.stats.chunks + 1)
 
     const failingEnv = createStore({ docs: [{ id: documentId, title: 'Malformed' }], markdown: { [documentId]: PAPER } })
     const failingGateway = createGateway(defaultScripts({ section: () => 'still not json' }))

@@ -1,6 +1,6 @@
 # dsh-litnotes 1.1.0 — UI/UX spec: the margin voice
 
-Authoritative UI contract for the reading desk. It describes the shipped 1.0.0 client
+Authoritative UI contract for the reading desk. It describes the shipped 1.1.0 client
 (`src/client/**`): design tokens, frame geometry, the position principle, component and class
 families, interactions, accessibility, responsive behaviour and the performance budget.
 Implementation reference: `src/client/styles/**` and each scene's `styles.css`.

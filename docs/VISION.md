@@ -63,8 +63,8 @@ orientation and memory**:
 
 ## 4. The agent shares the library
 
-The DSH agent gets the same operations through seven focused tools (search, read, ask, annotate,
-translate, graph, manage) that return citation-ready coordinates. It can answer from the library
+The DSH agent gets the same operations through eight focused tools (search, read, ask, deepread,
+annotate, translate, graph, manage) that return citation-ready coordinates. It can answer from the library
 with the citations the reader can click, create annotations that appear in the margin, and read or
 propose graph edits. One operations layer serves both surfaces, so UI and agent can never drift.
 

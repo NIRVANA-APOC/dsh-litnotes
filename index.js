@@ -618,7 +618,7 @@ var PACKAGE_VERSION = readPackageVersion();
 function readPackageVersion() {
   try {
     if (true) {
-      return "1.0.0";
+      return "1.1.0";
     }
   } catch {
   }
@@ -16963,7 +16963,7 @@ var MAX_NOTE_CHARS2 = 700;
 var MAX_MEMORY_CHARS = 2500;
 var MAX_MAP_PREVIEW_CHARS = 300;
 var MAP_HEAD_CHARS = 5e3;
-var MAP_MAX_TOKENS = 1600;
+var MAP_MAX_TOKENS = 3e3;
 var MAX_RAW_OUTPUT_CHARS2 = 2e5;
 var MIN_CONTENT_SECTION_CHARS = 40;
 var MAX_RECORD_HIGHLIGHTS = 200;
@@ -17615,25 +17615,93 @@ function buildFallbackReport(input) {
   const labels = reportLabels(input.language);
   const notes = input.selected.map((candidate) => boundedText3(candidate.note, 200)).filter((note) => note !== "");
   const tldr = (notes.length > 0 ? notes : input.map.contributions).slice(0, 3).map((note) => note.slice(0, 200));
+  const materialPairs = [...input.material.entries()].sort(
+    (left, right) => left[0] - right[0]
+  );
+  const summaryFor = (roles) => {
+    for (const role of roles) {
+      for (const [, entry] of materialPairs) {
+        if (entry.role === role && entry.summary !== "") return entry.summary;
+      }
+    }
+    return "";
+  };
+  const pointsOfKinds = (kinds, max2) => {
+    const out = [];
+    for (const [, entry] of materialPairs) {
+      for (const point of entry.points) {
+        if (!kinds.includes(point.kind)) continue;
+        out.push(point);
+        if (out.length >= max2) return out;
+      }
+    }
+    return out;
+  };
+  const problemDetail = boundedText3(input.map.problem, 500) || boundedText3(summaryFor(["abstract", "introduction"]), 500) || boundedText3(notes[0] ?? "", 500);
   const problem = {
     label: labels.problem ?? "Research problem",
-    detail: boundedText3(input.map.problem, 500),
+    detail: problemDetail,
     blockKeys: pointKeysForRoles(input.document, input.material, ["abstract", "introduction"])
   };
+  const gapPoint = pointsOfKinds(["gap"], 1)[0];
   const gap = {
     label: labels.gap ?? "Research gap",
-    detail: boundedText3(input.map.gap, 500),
-    blockKeys: []
+    detail: boundedText3(input.map.gap, 500) || boundedText3(gapPoint?.text ?? "", 500),
+    blockKeys: gapPoint === void 0 ? [] : gapPoint.blockKeys.slice(0, 4)
   };
-  const contributions = input.map.contributions.map((text3) => ({
+  const contributions = input.map.contributions.slice(0, 4).map((text3) => ({
     label: boundedText3(text3, 90),
     detail: boundedText3(text3, 500),
     blockKeys: [],
     evidence: "partial"
   }));
+  if (contributions.length === 0) {
+    for (const point of pointsOfKinds(["contribution"], 3)) {
+      contributions.push({
+        label: boundedText3(point.text, 90),
+        detail: boundedText3(point.text, 500),
+        blockKeys: point.blockKeys.slice(0, 4),
+        evidence: "partial"
+      });
+    }
+  }
+  if (contributions.length === 0) {
+    const strongest = [...input.selected].sort(
+      (left, right) => right.importance - left.importance || left.order - right.order
+    );
+    for (const candidate of strongest.slice(0, 2)) {
+      contributions.push({
+        label: boundedText3(candidate.section ?? labels.contributions ?? "Contribution", 90),
+        detail: boundedText3(candidate.note, 500),
+        blockKeys: [candidate.blockKey],
+        evidence: "partial"
+      });
+    }
+  }
+  const method = pointsFromCandidates(input.selected, ["method"], labels.method ?? "Method", 4);
+  if (method.length === 0) {
+    for (const point of pointsOfKinds(["method"], 4)) {
+      method.push({ label: labels.method ?? "Method", detail: boundedText3(point.text, 500), blockKeys: point.blockKeys.slice(0, 4) });
+    }
+  }
+  let evaluation = pointsFromCandidates(
+    input.selected.filter((candidate) => candidate.role === "experiment"),
+    null,
+    labels.evaluation ?? "Evaluation",
+    4
+  );
+  if (evaluation.length === 0) {
+    evaluation = pointsFromCandidates(input.selected, ["result"], labels.evaluation ?? "Evaluation", 4);
+  }
+  const findings = pointsFromCandidates(input.selected, ["result"], labels.findings ?? "Findings", 4);
+  if (findings.length === 0) {
+    for (const point of pointsOfKinds(["result"], 4)) {
+      findings.push({ label: labels.findings ?? "Findings", detail: boundedText3(point.text, 500), blockKeys: point.blockKeys.slice(0, 4) });
+    }
+  }
   const limitations = pointsFromCandidates(input.selected, ["limitation"], labels.limitations ?? "Limitations", 4);
-  for (const entry of input.material.values()) {
-    for (const point of entry.points) {
+  for (const entry of materialPairs) {
+    for (const point of entry[1].points) {
       if (point.kind !== "limitation" || limitations.length >= 4) continue;
       limitations.push({
         label: labels.limitations ?? "Limitations",
@@ -17668,6 +17736,22 @@ function buildFallbackReport(input) {
       blockKeys: match !== void 0 ? [match.blockKey] : []
     });
   }
+  if (glossary.length === 0) {
+    for (const candidate of definitionCandidates.slice(0, MAX_GLOSSARY_TERMS)) {
+      glossary.push({
+        term: boundedText3(candidate.quote, 60),
+        definition: boundedText3(candidate.note, 300),
+        blockKeys: [candidate.blockKey]
+      });
+    }
+  }
+  const argumentMap = [];
+  for (let index = 0; index < Math.min(3, contributions.length); index += 1) {
+    const contribution = contributions[index];
+    const evidence = findings[Math.min(index, findings.length - 1)];
+    if (contribution === void 0 || evidence === void 0) break;
+    argumentMap.push({ from: contribution.label, to: evidence.label, relation: "supported-by" });
+  }
   const sectionCounts = /* @__PURE__ */ new Map();
   for (const candidate of input.selected) {
     sectionCounts.set(candidate.sectionId, (sectionCounts.get(candidate.sectionId) ?? 0) + 1);
@@ -17693,17 +17777,12 @@ function buildFallbackReport(input) {
     problem,
     gap,
     contributions,
-    method: pointsFromCandidates(input.selected, ["method"], labels.method ?? "Method", 4),
-    evaluation: pointsFromCandidates(
-      input.selected.filter((candidate) => candidate.role === "experiment"),
-      null,
-      labels.evaluation ?? "Evaluation",
-      3
-    ),
-    findings: pointsFromCandidates(input.selected, ["result"], labels.findings ?? "Findings", 4),
+    method,
+    evaluation,
+    findings,
     limitations,
     openQuestions,
-    argumentMap: [],
+    argumentMap,
     glossary,
     readingPath,
     verdict: {
@@ -17720,6 +17799,17 @@ function fillReportGaps(report, fallback) {
   if (report.tldr.length === 0) report.tldr = fallback.tldr.slice(0, 3);
   if (report.problem.detail === "") report.problem = fallback.problem;
   if (report.gap.detail === "") report.gap = fallback.gap;
+  if (report.contributions.length === 0) report.contributions = fallback.contributions;
+  if (report.method.length === 0) report.method = fallback.method;
+  if (report.evaluation.length === 0) report.evaluation = fallback.evaluation;
+  if (report.findings.length === 0) report.findings = fallback.findings;
+  if (report.limitations.length === 0) report.limitations = fallback.limitations;
+  if (report.openQuestions.length === 0) report.openQuestions = fallback.openQuestions;
+  if (report.argumentMap.length === 0) report.argumentMap = fallback.argumentMap;
+  if (report.glossary.length === 0) report.glossary = fallback.glossary;
+  if (report.readingPath.length === 0) report.readingPath = fallback.readingPath;
+  if (report.verdict.strengths.length === 0) report.verdict.strengths = fallback.verdict.strengths;
+  if (report.verdict.weaknesses.length === 0) report.verdict.weaknesses = fallback.verdict.weaknesses;
   return report;
 }
 function createDeepReadService(deps) {
@@ -17848,7 +17938,7 @@ function createDeepReadService(deps) {
       signal: input.signal,
       maxTokens: input.maxTokens,
       temperature: input.temperature ?? 0.2,
-      reasoningEffort: readingConfig.reasoningEffort,
+      reasoningEffort: input.reasoningEffort ?? readingConfig.reasoningEffort,
       purpose: input.purpose,
       maxChars: Math.min(MAX_RAW_OUTPUT_CHARS2, Math.max(2e4, input.maxTokens * 16))
     };
@@ -18004,7 +18094,24 @@ function createDeepReadService(deps) {
       return false;
     }
     if (isAborted3(input.signal)) throw abortFailure();
-    const parsed = parseDeepReadSectionOutput(raw);
+    let parsed = parseDeepReadSectionOutput(raw);
+    if (parsed === null) {
+      try {
+        raw = await completeModel(state, {
+          purpose: `${input.pass === "gap" ? "deepread-gap" : "deepread-section"}-retry`,
+          system: input.pass === "gap" ? DEEPREAD_GAP_SYSTEM : DEEPREAD_SECTION_SYSTEM,
+          user: prompt,
+          maxTokens: Math.min(8192, readingConfig.maxTokens + 2048),
+          temperature: 0.1,
+          reasoningEffort: "off",
+          signal: input.signal
+        });
+        parsed = parseDeepReadSectionOutput(raw);
+      } catch (error) {
+        if (isAbortFailure(error, input.signal)) throw abortFailure();
+        log.warn?.("[dsh-litnotes] deep-read close reading retry failed: %s", error?.message ?? error);
+      }
+    }
     if (parsed === null) {
       log.warn?.("[dsh-litnotes] deep-read close reading returned no parsable payload");
       return false;
@@ -18107,14 +18214,28 @@ function createDeepReadService(deps) {
         tailOutline: input.document.tailOutline,
         truncated: input.document.truncated
       });
+      const mapTokens = Math.min(MAP_MAX_TOKENS, Math.max(readingConfig.maxTokens, 2400));
       const raw = await completeModel(state, {
         purpose: "deepread-map",
         system: DEEPREAD_MAP_SYSTEM,
         user: prompt,
-        maxTokens: Math.min(MAP_MAX_TOKENS, readingConfig.maxTokens),
+        maxTokens: mapTokens,
         signal: input.signal
       });
       map = parseDeepReadMapOutput(raw);
+      if (map === null) {
+        log.warn?.("[dsh-litnotes] deep-read map output unusable; retrying without reasoning");
+        const retryRaw = await completeModel(state, {
+          purpose: "deepread-map-retry",
+          system: DEEPREAD_MAP_SYSTEM,
+          user: prompt,
+          maxTokens: mapTokens,
+          temperature: 0.1,
+          reasoningEffort: "off",
+          signal: input.signal
+        });
+        map = parseDeepReadMapOutput(retryRaw);
+      }
     } catch (error) {
       if (isAbortFailure(error, input.signal)) throw abortFailure();
       log.warn?.("[dsh-litnotes] deep-read map call failed, using the deterministic map: %s", error?.message ?? error);
@@ -18384,16 +18505,30 @@ function createDeepReadService(deps) {
         maxChars: readingConfig.synthesisChars,
         truncated: input.document.truncated
       });
+      const reportTokens = Math.min(8192, Math.max(6144, readingConfig.maxTokens * 2));
+      const knownBlockKeys = new Set(input.document.blocks.map((block2) => block2.key));
       const raw = await completeModel(state, {
         purpose: "deepread-report",
         system: DEEPREAD_REPORT_SYSTEM,
         user: prompt,
-        maxTokens: clampInt5(readingConfig.maxTokens * 2, 1024, 8192, 4800),
+        maxTokens: reportTokens,
         temperature: 0.3,
         signal: input.signal
       });
-      const knownBlockKeys = new Set(input.document.blocks.map((block2) => block2.key));
       parsed = parseDeepReadReportOutput(raw, { knownBlockKeys });
+      if (parsed === null) {
+        log.warn?.("[dsh-litnotes] deep-read report output unusable; retrying without reasoning");
+        const retryRaw = await completeModel(state, {
+          purpose: "deepread-report-retry",
+          system: DEEPREAD_REPORT_SYSTEM,
+          user: prompt,
+          maxTokens: 8192,
+          temperature: 0.2,
+          reasoningEffort: "off",
+          signal: input.signal
+        });
+        parsed = parseDeepReadReportOutput(retryRaw, { knownBlockKeys });
+      }
     } catch (error) {
       if (isAbortFailure(error, input.signal)) throw abortFailure();
       log.warn?.("[dsh-litnotes] deep-read report call failed, using the deterministic report: %s", error?.message ?? error);

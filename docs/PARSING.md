@@ -1,4 +1,4 @@
-# dsh-litnotes — parsing pipeline (1.0.0)
+# dsh-litnotes — parsing pipeline (1.1.0)
 
 How a source file becomes a readable document: engine selection, the two MinerU cloud APIs, the
 local (on-device) engine, artifact formats, progress/cancel/resume semantics, page-scoped repair,

@@ -33,8 +33,11 @@ quality gate) and produces a structured, fully page-anchored report.
   quotes, heading-only quotes, trivial notes and notes that restate their quote; the coverage pass
   re-reads sections that received no annotation; selection is coverage-aware and capped
   (`ai.deepReadMaxAnnotations`).
-- The report is validated field by field: bounded strings, unknown block keys dropped, evidence/
-  confidence normalised, and a deterministic fallback report when synthesis output is malformed.
+- Structured-output calls (map, section/gap, report) are retried once with reasoning disabled
+  (section/report retries also get a larger output budget); the report is validated field by field (bounded strings, unknown
+  block keys dropped, evidence/confidence normalised) and a deterministic fallback report — with
+  contributions, argument map and glossary filled from the section digests and selected
+  annotations — covers the rare double failure.
 - Live isolated-instance acceptance (real model, 24-page paper) verifies annotation quality
   metrics, offset verification, report block-key validity, reload persistence and cancel
   behaviour, alongside the offline engine/wire/client test suites.
@@ -50,7 +53,7 @@ quality gate) and produces a structured, fully page-anchored report.
   unchanged. Deep-read annotations use the standard annotation format with
   `chatId: "deepread:<documentId>"`, `origin: "ai"` and the run id as `messageId`.
 - New `ai.deepRead*` configuration keys: `deepReadMaxChunks` (24), `deepReadMaxSourceChars`
-  (240000), `deepReadMaxAnnotations` (24), `deepReadMaxTokens` (2400), `deepReadSynthesisChars`
+  (240000), `deepReadMaxAnnotations` (24), `deepReadMaxTokens` (2400; the report synthesis call gets 6144–8192), `deepReadSynthesisChars`
   (14000), `deepReadCoveragePass` (on), `deepReadJudge` (on), each validated and clamped.
 
 ### Engineering

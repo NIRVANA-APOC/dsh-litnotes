@@ -618,7 +618,7 @@ var PACKAGE_VERSION = readPackageVersion();
 function readPackageVersion() {
   try {
     if (true) {
-      return "1.1.0";
+      return "1.1.0-alpha.1";
     }
   } catch {
   }

@@ -141,7 +141,7 @@ describe('host bundle artifact', () => {
     expect(module.name).toBe('dsh-litnotes')
     expect(module.inject).toEqual(['webServer', 'connection'])
     expect(typeof module.apply).toBe('function')
-    expect(module.HOST_VERSION).toMatch(/^\d+\.\d+\.\d+\+host$/)
+    expect(module.HOST_VERSION).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\+host$/)
   })
 
   it('registers the API and asset routes through the web-server effect', async () => {

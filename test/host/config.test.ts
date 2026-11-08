@@ -96,7 +96,7 @@ test('resolveConfig applies defaults, expands dataDir and canonicalizes apiBase'
   expect(base.parseTimeoutMs).toBe(30 * 60 * 1000)
   expect(base.toolMaxChars).toBe(40000)
   expect(base.hostVersion).toBe(PACKAGE_VERSION)
-  expect(PACKAGE_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
+  expect(PACKAGE_VERSION).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
 
   const custom = resolveConfig({
     dataDir: '~/data/../papers',

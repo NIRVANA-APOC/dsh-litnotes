@@ -172,7 +172,7 @@ await check('package.json manifest', () => {
   pkg = JSON.parse(read('package.json')) as PackageJson
   const problems: string[] = []
   if (pkg.name !== 'dsh-litnotes') problems.push(`name is ${JSON.stringify(pkg.name)}`)
-  if (typeof pkg.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(pkg.version)) {
+  if (typeof pkg.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(pkg.version)) {
     problems.push(`version is ${JSON.stringify(pkg.version)}`)
   }
   if (pkg.type !== 'module') problems.push('type must be "module"')

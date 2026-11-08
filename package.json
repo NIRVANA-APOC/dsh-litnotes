@@ -1,6 +1,6 @@
 {
   "name": "dsh-litnotes",
-  "version": "1.1.0",
+  "version": "1.1.0-alpha.1",
   "type": "module",
   "description": "AI-native literature desk for DeepSeek Harness: a local library, MinerU/local parsing, a bilingual reading desk, grounded AI conversation that marks the page, per-paper and library knowledge graphs, and agent tools over the whole library.",
   "main": "index.js",

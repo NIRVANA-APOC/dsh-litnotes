@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.1.0 — AI 精读 (close reading)
+## 1.1.0-alpha.1 — AI 精读 (close reading, alpha)
+
+> **Alpha release.** The close-reading workflow, its prompts and the 精读 UI are feature-complete
+> and pass the acceptance suite below, but their contracts may still change before 1.1.0. The data
+> format (`deepread.json`, version 1) and the wire frames are already versioned.
 
 The 1.0.0 AI flow answers one question over a bounded context window, so broad prompts such as
 "总结全文" tend to annotate the title, author line and venue: a ledger reading, not a close

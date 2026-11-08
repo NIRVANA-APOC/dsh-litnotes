@@ -94,16 +94,23 @@ dsh-litnotes is a DSH plugin, and it gives the same library to agents: seven too
 
 ### Install
 
-Install this repository into the DSH Web profile through the plugin manager (for a checkout in development, point `link:` at the directory):
+**From GitHub (recommended):**
 
-```
-plugin_manager install_bundle link:/path/to/dsh-litnotes
+```bash
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
 ```
 
-Or with the CLI:
+Or install the prebuilt package (no local build):
+
+```bash
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.0.0/dsh-litnotes-1.0.0.tgz
+```
+
+For local development, point `link:` at a source checkout:
 
 ```bash
 dsh plugin --profile web add link:/path/to/dsh-litnotes
+# or via the plugin manager: plugin_manager install_bundle link:/path/to/dsh-litnotes
 ```
 
 Reload the Web UI afterwards. Prerequisites: a DSH Web profile that mounts `webServer` and `connection`. Optional services light up the matching features: `llm` (AI), `credentials` (persistent MinerU token), `translator` (translation), `officeToPdf` (local Office conversion), `tokenMeter` (context budgeting), `systemPrompt` (agent hint) and `tools` (agent tools).

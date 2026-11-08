@@ -90,16 +90,23 @@ dsh-litnotes 是 DSH 的插件，也把同一套文献库能力开放给 Agent�
 
 ### 安装
 
-在 DSH Web 的插件管理器中安装本仓库（开发中的插件用 `link:` 指向检出目录）：
+**从 GitHub 安装（推荐）**：
 
-```
-plugin_manager install_bundle link:/path/to/dsh-litnotes
+```bash
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
 ```
 
-或使用 CLI：
+或安装预构建包（无需在本地构建）：
+
+```bash
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.0.0/dsh-litnotes-1.0.0.tgz
+```
+
+本地开发时，用 `link:` 指向源码检出目录：
 
 ```bash
 dsh plugin --profile web add link:/path/to/dsh-litnotes
+# 或在 DSH 插件管理器中：plugin_manager install_bundle link:/path/to/dsh-litnotes
 ```
 
 安装后重新加载 Web UI。前置条件：一个挂载了 `webServer` 与 `connection` 的 DSH Web profile。以下服务按需启用相应能力：`llm`（AI）、`credentials`（持久化 MinerU token）、`translator`（翻译）、`officeToPdf`（Office 本地转换）、`tokenMeter`（上下文预算）、`systemPrompt`（Agent 提示）、`tools`（Agent 工具）。

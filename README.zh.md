@@ -114,8 +114,6 @@ dsh plugin --profile web add dsh-litnotes
 
 可固定版本：`dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.1`。
 
-在这个 alpha 上架 npm 之前，请使用下方的 GitHub Release 预构建包安装。
-
 **从 GitHub 安装**：
 
 ```bash

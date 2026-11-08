@@ -43,7 +43,7 @@ import { SelectionTranslationCard } from './translation.tsx'
 import type { SelectionTranslationState } from './translation.tsx'
 import { Tethers } from './tethers.tsx'
 import { AnnotationCard } from './annotation-card.tsx'
-import { AiComposer, AiMarginEntries } from './margin-ai.tsx'
+import { AiComposer, AiMarginEntries, MarginFilterRow } from './margin-ai.tsx'
 import { askAI } from './api.ts'
 import { orderOf, refreshAnnotations, useReaderStore } from './store.ts'
 import { copyText } from './clipboard.ts'
@@ -855,6 +855,7 @@ export function ReadScene({ document }: ReadSceneProps): ReactElement {
                 <span className="ln-margin__count ln-tabular">
                   {t('margin.notesCount', { count: annotations.length + staleAnnotations.length })}
                 </span>
+                <MarginFilterRow />
               </div>
               {translateAll !== null && translateAll.running ? (
                 <div className="ln-translateall" role="status">

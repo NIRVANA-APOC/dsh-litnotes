@@ -11,3 +11,4 @@
 export { AiMarginEntries } from '../ai/AiMarginEntries.tsx'
 export type { AiMarginEntriesProps } from '../ai/AiMarginEntries.tsx'
 export { AiComposer } from '../ai/AiComposer.tsx'
+export { MarginFilterRow } from '../ai/MarginFilterRow.tsx'

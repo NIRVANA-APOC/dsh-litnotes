@@ -79,6 +79,9 @@ formats. Existing libraries load as-is; no migration step.
   ranked lexical selection the context retriever fills the remaining budget with the first body
   block of every section, so overview prompts (including a Chinese "总结全文" against an English
   paper, which has no lexical hits) can actually summarise the paper.
+- Margin filter chips (全部 / 对话 / AI 批注 / 我的批注) moved into the sticky margin
+  header, so after scrolling the independent margin down to its notes the
+  conversation stays one click away (对话) instead of being scrolled out of reach.
 - The paper column and the AI margin scroll independently: the margin is a
   pinned, separately scrollable column on desktop (its own scrollbar, sticky
   composer and sticky filters), so reading the paper never drags the AI

@@ -46,11 +46,10 @@ import {
   unverifiedBreakdown,
 } from './chat.ts'
 import type { ChatEntry, ChatTurn, QuestionMark } from './chat.ts'
-import { AiMarginFilterChips } from './AiMarginFilterChips.tsx'
 import { AiMarkdown } from './markdown.tsx'
 import { CitationCard, CitationChip } from './Citation.tsx'
 import type { CitationAnchorEvent, CitationPayload } from './Citation.tsx'
-import { installReaderBridge, useMarginAnnotationCounts } from './reader-bridge.ts'
+import { installReaderBridge } from './reader-bridge.ts'
 import { adaptTranslate } from './translate.ts'
 import { setAiTranslate, useAiStore } from './store.ts'
 import type { AiFailure, AiStreamError } from './store.ts'
@@ -128,7 +127,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   const document = useLibraryStore((state) => state.documents.find((entry) => entry.id === documentId))
   const preferenceEntailmentNotice = useSettingsStore((state) => state.preferences.entailmentNotice)
   const showEntailmentEnabled = showEntailment ?? preferenceEntailmentNotice
-  const annotationCounts = useMarginAnnotationCounts()
 
   const available = status?.ai?.available === true
   const modelLabel = status?.ai?.route?.model ?? ''
@@ -190,10 +188,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
           question: displayText(turn.question),
         })),
     [orderedTurns],
-  )
-  const counts = useMemo(
-    () => ({ chat: turns.length, ai: annotationCounts.ai, user: annotationCounts.user }),
-    [turns.length, annotationCounts.ai, annotationCounts.user],
   )
   const visibleTurns = useMemo(() => {
     if (marginFilter === 'ai' || marginFilter === 'user') return []
@@ -514,7 +508,6 @@ export function AiMarginEntries(props: AiMarginEntriesProps): ReactElement {
   return (
     <div className="ln-ai" data-state={stateName} data-busy={busy ? 'true' : 'false'}>
       <div className="ln-ai__head">
-        <AiMarginFilterChips counts={counts} />
         <div className="ln-ai__head-actions">
           {questionNav}
           <Menu

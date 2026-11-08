@@ -465,7 +465,8 @@ describe('ReadScene — navigation and AI margin', () => {
     const margin = container.querySelector('.ln-sheet__margin')
     const seat = margin?.querySelector('.ln-margin__ai .ln-ai')
     expect(seat).not.toBeNull()
-    expect(seat?.querySelector('.ln-ai__filters')).not.toBeNull()
+    // Filter chips live in the sticky margin header; the stream stays in the seat.
+    expect(margin?.querySelector('.ln-margin__head .ln-ai__filters')).not.toBeNull()
     expect(seat?.querySelector('.ln-ai__stream')).not.toBeNull()
     // The composer sits at the end of the margin column (sticky footer), not
     // inside the AI stream container.

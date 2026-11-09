@@ -75,7 +75,8 @@ Manual runs are dry runs unless `dry_run` is unchecked:
 
 - Actions → **Publish to npm → Run workflow** (leave *dry_run* checked). The job
   runs the gate, packs the tarball, checks the registry and prints the
-  `npm publish --dry-run` plan without writing anything.
+  `npm publish --dry-run` plan without writing anything. The `dist_tag` input
+  selects the npm dist-tag for a manual publish (default `latest`).
 - From the CLI: `gh workflow run publish-npm.yml --ref main`.
 - Locally, `node scripts/pack-check.ts` packs the package and validates the
   contents; the last output line is `TARBALL=<path>`.
@@ -85,9 +86,12 @@ the tag in **Use workflow from**, uncheck *dry_run*, and run the workflow.
 
 ## Behaviour worth knowing
 
-- **Prereleases publish to `latest`.** `npm publish` uses the default `latest`
-  dist-tag, matching how `1.1.0-alpha.1` was published. To keep a separate
-  prerelease channel, add `--tag next` to the publish command.
+- **Every version is published under the `latest` dist-tag by default.** npm
+  requires an explicit `--tag` for prerelease versions (it refuses to guess), and
+  `latest` keeps the install path in README.md pointing at the current line, as
+  `1.1.0-alpha.1` did. To keep a separate prerelease channel, run the workflow
+  manually with `dist_tag: next` (or edit the default) and later publish the
+  stable release with `latest`.
 - **Re-runs are safe.** The workflow skips the publish steps when
   `dsh-litnotes@<version>` already exists on npm; npm versions are immutable, so
   a corrected build needs a new version.

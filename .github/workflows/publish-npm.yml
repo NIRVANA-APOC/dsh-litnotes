@@ -14,7 +14,8 @@
 #
 # Manual runs (`workflow_dispatch`) are dry runs by default: they build, run the
 # gate, pack and print the publish plan without writing to the registry. Choose
-# the tag in "Use workflow from" and uncheck dry_run for an emergency publish.
+# the tag in "Use workflow from" and uncheck dry_run for an emergency publish;
+# the dist-tag input selects the npm dist-tag (default `latest`).
 name: Publish to npm
 
 on:
@@ -26,6 +27,11 @@ on:
         description: Build and pack only; do not publish to npm
         type: boolean
         default: true
+      dist_tag:
+        description: npm dist-tag to publish under (latest, next, ...)
+        type: string
+        default: latest
+        required: false
 
 # Never race two publishes against the same registry state.
 concurrency:
@@ -49,6 +55,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_DIST_TAG: ${{ inputs.dist_tag }}
         run: |
           # Release events always publish; manual runs are dry runs unless asked.
           if [ "$EVENT_NAME" = "release" ] || [ "$INPUT_DRY_RUN" = "false" ]; then
@@ -58,6 +65,10 @@ jobs:
             echo "dry_run=true" >> "$GITHUB_OUTPUT"
             echo "mode: dry run"
           fi
+          # npm requires an explicit --tag for prerelease versions; `latest`
+          # matches how 1.1.0-alpha.1 was published. A manual run can pick another
+          # dist-tag (for example `next`) without editing the workflow.
+          echo "dist_tag=${INPUT_DIST_TAG:-latest}" >> "$GITHUB_OUTPUT"
 
       # For a release event this checks out the tagged commit; for a manual run
       # on a tag ref it checks out that tag, otherwise the dispatched ref.
@@ -150,13 +161,13 @@ jobs:
 
       - name: Publish plan (dry run)
         if: ${{ steps.mode.outputs.dry_run == 'true' }}
-        run: npm publish --dry-run --access public
+        run: npm publish --dry-run --access public --tag "${{ steps.mode.outputs.dist_tag }}"
 
       - name: Publish with npm trusted publishing (OIDC)
         if: ${{ steps.mode.outputs.dry_run == 'false' && steps.registry.outputs.published != 'true' && steps.auth.outputs.mode == 'oidc' }}
         run: |
           echo "publishing with npm trusted publishing (OIDC)"
-          npm publish --access public
+          npm publish --access public --tag "${{ steps.mode.outputs.dist_tag }}"
 
       - name: Publish with the NPM_TOKEN secret
         if: ${{ steps.mode.outputs.dry_run == 'false' && steps.registry.outputs.published != 'true' && steps.auth.outputs.mode == 'token' }}
@@ -165,7 +176,7 @@ jobs:
         run: |
           echo "publishing with the NPM_TOKEN repository secret"
           echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
-          npm publish --access public --provenance
+          npm publish --access public --provenance --tag "${{ steps.mode.outputs.dist_tag }}"
 
       - name: Upload the package tarball
         uses: actions/upload-artifact@v7
@@ -189,6 +200,7 @@ jobs:
             echo "### dsh-litnotes · npm publish"
             echo ""
             echo "- regime: ${{ steps.mode.outputs.dry_run == 'true' && 'dry run' || 'publish' }}"
+            echo "- dist-tag: ${{ steps.mode.outputs.dist_tag }}"
             echo "- npm authentication: ${{ steps.auth.outputs.mode || 'unknown' }}"
             echo "- version already on npm: ${{ steps.registry.outputs.published || 'unknown' }}"
             echo "- tarball: \`${{ steps.pack.outputs.tarball }}\`"

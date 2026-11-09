@@ -6,7 +6,7 @@ A local-first AI literature desk that plugs into the [DeepSeek Harness](https://
 
 <sub>[**English**](README.md) · [简体中文](README.zh.md)</sub>
 
-[![version](https://img.shields.io/badge/version-1.1.0-alpha.1-2646be?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.1.0-alpha.2-2646be?style=flat-square)](CHANGELOG.md)
 [![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
 [![CI](https://img.shields.io/github/actions/workflow/status/NIRVANA-APOC/dsh-litnotes/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/NIRVANA-APOC/dsh-litnotes/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
@@ -119,7 +119,7 @@ dsh-litnotes is a DSH plugin, and it gives the same library to agents: eight too
 dsh plugin --profile web add dsh-litnotes
 ```
 
-Pin a version with `dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.1`.
+Pin a version with `dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.2`.
 
 **From GitHub:**
 
@@ -130,7 +130,7 @@ dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
 Or install the prebuilt release tarball (no local build):
 
 ```bash
-dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.1.0-alpha.1/dsh-litnotes-1.1.0-alpha.1.tgz
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.1.0-alpha.2/dsh-litnotes-1.1.0-alpha.2.tgz
 ```
 
 For local development, point `link:` at a source checkout:

@@ -6,7 +6,7 @@
 
 <sub>[English](README.md) · **简体中文**</sub>
 
-[![version](https://img.shields.io/badge/version-1.1.0-alpha.1-2646be?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.1.0-alpha.2-2646be?style=flat-square)](CHANGELOG.md)
 [![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
 [![CI](https://img.shields.io/github/actions/workflow/status/NIRVANA-APOC/dsh-litnotes/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/NIRVANA-APOC/dsh-litnotes/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
@@ -113,7 +113,7 @@ dsh-litnotes 是 DSH 的插件，也把同一套文献库能力开放给 Agent�
 dsh plugin --profile web add dsh-litnotes
 ```
 
-可固定版本：`dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.1`。
+可固定版本：`dsh plugin --profile web add dsh-litnotes@1.1.0-alpha.2`。
 
 **从 GitHub 安装**：
 
@@ -124,7 +124,7 @@ dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes
 或安装预构建包（无需在本地构建）：
 
 ```bash
-dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.1.0-alpha.1/dsh-litnotes-1.1.0-alpha.1.tgz
+dsh plugin --profile web add https://github.com/NIRVANA-APOC/dsh-litnotes/releases/download/v1.1.0-alpha.2/dsh-litnotes-1.1.0-alpha.2.tgz
 ```
 
 本地开发时，用 `link:` 指向源码检出目录：

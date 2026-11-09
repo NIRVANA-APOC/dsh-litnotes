@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.1.0-alpha.2 — release automation
+
+> **Alpha release.** The feature set is identical to 1.1.0-alpha.1; this alpha ships the release
+> pipeline that publishes the npm package from GitHub Actions.
+
+### CI
+
+- New GitHub Actions gate (`.github/workflows/ci.yml`) runs the 17-check release gate
+  (`node scripts/check.ts`) on Node 22 and 24 for every push to `main` and every pull request,
+  verifies that the committed `index.js` / `lib/client.js` match a fresh build, and checks the npm
+  tarball contract.
+- A separate CI job loads the published host entry on Node 20.16 — the `engines.node` floor — so the
+  shipped bundle stays honest about the oldest supported runtime.
+- New `scripts/pack-check.ts` packs exactly what `npm publish` would and asserts the runtime file
+  contract (18 required files, no development trees leaked); CI and the release pipeline share it.
+
+### Release automation
+
+- New `.github/workflows/publish-npm.yml` publishes a published GitHub Release to npm: tag/version
+  guard, full gate on the tagged commit, skip when the version is already on npm, npm trusted
+  publishing (OIDC, with automatic provenance) and an `NPM_TOKEN` fallback, then attaches the
+  verified tarball to the release and uploads it as a workflow artifact.
+- Publication always passes an explicit `--tag` (npm refuses to guess a dist-tag for a prerelease
+  version); `latest` keeps the README install path on the current line, and a manual run accepts
+  another dist-tag such as `next`.
+- Manual runs are dry runs by default: they run the gate, pack and print the publish plan without
+  writing to the registry.
+- `docs/RELEASING.md` documents the one-time npm trusted-publisher setup, the release checklist and
+  the dry-run flow; both READMEs carry the CI badge and link to it.
+
 ## 1.1.0-alpha.1 — AI 精读 (close reading, alpha)
 
 > **Alpha release.** The close-reading workflow, its prompts and the 精读 UI are feature-complete

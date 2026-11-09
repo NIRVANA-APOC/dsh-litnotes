@@ -97,10 +97,10 @@ the tag in **Use workflow from**, uncheck *dry_run*, and run the workflow.
 
 - **Every version is published under the `latest` dist-tag by default.** npm
   requires an explicit `--tag` for prerelease versions (it refuses to guess), and
-  `latest` keeps the install path in README.md pointing at the current line, as
-  `1.1.0-alpha.1` did. To keep a separate prerelease channel, run the workflow
-  manually with `dist_tag: next` (or edit the default) and later publish the
-  stable release with `latest`.
+  `latest` keeps the install path in README.md pointing at the current line (both
+  `1.1.0-alpha` releases are published under `latest`). To keep a separate
+  prerelease channel, run the workflow manually with `dist_tag: next` (or edit
+  the default) and later publish the stable release with `latest`.
 - **Re-runs are safe.** The workflow skips the publish steps when
   `dsh-litnotes@<version>` already exists on npm; npm versions are immutable, so
   a corrected build needs a new version.

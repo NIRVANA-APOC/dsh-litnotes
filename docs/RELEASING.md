@@ -20,6 +20,7 @@ long-lived secret and produces a provenance statement on every publish.
    - Repository: `dsh-litnotes`
    - Workflow filename: `publish-npm.yml` (filename only; the `.yml` suffix is required)
    - Environment name: leave empty (the workflow does not use a GitHub environment)
+   - Allowed actions: allow `npm publish` (the workflow publishes directly)
 3. Save. npm does not validate the fields when saving — a mismatch only shows up
    as `ENEEDAUTH` on the first publish. A new configuration must complete its
    first successful publish within two days of being created, so add it right
@@ -27,6 +28,14 @@ long-lived secret and produces a provenance statement on every publish.
 4. After the first successful OIDC publish, consider **Settings → Publishing
    access → "Require two-factor authentication and disallow tokens"** to remove
    token-based publishing entirely.
+
+The same connection can be created from a logged-in npm CLI (npm 11.5.1+):
+
+```bash
+npm login
+npm trust github dsh-litnotes --file publish-npm.yml --repo NIRVANA-APOC/dsh-litnotes --allow-publish -y
+npm trust list dsh-litnotes   # verify the connection
+```
 
 The package already exists on npm (that is a prerequisite for configuring a
 trusted publisher), and its `repository.url` in `package.json` already matches

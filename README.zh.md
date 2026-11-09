@@ -8,6 +8,7 @@
 
 [![version](https://img.shields.io/badge/version-1.1.0-alpha.1-2646be?style=flat-square)](CHANGELOG.md)
 [![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
+[![CI](https://img.shields.io/github/actions/workflow/status/NIRVANA-APOC/dsh-litnotes/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/NIRVANA-APOC/dsh-litnotes/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![runtime deps](https://img.shields.io/badge/runtime_deps-0-2f855a?style=flat-square)](package.json)
 [![data](https://img.shields.io/badge/data-stays_local-6B7280?style=flat-square)](#数据与隐私)
@@ -180,6 +181,8 @@ node scripts/check.ts --final     # 发布门禁（警告视为失败）
 
 需要 Node ≥ 20.16。源码分布在 `src/shared/**`（两端共享）、`src/host/**`、`src/client/**`；`index.js` 与 `lib/client.js` 为构建产物。
 
+CI 在 Node 22 与 24 上运行同一套门禁，校验 npm tarball 与已提交的构建产物，并在发布 GitHub Release 时自动发布到 npm——详见 [`docs/RELEASING.md`](docs/RELEASING.md)。
+
 ## 文档
 
 | 文档 | 内容 |
@@ -189,6 +192,7 @@ node scripts/check.ts --final     # 发布门禁（警告视为失败）
 | [`docs/AGENT.md`](docs/AGENT.md) | 八个 Agent 工具与完整调用示例 |
 | [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded 对话、引用校验、蕴含检查、知识图谱、AI 精读 |
 | [`docs/UI-SPEC.md`](docs/UI-SPEC.md) | 阅读台设计系统与交互契约 |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | 发布清单、GitHub Actions 与 npm 发布 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本历史 |
 
 ---

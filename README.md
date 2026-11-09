@@ -8,6 +8,7 @@ A local-first AI literature desk that plugs into the [DeepSeek Harness](https://
 
 [![version](https://img.shields.io/badge/version-1.1.0-alpha.1-2646be?style=flat-square)](CHANGELOG.md)
 [![npm](https://img.shields.io/npm/v/dsh-litnotes?style=flat-square)](https://www.npmjs.com/package/dsh-litnotes)
+[![CI](https://img.shields.io/github/actions/workflow/status/NIRVANA-APOC/dsh-litnotes/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/NIRVANA-APOC/dsh-litnotes/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![runtime deps](https://img.shields.io/badge/runtime_deps-0-2f855a?style=flat-square)](package.json)
 [![data](https://img.shields.io/badge/data-stays_local-6B7280?style=flat-square)](#data-and-privacy)
@@ -186,6 +187,8 @@ node scripts/check.ts --final     # release gate (warnings are failures)
 
 Requires Node ≥ 20.16. Source lives in `src/shared/**` (both halves), `src/host/**` and `src/client/**`; `index.js` and `lib/client.js` are build artifacts.
 
+CI runs the same gate on Node 22 and 24, verifies the npm tarball and the committed build artifacts, and publishes to npm when a GitHub Release is published — see [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Docs
 
 | document | contents |
@@ -195,6 +198,7 @@ Requires Node ≥ 20.16. Source lives in `src/shared/**` (both halves), `src/hos
 | [`docs/AGENT.md`](docs/AGENT.md) | the eight agent tools with a worked flow |
 | [`docs/AI-SPEC.md`](docs/AI-SPEC.md) | grounded chat, citation validation, entailment, knowledge graphs, AI 精读 (close reading) |
 | [`docs/UI-SPEC.md`](docs/UI-SPEC.md) | reading-desk design system and interaction contract |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | release checklist, GitHub Actions and npm publishing |
 | [`CHANGELOG.md`](CHANGELOG.md) | release history |
 
 ---

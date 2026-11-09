@@ -1,0 +1,195 @@
+# Publish dsh-litnotes to npm from a GitHub Release.
+#
+# Trigger: publishing a GitHub Release whose tag is `v<package.json version>`.
+# The tagged commit is gated (the same `node scripts/check.ts` release gate as
+# CI), packed, verified, published to npm, and the verified tarball is attached
+# to the release (the offline-install URL documented in README.md).
+#
+# Authentication is OIDC-first: configure a Trusted Publisher on npmjs.com
+# (package dsh-litnotes → Settings → Trusted publishing → GitHub Actions,
+# user NIRVANA-APOC, repository dsh-litnotes, workflow filename
+# `publish-npm.yml`) and no secret is needed — npm generates provenance
+# automatically. As a fallback, a repository secret named NPM_TOKEN is used when
+# present (provenance is then requested explicitly). See docs/RELEASING.md.
+#
+# Manual runs (`workflow_dispatch`) are dry runs by default: they build, run the
+# gate, pack and print the publish plan without writing to the registry. Choose
+# the tag in "Use workflow from" and uncheck dry_run for an emergency publish.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and pack only; do not publish to npm
+        type: boolean
+        default: true
+
+# Never race two publishes against the same registry state.
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # attach the tarball to the GitHub release
+      id-token: write # OIDC: npm trusted publishing and provenance
+    steps:
+      - name: Resolve the run mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # Release events always publish; manual runs are dry runs unless asked.
+          if [ "$EVENT_NAME" = "release" ] || [ "$INPUT_DRY_RUN" = "false" ]; then
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "mode: publish"
+          else
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"
+            echo "mode: dry run"
+          fi
+
+      # For a release event this checks out the tagged commit; for a manual run
+      # on a tag ref it checks out that tag, otherwise the dispatched ref.
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify the tag and package.json agree
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="${RELEASE_TAG:-$GITHUB_REF_NAME}"
+          case "$tag" in
+            v*)
+              if [ "$tag" != "v$version" ]; then
+                echo "::error::tag $tag does not match package.json version $version"
+                exit 1
+              fi
+              echo "tag $tag matches package version $version"
+              ;;
+            *)
+              echo "::notice::'$tag' is not a v* tag; the version guard is skipped"
+              ;;
+          esac
+
+      # Reads `packageManager` (pnpm@12.6.0) from package.json.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          # Never cache dependencies in a release build.
+          package-manager-cache: false
+
+      - name: Ensure an npm CLI with trusted publishing support
+        run: |
+          # Trusted publishing needs npm >= 11.5.1 (bundled with Node 24 line).
+          npm install --global npm@11
+          npm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Release gate
+        run: node scripts/check.ts
+
+      - name: Committed build artifacts are current
+        run: |
+          if ! git diff --exit-code -- index.js lib/client.js; then
+            echo "::error::the tagged commit has stale build artifacts; rebuild and retag before publishing."
+            exit 1
+          fi
+
+      - name: Pack and verify the npm tarball
+        id: pack
+        run: |
+          node scripts/pack-check.ts
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          tarball=".build/${name}-${version}.tgz"
+          test -s "$tarball" || { echo "::error::npm pack did not produce $tarball"; exit 1; }
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Detect npm authentication
+        id: auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+            echo "auth: NPM_TOKEN repository secret"
+          else
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "auth: npm trusted publishing (OIDC)"
+          fi
+
+      - name: Check whether this version is already on npm
+        id: registry
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if npm view "${name}@${version}" version > /dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${name}@${version} is already on npm; the publish steps are skipped"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish plan (dry run)
+        if: ${{ steps.mode.outputs.dry_run == 'true' }}
+        run: npm publish --dry-run --access public
+
+      - name: Publish with npm trusted publishing (OIDC)
+        if: ${{ steps.mode.outputs.dry_run == 'false' && steps.registry.outputs.published != 'true' && steps.auth.outputs.mode == 'oidc' }}
+        run: |
+          echo "publishing with npm trusted publishing (OIDC)"
+          npm publish --access public
+
+      - name: Publish with the NPM_TOKEN secret
+        if: ${{ steps.mode.outputs.dry_run == 'false' && steps.registry.outputs.published != 'true' && steps.auth.outputs.mode == 'token' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "publishing with the NPM_TOKEN repository secret"
+          echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+          npm publish --access public --provenance
+
+      - name: Upload the package tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach the tarball to the GitHub release
+        if: ${{ github.event_name == 'release' && steps.mode.outputs.dry_run == 'false' && steps.registry.outputs.published != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" "${{ steps.pack.outputs.tarball }}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### dsh-litnotes · npm publish"
+            echo ""
+            echo "- regime: ${{ steps.mode.outputs.dry_run == 'true' && 'dry run' || 'publish' }}"
+            echo "- npm authentication: ${{ steps.auth.outputs.mode || 'unknown' }}"
+            echo "- version already on npm: ${{ steps.registry.outputs.published || 'unknown' }}"
+            echo "- tarball: \`${{ steps.pack.outputs.tarball }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,96 @@
+# Continuous integration for dsh-litnotes.
+#
+# The gate is the repository's own release gate (`node scripts/check.ts`):
+# manifest/patch/locale/asset audits, strict `tsc`, both esbuild bundles, the
+# generated-artifact contracts and the full vitest suite. CI adds the npm side
+# the gate does not cover: the committed build artifacts must match a fresh
+# build, and the npm tarball must carry every runtime file.
+#
+# The gate runs on the current Node LTS lines. The dev scripts execute
+# TypeScript directly (node type stripping, Node >= 22.18), so the oldest
+# supported runtime (`engines.node` 20.16) is verified separately against the
+# published artifacts instead.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.x', '24.x']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Reads `packageManager` (pnpm@12.6.0) from package.json.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Release gate
+        run: node scripts/check.ts
+
+      - name: Committed build artifacts are current
+        run: |
+          if ! git diff --exit-code -- index.js lib/client.js; then
+            echo "::error::index.js or lib/client.js is stale; run 'node scripts/build.ts' and commit the result."
+            exit 1
+          fi
+
+      - name: npm tarball contract
+        run: node scripts/pack-check.ts
+
+  runtime:
+    name: runtime (node 20.16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up the oldest supported node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20.16.0'
+
+      # The published host bundle must load on the minimum engine without any
+      # installed dependency: it bundles every runtime dependency and only
+      # imports node builtins.
+      - name: Published host entry loads
+        run: |
+          node -e '
+            import("./index.js").then((plugin) => {
+              if (plugin.name !== "dsh-litnotes" || typeof plugin.apply !== "function" || !Array.isArray(plugin.inject)) {
+                console.error("index.js is not a dsh plugin:", Object.keys(plugin));
+                process.exit(1);
+              }
+              console.log("index.js loads as a dsh plugin on node", process.version);
+            }).catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+          '
